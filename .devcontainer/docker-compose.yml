@@ -1,5 +1,5 @@
 # Voidlabs Development Container
-# Base configuration - synced via dc-sync
+# Base configuration - synced via pbs
 #
 # Project-specific customizations go in docker-compose.override.yml
 # which is automatically merged and NOT synced.
@@ -18,6 +18,10 @@ services:
       - /srv/fast/ai-cli-configs/codex:/home/chris/.codex:cached
       - /srv/fast/ai-cli-configs/factory:/home/chris/.factory:cached
       - ${HOME}/.ssh:/home/chris/.ssh:cached
+      # Persistent package caches - shared across all devcontainers
+      - /srv/fast/caches/uv:/home/chris/.cache/uv:cached
+      - /srv/fast/caches/pip:/home/chris/.cache/pip:cached
+      - /srv/fast/caches/huggingface:/home/chris/.cache/huggingface:cached
 
     # Network configuration
     networks:
@@ -35,6 +39,8 @@ services:
       - PHASE_SERVICE_TOKEN=${PHASE_SERVICE_TOKEN}
       - PHASE_ENV=${PHASE_ENV}
       - PHASE_APP=${PHASE_APP}
+      # Cache directories (volumes mounted above)
+      - HF_HOME=/home/chris/.cache/huggingface
 
     # Keep container running
     command: sleep infinity
