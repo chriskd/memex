@@ -1,6 +1,8 @@
 """FastMCP server for voidlabs-kb."""
 
+import os
 import re
+import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -13,6 +15,50 @@ from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
 from .models import DocumentChunk, IndexStatus, KBEntry, QualityReport, SearchResult
 from .parser import ParseError, extract_links, parse_entry
+
+
+def _get_current_contributor() -> str | None:
+    """Get the current contributor identity from git config or environment.
+
+    Returns:
+        Contributor string like "Name <email>" or "Name", or None if unavailable.
+    """
+    # Try git config first
+    try:
+        name_result = subprocess.run(
+            ["git", "config", "user.name"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+        email_result = subprocess.run(
+            ["git", "config", "user.email"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+
+        name = name_result.stdout.strip() if name_result.returncode == 0 else None
+        email = email_result.stdout.strip() if email_result.returncode == 0 else None
+
+        if name and email:
+            return f"{name} <{email}>"
+        elif name:
+            return name
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+
+    # Fall back to environment variables
+    name = os.environ.get("GIT_AUTHOR_NAME") or os.environ.get("USER")
+    email = os.environ.get("GIT_AUTHOR_EMAIL")
+
+    if name and email:
+        return f"{name} <{email}>"
+    elif name:
+        return name
+
+    return None
+
 
 mcp = FastMCP(
     name="voidlabs-kb",
@@ -231,11 +277,16 @@ async def add_tool(
     # Build frontmatter
     today = date.today().isoformat()
     tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
+
+    # Get contributor identity
+    contributor = _get_current_contributor()
+    contributors_yaml = f"\ncontributors:\n  - {contributor}" if contributor else ""
+
     frontmatter = f"""---
 title: {title}
 tags:
 {tags_yaml}
-created: {today}
+created: {today}{contributors_yaml}
 ---
 
 """
@@ -306,9 +357,15 @@ async def update_tool(
     if not new_tags:
         raise ValueError("At least one tag is required")
 
+    # Add current contributor if not already present
+    contributors = list(metadata.contributors)
+    current_contributor = _get_current_contributor()
+    if current_contributor and current_contributor not in contributors:
+        contributors.append(current_contributor)
+
     # Build updated frontmatter
     tags_yaml = "\n".join(f"  - {tag}" for tag in new_tags)
-    contributors_yaml = "\n".join(f"  - {c}" for c in metadata.contributors)
+    contributors_yaml = "\n".join(f"  - {c}" for c in contributors)
     aliases_yaml = "\n".join(f"  - {a}" for a in metadata.aliases)
 
     frontmatter_parts = [
@@ -320,7 +377,7 @@ async def update_tool(
         f"updated: {today.isoformat()}",
     ]
 
-    if metadata.contributors:
+    if contributors:
         frontmatter_parts.append("contributors:")
         frontmatter_parts.append(contributors_yaml)
 
@@ -515,6 +572,14 @@ async def reindex_tool() -> IndexStatus:
 
 def main():
     """Run the MCP server."""
+    # Check for preload request via environment variable
+    if os.environ.get("KB_PRELOAD", "").lower() in ("1", "true", "yes"):
+        import sys
+        print("Preloading embedding model...", file=sys.stderr)
+        searcher = _get_searcher()
+        searcher.preload()
+        print("Embedding model ready.", file=sys.stderr)
+
     mcp.run()
 
 

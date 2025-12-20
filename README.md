@@ -123,3 +123,22 @@ The MCP server uses these environment variables (set automatically by the plugin
 
 - `KB_ROOT` - Path to knowledge base directory (default: `${CLAUDE_PLUGIN_ROOT}/kb`)
 - `INDEX_ROOT` - Path to search indices (default: `${CLAUDE_PLUGIN_ROOT}/.indices`)
+- `KB_PRELOAD` - Set to `1` to preload the embedding model at startup (reduces first-search latency from ~3s to instant)
+
+To enable preloading, add to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "voidlabs-kb": {
+      "env": {
+        "KB_PRELOAD": "1"
+      }
+    }
+  }
+}
+```
+
+## Contributor Tracking
+
+When you add or update entries via MCP tools, your git identity is automatically recorded in the entry's `contributors` field. This helps track who has contributed to organizational knowledge.

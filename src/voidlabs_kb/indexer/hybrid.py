@@ -303,3 +303,10 @@ class HybridSearcher:
             last_indexed=self._last_indexed.isoformat() if self._last_indexed else None,
             kb_files=kb_files,
         )
+
+    def preload(self) -> None:
+        """Preload the embedding model to avoid first-query latency.
+
+        Call this at startup when KB_PRELOAD=1 is set.
+        """
+        self._chroma.preload()
