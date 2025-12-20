@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
 
+from ..backlinks_cache import rebuild_backlink_cache
 from ..config import get_kb_root
 
 if TYPE_CHECKING:
@@ -137,8 +138,9 @@ class FileWatcher:
         logger.info(f"Re-indexing {len(files)} changed files")
 
         # Import here to avoid circular imports
-        from ..models import DocumentChunk
         from ..parser import parse_entry
+
+        refresh_backlinks = False
 
         for file_path in files:
             try:
@@ -147,27 +149,28 @@ class FileWatcher:
                     relative_path = file_path.relative_to(self._kb_root)
                     self._searcher.delete_document(str(relative_path))
                     logger.debug(f"Removed from index: {relative_path}")
+                    refresh_backlinks = True
                     continue
 
-                # Parse and re-index the file
-                relative_path = file_path.relative_to(self._kb_root)
-                content = file_path.read_text()
-                entry = parse_entry(content, str(relative_path))
+                relative_path = str(file_path.relative_to(self._kb_root))
+                _, _, chunks = parse_entry(file_path)
+                if not chunks:
+                    continue
 
-                if entry:
-                    chunk = DocumentChunk(
-                        path=str(relative_path),
-                        section=None,
-                        content=entry.content,
-                        metadata=entry.metadata,
-                    )
-                    # Delete old chunks first, then add new one
-                    self._searcher.delete_document(str(relative_path))
-                    self._searcher.index_document(chunk)
-                    logger.debug(f"Re-indexed: {relative_path}")
+                normalized_chunks = [
+                    chunk.model_copy(update={"path": relative_path}) for chunk in chunks
+                ]
+
+                self._searcher.delete_document(relative_path)
+                self._searcher.index_chunks(normalized_chunks)
+                logger.debug(f"Re-indexed: {relative_path}")
+                refresh_backlinks = True
 
             except Exception as e:
                 logger.warning(f"Failed to process {file_path}: {e}")
+
+        if refresh_backlinks:
+            rebuild_backlink_cache(self._kb_root)
 
     def start(self) -> None:
         """Start watching for file changes."""

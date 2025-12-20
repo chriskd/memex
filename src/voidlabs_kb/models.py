@@ -55,3 +55,21 @@ class IndexStatus(BaseModel):
     chroma_docs: int
     last_indexed: str | None
     kb_files: int
+
+
+class QualityDetail(BaseModel):
+    """Per-query evaluation result."""
+
+    query: str
+    expected: list[str]
+    hits: list[str]
+    found: bool
+    best_rank: int | None = None
+
+
+class QualityReport(BaseModel):
+    """Aggregate quality report for search accuracy."""
+
+    accuracy: float
+    total_queries: int
+    details: list[QualityDetail] = Field(default_factory=list)
