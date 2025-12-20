@@ -234,3 +234,13 @@ class ChromaIndex:
 
         if results["ids"]:
             collection.delete(ids=results["ids"])
+
+    def preload(self) -> None:
+        """Preload the embedding model and collection to avoid first-query latency.
+
+        Call this at startup to warm up the model before any searches.
+        """
+        # Load the embedding model (this is the slow part - 2-3s)
+        self._get_model()
+        # Initialize the collection
+        self._get_collection()
