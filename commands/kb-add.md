@@ -58,9 +58,6 @@ mcp__plugin_voidlabs-kb_voidlabs-kb__add(
 ### 4. Suggest Related Links
 After creation, search for related entries and suggest linking them.
 
-### 5. Offer to Sync
-Ask: "Would you like to commit and push this change? (Run `/kb-sync`)"
-
 ## Example Session
 
 ```
@@ -84,5 +81,4 @@ Claude: Any tags? (comma-separated, or skip)
 User: nginx, proxy, web
 
 Claude: Created: infrastructure/nginx-reverse-proxy-setup.md
-Would you like to sync this to git?
 ```
