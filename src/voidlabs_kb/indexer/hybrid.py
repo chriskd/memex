@@ -46,14 +46,20 @@ class HybridSearcher:
             mode: Search mode - "hybrid", "keyword", or "semantic".
 
         Returns:
-            List of search results.
+            List of search results, deduplicated by document path.
         """
+        # Fetch more results to allow for deduplication
+        fetch_limit = limit * 3
+
         if mode == "keyword":
-            return self._whoosh.search(query, limit=limit)
+            results = self._whoosh.search(query, limit=fetch_limit)
         elif mode == "semantic":
-            return self._chroma.search(query, limit=limit)
+            results = self._chroma.search(query, limit=fetch_limit)
         else:
-            return self._hybrid_search(query, limit=limit)
+            results = self._hybrid_search(query, limit=fetch_limit)
+
+        # Deduplicate by path, keeping highest-scoring chunk per document
+        return self._deduplicate_by_path(results, limit)
 
     def _hybrid_search(self, query: str, limit: int) -> list[SearchResult]:
         """Perform hybrid search using Reciprocal Rank Fusion.
@@ -169,6 +175,33 @@ class HybridSearcher:
             res.score = min(1.0, res.score / max_score)
 
         return results
+
+    def _deduplicate_by_path(
+        self, results: list[SearchResult], limit: int
+    ) -> list[SearchResult]:
+        """Deduplicate results by document path, keeping highest-scoring chunk.
+
+        Args:
+            results: List of search results (may contain duplicates).
+            limit: Maximum number of results to return.
+
+        Returns:
+            Deduplicated list with at most one result per document path.
+        """
+        if not results:
+            return results
+
+        # Keep track of best result per path
+        best_by_path: dict[str, SearchResult] = {}
+
+        for result in results:
+            path = result.path
+            if path not in best_by_path or result.score > best_by_path[path].score:
+                best_by_path[path] = result
+
+        # Sort by score descending and limit
+        deduplicated = sorted(best_by_path.values(), key=lambda r: r.score, reverse=True)
+        return deduplicated[:limit]
 
     def index_document(self, chunk: DocumentChunk) -> None:
         """Index a single document chunk to both indices.

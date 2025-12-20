@@ -15,6 +15,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from voidlabs_kb.parser import parse_entry, ParseError
+
 # Cache configuration
 CACHE_DIR = Path("/tmp")
 CACHE_TTL_SECONDS = 3600  # 1 hour
@@ -109,34 +111,6 @@ def get_kb_root() -> Path | None:
     return None
 
 
-def parse_frontmatter(content: str) -> tuple[dict, str]:
-    """Parse YAML frontmatter from markdown content."""
-    if not content.startswith("---"):
-        return {}, content
-
-    # Find end of frontmatter
-    end_match = re.search(r"\n---\n", content[3:])
-    if not end_match:
-        return {}, content
-
-    frontmatter_text = content[4 : end_match.start() + 3]
-    body = content[end_match.end() + 4 :]
-
-    # Simple YAML parsing for frontmatter
-    metadata: dict = {}
-    for line in frontmatter_text.split("\n"):
-        if ":" in line:
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip()
-            if value.startswith("[") or value.startswith("-"):
-                continue  # Skip complex values for simplicity
-            if value:
-                metadata[key] = value
-
-    return metadata, body
-
-
 def extract_summary(content: str, max_length: int = 150) -> str:
     """Extract first meaningful paragraph as summary."""
     # Remove headers
@@ -163,23 +137,23 @@ def scan_kb_entries(kb_root: Path) -> list[dict]:
             continue  # Skip index files
 
         try:
-            content = md_file.read_text()
-            metadata, body = parse_frontmatter(content)
+            # Use shared parser for consistent frontmatter handling
+            metadata, content, _ = parse_entry(md_file)
 
             relative_path = md_file.relative_to(kb_root)
-            title = metadata.get("title", md_file.stem.replace("-", " ").title())
-            tags = metadata.get("tags", "")
+            # Convert tags list to string for scoring
+            tags_str = " ".join(metadata.tags) if metadata.tags else ""
 
             entries.append(
                 {
                     "path": str(relative_path),
-                    "title": title,
-                    "tags": tags,
-                    "summary": extract_summary(body),
+                    "title": metadata.title,
+                    "tags": tags_str,
+                    "summary": extract_summary(content),
                     "category": relative_path.parent.name if relative_path.parent.name else "root",
                 }
             )
-        except (OSError, UnicodeDecodeError):
+        except (OSError, UnicodeDecodeError, ParseError):
             continue
 
     return entries
