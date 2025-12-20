@@ -3,14 +3,17 @@
 import re
 import subprocess
 from datetime import date
+from pathlib import Path
 from typing import Literal
 
 from fastmcp import FastMCP
 
+from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import get_kb_root
+from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
-from .models import IndexStatus, KBEntry, SearchResult
-from .parser import ParseError, extract_links, parse_entry, resolve_backlinks
+from .models import DocumentChunk, IndexStatus, KBEntry, QualityReport, SearchResult
+from .parser import ParseError, extract_links, parse_entry
 
 mcp = FastMCP(
     name="voidlabs-kb",
@@ -31,6 +34,21 @@ Best practices:
 
 # Lazy-initialized searcher
 _searcher: HybridSearcher | None = None
+_searcher_ready = False
+
+def _maybe_initialize_searcher(searcher: HybridSearcher) -> None:
+    """Ensure search indices are populated before first query."""
+    global _searcher_ready
+    if _searcher_ready:
+        return
+
+    status = searcher.status()
+    if status.kb_files > 0 and (status.whoosh_docs == 0 or status.chroma_docs == 0):
+        kb_root = get_kb_root()
+        if kb_root.exists():
+            searcher.reindex(kb_root)
+
+    _searcher_ready = True
 
 
 def _get_searcher() -> HybridSearcher:
@@ -38,6 +56,7 @@ def _get_searcher() -> HybridSearcher:
     global _searcher
     if _searcher is None:
         _searcher = HybridSearcher()
+    _maybe_initialize_searcher(_searcher)
     return _searcher
 
 
@@ -66,6 +85,47 @@ def _get_valid_categories() -> list[str]:
         for d in kb_root.iterdir()
         if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".")
     ]
+
+
+def _relative_kb_path(kb_root: Path, file_path: Path) -> str:
+    """Return file path relative to KB root."""
+    return str(file_path.relative_to(kb_root))
+
+
+def _normalize_chunks(chunks: list[DocumentChunk], relative_path: str) -> list[DocumentChunk]:
+    """Ensure all chunk paths share the relative file path."""
+    return [chunk.model_copy(update={"path": relative_path}) for chunk in chunks]
+
+
+def _apply_section_updates(content: str, updates: dict[str, str]) -> str:
+    """Apply section-level updates to markdown content."""
+
+    updated = content
+    for section, replacement in updates.items():
+        clean_section = section.strip()
+        clean_replacement = replacement.strip()
+        if not clean_section or not clean_replacement:
+            continue
+
+        pattern = re.compile(
+            rf"(^##\s+{re.escape(clean_section)}\s*$)(.*?)(?=^##\s+|\Z)",
+            re.MULTILINE | re.DOTALL,
+        )
+
+        if pattern.search(updated):
+            updated = pattern.sub(
+                f"## {clean_section}\n\n{clean_replacement}\n\n", updated, count=1
+            )
+        else:
+            updated = updated.rstrip() + f"\n\n## {clean_section}\n\n{clean_replacement}\n"
+
+    return updated
+
+
+def _get_backlink_index() -> dict[str, list[str]]:
+    """Return cached backlink index, refreshing if files changed."""
+    kb_root = get_kb_root()
+    return ensure_backlink_cache(kb_root)
 
 
 @mcp.tool(
@@ -101,6 +161,17 @@ async def search_tool(
         results = [r for r in results if tag_set.intersection(r.tags)]
 
     return results
+
+
+@mcp.tool(
+    name="quality",
+    description="Run the built-in search accuracy evaluation suite and return metrics.",
+)
+async def quality_tool(limit: int = 5, cutoff: int = 3) -> QualityReport:
+    """Evaluate MCP search accuracy."""
+
+    searcher = _get_searcher()
+    return run_quality_checks(searcher, limit=limit, cutoff=cutoff)
 
 
 @mcp.tool(
@@ -172,13 +243,16 @@ created: {today}
 """
     # Write the file
     file_path.write_text(frontmatter + final_content, encoding="utf-8")
+    rebuild_backlink_cache(kb_root)
 
     # Reindex the new file
     try:
-        metadata, raw_content, chunks = parse_entry(file_path)
+        _, _, chunks = parse_entry(file_path)
         searcher = _get_searcher()
         if chunks:
-            searcher.index_chunks(chunks)
+            relative_path = _relative_kb_path(kb_root, file_path)
+            normalized_chunks = _normalize_chunks(chunks, relative_path)
+            searcher.index_chunks(normalized_chunks)
     except ParseError:
         # File was written but indexing failed - still return success
         pass
@@ -195,8 +269,9 @@ created: {today}
 )
 async def update_tool(
     path: str,
-    content: str,
+    content: str | None = None,
     tags: list[str] | None = None,
+    section_updates: dict[str, str] | None = None,
 ) -> str:
     """Update an existing KB entry.
 
@@ -217,9 +292,12 @@ async def update_tool(
     if not file_path.is_file():
         raise ValueError(f"Path is not a file: {path}")
 
+    if content is None and not section_updates:
+        raise ValueError("Provide new content or section_updates")
+
     # Parse existing entry to get metadata
     try:
-        metadata, old_content, _ = parse_entry(file_path)
+        metadata, existing_content, _ = parse_entry(file_path)
     except ParseError as e:
         raise ValueError(f"Failed to parse existing entry: {e}") from e
 
@@ -258,23 +336,31 @@ async def update_tool(
     frontmatter_parts.append("---\n\n")
     frontmatter = "\n".join(frontmatter_parts)
 
+    new_content = content if content is not None else existing_content
+    if section_updates:
+        new_content = _apply_section_updates(new_content, section_updates)
+
     # Write updated file
-    file_path.write_text(frontmatter + content, encoding="utf-8")
+    file_path.write_text(frontmatter + new_content, encoding="utf-8")
+    rebuild_backlink_cache(kb_root)
+
+    relative_path = _relative_kb_path(kb_root, file_path)
 
     # Reindex
     searcher = _get_searcher()
     try:
         # Remove old index entries
-        searcher.delete_document(path)
+        searcher.delete_document(relative_path)
         # Parse and index new content
         _, _, chunks = parse_entry(file_path)
         if chunks:
-            searcher.index_chunks(chunks)
+            normalized_chunks = _normalize_chunks(chunks, relative_path)
+            searcher.index_chunks(normalized_chunks)
     except (ParseError, Exception):
         # Indexing failed but file was updated
         pass
 
-    return path
+    return relative_path
 
 
 @mcp.tool(
@@ -310,7 +396,7 @@ async def get_tool(path: str) -> KBEntry:
     links = extract_links(content)
 
     # Get backlinks
-    all_backlinks = resolve_backlinks(kb_root)
+    all_backlinks = _get_backlink_index()
     # Normalize path for lookup (remove .md extension)
     path_key = path[:-3] if path.endswith(".md") else path
     entry_backlinks = all_backlinks.get(path_key, [])
@@ -402,12 +488,10 @@ async def backlinks_tool(path: str) -> list[str]:
     Returns:
         List of paths that link to this entry.
     """
-    kb_root = get_kb_root()
-
     # Normalize path (remove .md extension for lookup)
     path_key = path[:-3] if path.endswith(".md") else path
 
-    all_backlinks = resolve_backlinks(kb_root)
+    all_backlinks = _get_backlink_index()
     return all_backlinks.get(path_key, [])
 
 
@@ -425,6 +509,7 @@ async def reindex_tool() -> IndexStatus:
     searcher = _get_searcher()
 
     searcher.reindex(kb_root)
+    rebuild_backlink_cache(kb_root)
 
     status = searcher.status()
     return status

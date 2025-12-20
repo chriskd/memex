@@ -1,5 +1,6 @@
 """Hybrid search combining Whoosh BM25 and ChromaDB semantic search."""
 
+import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
@@ -78,10 +79,11 @@ class HybridSearcher:
             return whoosh_results[:limit]
 
         # Apply RRF
-        return self._rrf_merge(whoosh_results, chroma_results, limit)
+        return self._rrf_merge(query, whoosh_results, chroma_results, limit)
 
     def _rrf_merge(
         self,
+        query: str,
         whoosh_results: list[SearchResult],
         chroma_results: list[SearchResult],
         limit: int,
@@ -139,7 +141,34 @@ class HybridSearcher:
                 )
             )
 
-        return final_results
+        return self._apply_ranking_adjustments(query, final_results)
+
+    def _apply_ranking_adjustments(
+        self, query: str, results: list[SearchResult]
+    ) -> list[SearchResult]:
+        """Boost results with matching tags and renormalize scores."""
+
+        if not results:
+            return results
+
+        tokens = {tok for tok in re.split(r"\W+", query.lower()) if tok}
+        if not tokens:
+            return results
+
+        for result in results:
+            tag_tokens = {tag.lower() for tag in result.tags}
+            overlap = tokens.intersection(tag_tokens)
+            if overlap:
+                result.score += 0.05 * len(overlap)
+
+        max_score = max((res.score for res in results), default=1.0)
+        if max_score <= 0:
+            return results
+
+        for res in results:
+            res.score = min(1.0, res.score / max_score)
+
+        return results
 
     def index_document(self, chunk: DocumentChunk) -> None:
         """Index a single document chunk to both indices.
@@ -202,7 +231,14 @@ class HybridSearcher:
             try:
                 # Parse the file - returns (metadata, content, chunks)
                 _, _, file_chunks = parse_entry(md_file)
-                chunks.extend(file_chunks)
+                if not file_chunks:
+                    continue
+
+                relative_path = str(md_file.relative_to(kb_root))
+                normalized_chunks = [
+                    chunk.model_copy(update={"path": relative_path}) for chunk in file_chunks
+                ]
+                chunks.extend(normalized_chunks)
             except Exception:
                 # Skip files that can't be parsed
                 continue
