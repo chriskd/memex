@@ -98,30 +98,13 @@ See [[references/categories]] for the full category taxonomy.
 - Mark outdated information clearly
 - Remove entries that are no longer relevant
 
-## Sync Workflow
-
-After making significant contributions, sync your changes:
-
-```
-# Use the MCP sync tool to commit and push
-sync
-```
-
-This commits your KB changes with an appropriate message and pushes to the remote repository. Similar to `bd sync` for issue tracking.
-
-**When to sync:**
-- After adding a new entry
-- After updating multiple entries
-- Before ending a work session
-- When you want others to see your changes
-
 ## Quick Reference
 
 | Action | Tool | Example |
 |--------|------|---------|
 | Find knowledge | `search` | `search "cloudflare dns"` |
 | Add new entry | `add` | `add infrastructure/dns-setup.md` |
-| Push changes | `sync` | `sync` |
+| Update entry | `update` | `update path="devops/docker.md"` |
 
 ## Anti-patterns
 
@@ -129,4 +112,3 @@ This commits your KB changes with an appropriate message and pushes to the remot
 - Linking everything to everything (dilutes link value)
 - Using project-specific tags in org-wide KB
 - Leaving entries without tags or with wrong category
-- Not syncing after contributions (changes stay local)

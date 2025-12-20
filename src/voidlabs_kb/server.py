@@ -1,7 +1,6 @@
 """FastMCP server for voidlabs-kb."""
 
 import re
-import subprocess
 from datetime import date
 from pathlib import Path
 from typing import Literal
@@ -22,13 +21,12 @@ Voidlabs Knowledge Base - Organization-wide knowledge with semantic search.
 
 Use `search` to find documentation, patterns, and operational guides.
 Use `add` to contribute new knowledge entries.
-Use `sync` to commit and push your KB changes.
+Use `update` to modify existing entries.
 
 Best practices:
 - Search before creating to avoid duplicates
 - Use consistent tags from the existing taxonomy
 - Add [[bidirectional links]] to related entries
-- Run sync after making significant contributions
 """,
 )
 
@@ -513,74 +511,6 @@ async def reindex_tool() -> IndexStatus:
 
     status = searcher.status()
     return status
-
-
-@mcp.tool(
-    name="sync",
-    description="Commit and push knowledge base changes to git.",
-)
-async def sync_tool(message: str | None = None) -> str:
-    """Commit and push KB changes.
-
-    Args:
-        message: Optional commit message. Defaults to "Update knowledge base".
-
-    Returns:
-        Success or failure message.
-    """
-    kb_root = get_kb_root()
-    commit_message = message or "Update knowledge base"
-
-    try:
-        # Check for changes
-        result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=kb_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        if not result.stdout.strip():
-            return "No changes to commit"
-
-        # Stage all changes in kb directory
-        subprocess.run(
-            ["git", "add", "."],
-            cwd=kb_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        # Commit
-        subprocess.run(
-            ["git", "commit", "-m", commit_message],
-            cwd=kb_root,
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-
-        # Push
-        push_result = subprocess.run(
-            ["git", "push"],
-            cwd=kb_root,
-            capture_output=True,
-            text=True,
-        )
-
-        if push_result.returncode != 0:
-            return f"Committed but push failed: {push_result.stderr}"
-
-        return f"Successfully committed and pushed: {commit_message}"
-
-    except subprocess.CalledProcessError as e:
-        return f"Git operation failed: {e.stderr or str(e)}"
-    except FileNotFoundError:
-        return "Git not found. Please ensure git is installed."
-    except Exception as e:
-        return f"Sync failed: {e}"
 
 
 def main():
