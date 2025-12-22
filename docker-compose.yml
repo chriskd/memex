@@ -12,12 +12,16 @@ services:
     ports:
       - "8088:8080"
     volumes:
-      # Mount knowledge base (read-only for web explorer)
-      - ./kb:/kb:ro
+      # Mount KB project root for registry path resolution
+      - ./:/project:ro
+      # Mount cross-project beads directories at host paths (for registry resolution)
+      - /srv/fast/code/epstein/.beads:/srv/fast/code/epstein/.beads:ro
+      - /srv/fast/code/voidlabs-ansible/.beads:/srv/fast/code/voidlabs-ansible/.beads:ro
+      - /srv/fast/code/voidlabs-devtools/.beads:/srv/fast/code/voidlabs-devtools/.beads:ro
       # Persistent storage for indices and view tracking
       - kb-data:/data
     environment:
-      - KB_ROOT=/kb
+      - KB_ROOT=/project/kb
       - INDEX_ROOT=/data/indices
       - HOST=0.0.0.0
       - PORT=8080

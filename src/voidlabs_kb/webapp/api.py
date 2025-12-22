@@ -188,6 +188,52 @@ async def search(
     return SearchResponseAPI(results=results, total=len(results))
 
 
+# NOTE: This route must come BEFORE the generic /api/entries/{path:path} route
+# because FastAPI's {path:path} is greedy and would match "/beads" as part of the path
+@app.get("/api/entries/{path:path}/beads", response_model=EntryBeadsResponse)
+async def get_entry_beads(path: str):
+    """Get beads issues linked from a KB entry.
+
+    Uses the beads registry to resolve issues from any registered project.
+    """
+    kb_root = get_kb_root()
+
+    # Ensure .md extension
+    if not path.endswith(".md"):
+        path = f"{path}.md"
+
+    file_path = kb_root / path
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"Entry not found: {path}")
+
+    try:
+        metadata, content, _ = parse_entry(file_path)
+    except ParseError as e:
+        raise HTTPException(status_code=500, detail=f"Parse error: {e}")
+
+    # Get specifically linked issues using registry-aware resolution
+    linked_issues = []
+    if metadata.beads_issues:
+        linked_issues = resolve_issues(metadata.beads_issues)
+
+    # Get project issues if linked to a project
+    project_issues = None
+    if metadata.beads_project:
+        kanban = get_kanban_for_project(metadata.beads_project)
+        if kanban:
+            # Flatten all columns into a single list
+            project_issues = []
+            for col in kanban.columns:
+                project_issues.extend(col.issues)
+
+    return EntryBeadsResponse(
+        linked_issues=[_format_beads_issue(i) for i in linked_issues],
+        project_issues=[_format_beads_issue(i) for i in project_issues]
+        if project_issues
+        else None,
+    )
+
+
 @app.get("/api/entries/{path:path}", response_model=EntryResponse)
 async def get_entry(path: str):
     """Get a single KB entry."""
@@ -545,50 +591,6 @@ async def get_beads_kanban(project: str | None = None):
             for col in kanban_data.columns
         ],
         total_issues=kanban_data.total_issues,
-    )
-
-
-@app.get("/api/entries/{path:path}/beads", response_model=EntryBeadsResponse)
-async def get_entry_beads(path: str):
-    """Get beads issues linked from a KB entry.
-
-    Uses the beads registry to resolve issues from any registered project.
-    """
-    kb_root = get_kb_root()
-
-    # Ensure .md extension
-    if not path.endswith(".md"):
-        path = f"{path}.md"
-
-    file_path = kb_root / path
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Entry not found: {path}")
-
-    try:
-        metadata, content, _ = parse_entry(file_path)
-    except ParseError as e:
-        raise HTTPException(status_code=500, detail=f"Parse error: {e}")
-
-    # Get specifically linked issues using registry-aware resolution
-    linked_issues = []
-    if metadata.beads_issues:
-        linked_issues = resolve_issues(metadata.beads_issues)
-
-    # Get project issues if linked to a project
-    project_issues = None
-    if metadata.beads_project:
-        kanban = get_kanban_for_project(metadata.beads_project)
-        if kanban:
-            # Flatten all columns into a single list
-            project_issues = []
-            for col in kanban.columns:
-                project_issues.extend(col.issues)
-
-    return EntryBeadsResponse(
-        linked_issues=[_format_beads_issue(i) for i in linked_issues],
-        project_issues=[_format_beads_issue(i) for i in project_issues]
-        if project_issues
-        else None,
     )
 
 
