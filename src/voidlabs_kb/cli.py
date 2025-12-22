@@ -100,6 +100,121 @@ def cli():
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Prime Command (Agent Context Injection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+PRIME_OUTPUT = """# Voidlabs Knowledge Base
+
+> Search organizational knowledge before reinventing. Add discoveries for future agents.
+
+## CLI Quick Reference
+
+```bash
+# Search (hybrid keyword + semantic)
+vl-kb search "deployment"              # Find entries
+vl-kb search "docker" --tags=infra     # Filter by tag
+vl-kb search "api" --mode=semantic     # Semantic only
+
+# Read entries
+vl-kb get tooling/beads.md             # Full entry
+vl-kb get tooling/beads.md --metadata  # Just metadata
+
+# Browse
+vl-kb tree                             # Directory structure
+vl-kb list --tag=infrastructure        # Filter by tag
+vl-kb whats-new --days=7               # Recent changes
+
+# Contribute
+vl-kb add --title="My Entry" --tags="foo,bar" --content="..."
+vl-kb add --title="..." --tags="..." --file=content.md
+cat notes.md | vl-kb add --title="..." --tags="..." --stdin
+
+# Maintenance
+vl-kb health                           # Audit for problems
+vl-kb suggest-links path/entry.md      # Find related entries
+```
+
+## When to Search KB
+
+- ✅ Looking for org patterns, guides, troubleshooting
+- ✅ Before implementing something that might exist
+- ✅ Understanding infrastructure or deployment
+
+## When to Contribute
+
+- ✅ Discovered reusable pattern or solution
+- ✅ Troubleshooting steps worth preserving
+- ✅ Infrastructure or deployment knowledge
+
+## Entry Format
+
+Entries are Markdown with YAML frontmatter:
+
+```markdown
+---
+title: Entry Title
+tags: [tag1, tag2]
+created: 2024-01-15
+---
+
+# Entry Title
+
+Content with [[bidirectional links]] to other entries.
+```
+
+Use `[[path/to/entry.md|Display Text]]` for links.
+"""
+
+PRIME_MCP_OUTPUT = """# KB Quick Reference
+Search: `vl-kb search "query"` | Read: `vl-kb get path.md` | Add: `vl-kb add --title="..." --tags="..."`
+"""
+
+
+def _detect_mcp_mode() -> bool:
+    """Detect if running in MCP context (minimal output preferred)."""
+    import os
+    # If MCP server is active, we're likely in a context where minimal output is better
+    # Check for common MCP environment indicators
+    return os.environ.get("MCP_SERVER_ACTIVE") == "1"
+
+
+@cli.command()
+@click.option("--full", is_flag=True, help="Force full CLI output (ignore MCP detection)")
+@click.option("--mcp", is_flag=True, help="Force MCP mode (minimal output)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def prime(full: bool, mcp: bool, as_json: bool):
+    """Output agent workflow context for session start.
+
+    Automatically detects MCP vs CLI mode and adapts output:
+    - CLI mode: Full command reference (~1-2k tokens)
+    - MCP mode: Brief workflow reminders (~50 tokens)
+
+    Designed for Claude Code hooks (SessionStart, PreCompact) to prevent
+    agents from forgetting KB workflow after context compaction.
+
+    \b
+    Examples:
+      vl-kb prime              # Auto-detect mode
+      vl-kb prime --full       # Force full output
+      vl-kb prime --mcp        # Force minimal output
+    """
+    # Determine output mode
+    if full:
+        use_full = True
+    elif mcp:
+        use_full = False
+    else:
+        use_full = not _detect_mcp_mode()
+
+    content = PRIME_OUTPUT if use_full else PRIME_MCP_OUTPUT
+
+    if as_json:
+        output({"mode": "full" if use_full else "mcp", "content": content}, as_json=True)
+    else:
+        click.echo(content)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Search Command
 # ─────────────────────────────────────────────────────────────────────────────
 
