@@ -3,65 +3,36 @@ title: Voidlabs Knowledge Base
 tags:
   - index
   - overview
-created: 2024-12-19
+created: 2025-12-20
 ---
 
 # Voidlabs Knowledge Base
 
-This knowledge base contains operational guidance, patterns, and documentation for voidlabs projects. It serves as a reference for both human developers and AI agents working in this environment.
+Organizational knowledge for voidlabs projects—infrastructure, patterns, and operational guidance for both human developers and AI agents.
 
-## Categories
+## Infrastructure
 
-### [[devops/]]
-Deployment, CI/CD, and operational concerns.
-- [[devops/deployment]] - Dokploy deployment workflow
-- [[devops/docker-patterns]] - Dockerfile patterns with uv
+Core infrastructure documentation:
 
-### [[development/]]
-Development tooling and practices.
-- [[development/python-tooling]] - Python development with uv
-- [[development/project-structure]] - Standard project layout
+- [[Voidlabs Infrastructure Overview]] - Proxmox homelab architecture and design principles
+- [[Voidlabs Storage Architecture]] - Multi-tier ZFS storage, NFS, and virtiofs
+- [[Voidlabs Networking and DNS]] - Network layout, OPNsense, AdGuard, Caddy
 
-### [[infrastructure/]]
-Environment and infrastructure setup.
-- [[infrastructure/devcontainers]] - Devcontainer configuration
+## DevOps
 
-### [[architecture/]]
-System design and architectural decisions.
+Provisioning and automation:
 
-### [[patterns/]]
-Coding patterns and philosophy.
-- [[patterns/clean-changes]] - Clean changes over backwards compatibility
+- [[Voidlabs Provisioning Workflow]] - Step-by-step guest provisioning guide
+- [[Voidlabs CI/CD Automation]] - GitHub Actions, testing, release automation
 
-### [[troubleshooting/]]
-Common issues and solutions.
+## Tools
+
+- [[Voidlabs Knowledge Base Plugin]] - This KB system and how to use it
 
 ## Contributing
 
-To add new entries:
-
-1. Create a new `.md` file in the appropriate category directory
-2. Include proper frontmatter:
-   ```yaml
-   ---
-   title: Entry Title
-   tags:
-     - relevant
-     - tags
-   created: YYYY-MM-DD
-   contributors:
-     - your-name
-   ---
-   ```
-3. Use `[[bidirectional links]]` to connect related entries
+1. Create `.md` file in appropriate category
+2. Include frontmatter with title, tags, created date
+3. Use `[[bidirectional links]]` to connect entries
 4. Keep entries focused on one topic
-5. Include actionable content and code examples
-
-## Usage
-
-This KB is available as a Claude Code plugin. AI agents can query entries for operational guidance. Entries are designed to be:
-
-- **Focused** - One topic per file
-- **Actionable** - Include commands and examples
-- **Connected** - Link to related entries
-- **Current** - Update when practices change
+5. Include actionable content and examples
