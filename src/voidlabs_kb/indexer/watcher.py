@@ -139,17 +139,29 @@ class FileWatcher:
 
         # Import here to avoid circular imports
         from ..parser import parse_entry
+        from ..webapp.events import Event, EventType, get_broadcaster
 
+        broadcaster = get_broadcaster()
         refresh_backlinks = False
+        changed_paths: list[str] = []
 
         for file_path in files:
             try:
                 # Check if file was deleted
                 if not file_path.exists():
-                    relative_path = file_path.relative_to(self._kb_root)
-                    self._searcher.delete_document(str(relative_path))
+                    relative_path = str(file_path.relative_to(self._kb_root))
+                    self._searcher.delete_document(relative_path)
                     logger.debug(f"Removed from index: {relative_path}")
                     refresh_backlinks = True
+                    changed_paths.append(relative_path)
+
+                    # Broadcast delete event
+                    broadcaster.broadcast_sync(
+                        Event(
+                            type=EventType.FILE_DELETED,
+                            data={"path": relative_path},
+                        )
+                    )
                     continue
 
                 relative_path = str(file_path.relative_to(self._kb_root))
@@ -161,16 +173,35 @@ class FileWatcher:
                     chunk.model_copy(update={"path": relative_path}) for chunk in chunks
                 ]
 
+                # Update index
                 self._searcher.delete_document(relative_path)
                 self._searcher.index_chunks(normalized_chunks)
                 logger.debug(f"Re-indexed: {relative_path}")
                 refresh_backlinks = True
+                changed_paths.append(relative_path)
+
+                # Broadcast change event
+                broadcaster.broadcast_sync(
+                    Event(
+                        type=EventType.FILE_CHANGED,
+                        data={"path": relative_path},
+                    )
+                )
 
             except Exception as e:
                 logger.warning(f"Failed to process {file_path}: {e}")
 
         if refresh_backlinks:
             rebuild_backlink_cache(self._kb_root)
+
+        # Broadcast completion event
+        if changed_paths:
+            broadcaster.broadcast_sync(
+                Event(
+                    type=EventType.REINDEX_COMPLETE,
+                    data={"paths": changed_paths, "count": len(changed_paths)},
+                )
+            )
 
     def start(self) -> None:
         """Start watching for file changes."""

@@ -237,6 +237,42 @@
             font-weight: 500;
         }
 
+        /* Live reload indicator */
+        #live-reload-indicator {
+            opacity: 0.5;
+            transition: opacity 0.3s ease;
+        }
+
+        #live-reload-indicator.connected {
+            opacity: 1;
+        }
+
+        .live-reload-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            transition: all 0.3s ease;
+        }
+
+        #live-reload-indicator.connected .live-reload-dot {
+            background: var(--accent-green);
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+
+        #live-reload-indicator.flash .live-reload-dot {
+            background: var(--accent-amber);
+            box-shadow: 0 0 12px var(--accent-amber);
+            animation: flash-pulse 0.5s ease;
+        }
+
+        @keyframes flash-pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.5); }
+            100% { transform: scale(1); }
+        }
+
         /* Sidebar */
         .sidebar {
             background: var(--bg-dark);
@@ -1274,6 +1310,10 @@
                     <span class="stat-value" id="stat-links">-</span>
                     <span>links</span>
                 </div>
+                <div class="stat" id="live-reload-indicator" title="Live reload connecting...">
+                    <span class="live-reload-dot"></span>
+                    <span>live</span>
+                </div>
             </div>
         </header>
 
@@ -1464,6 +1504,127 @@
             setupViewToggle();
             setupKeyboard();
             setupModalBackdrop();
+            setupLiveReload();
+        }
+
+        // Live reload via Server-Sent Events
+        function setupLiveReload() {
+            let eventSource = null;
+            let reconnectAttempts = 0;
+            const maxReconnectAttempts = 10;
+            const reconnectDelay = 3000;
+
+            function connect() {
+                if (eventSource) {
+                    eventSource.close();
+                }
+
+                console.log('Live reload: connecting to SSE...');
+                eventSource = new EventSource('/api/events');
+
+                eventSource.onopen = () => {
+                    console.log('Live reload: connected');
+                    reconnectAttempts = 0;
+                    updateLiveReloadIndicator(true);
+                };
+
+                eventSource.onerror = (e) => {
+                    console.warn('Live reload: connection error', e);
+                    updateLiveReloadIndicator(false);
+                    eventSource.close();
+
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        console.log(`Live reload: reconnecting in ${reconnectDelay}ms (attempt ${reconnectAttempts})`);
+                        setTimeout(connect, reconnectDelay);
+                    } else {
+                        console.error('Live reload: max reconnect attempts reached');
+                    }
+                };
+
+                // Handle file change events
+                eventSource.addEventListener('file_changed', (e) => {
+                    const data = JSON.parse(e.data);
+                    console.log('Live reload: file changed', data.path);
+                    handleFileChange(data.path);
+                });
+
+                eventSource.addEventListener('file_deleted', (e) => {
+                    const data = JSON.parse(e.data);
+                    console.log('Live reload: file deleted', data.path);
+                    handleFileChange(data.path, true);
+                });
+
+                eventSource.addEventListener('reindex_complete', (e) => {
+                    const data = JSON.parse(e.data);
+                    console.log('Live reload: reindex complete', data.count, 'files');
+                    // Refresh tree and stats after bulk changes
+                    loadTree();
+                    loadStats();
+                    loadRecent();
+                });
+
+                eventSource.addEventListener('heartbeat', (e) => {
+                    // Just keep-alive, no action needed
+                });
+            }
+
+            function handleFileChange(changedPath, isDeleted = false) {
+                // Refresh tree sidebar
+                loadTree();
+                loadStats();
+                loadRecent();
+
+                // If we're viewing the changed file, reload it
+                if (state.currentEntry && state.currentEntry.path === changedPath) {
+                    if (isDeleted) {
+                        // File was deleted, show welcome screen
+                        state.currentEntry = null;
+                        $('#welcome').style.display = 'flex';
+                        $('#entry-content').style.display = 'none';
+                        $('#links-out').innerHTML = '<div class="empty-state">No outgoing links</div>';
+                        $('#links-in').innerHTML = '<div class="empty-state">No backlinks</div>';
+                    } else {
+                        // Reload the current entry
+                        loadEntry(changedPath);
+                    }
+                }
+
+                // If graph is visible, refresh it
+                if (state.currentView === 'graph') {
+                    state.graph = null;
+                    loadGraph();
+                }
+
+                // Flash indicator to show update happened
+                flashLiveReloadIndicator();
+            }
+
+            function updateLiveReloadIndicator(connected) {
+                let indicator = $('#live-reload-indicator');
+                if (!indicator) return;
+                indicator.classList.toggle('connected', connected);
+                indicator.title = connected ? 'Live reload connected' : 'Live reload disconnected';
+            }
+
+            function flashLiveReloadIndicator() {
+                let indicator = $('#live-reload-indicator');
+                if (!indicator) return;
+                indicator.classList.add('flash');
+                setTimeout(() => indicator.classList.remove('flash'), 500);
+            }
+
+            // Start connection
+            connect();
+
+            // Reconnect on visibility change (when tab becomes active again)
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible' && eventSource?.readyState === EventSource.CLOSED) {
+                    console.log('Live reload: tab visible, reconnecting...');
+                    reconnectAttempts = 0;
+                    connect();
+                }
+            });
         }
 
         // Initialize beads

@@ -1,14 +1,17 @@
 """REST API for KB Explorer web application."""
 
+import asyncio
 import os
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from .events import Event, EventType, get_broadcaster
 
 from ..backlinks_cache import ensure_backlink_cache
 from ..config import get_kb_root
@@ -193,6 +196,80 @@ class EntryBeadsResponse(BaseModel):
 
 
 # API Routes
+
+
+# File watcher for live reload
+_file_watcher = None
+
+
+@app.on_event("startup")
+async def startup_event():
+    """Start the file watcher on server startup."""
+    global _file_watcher
+    from ..indexer.watcher import FileWatcher
+
+    searcher = _get_searcher()
+    kb_root = get_kb_root()
+
+    _file_watcher = FileWatcher(
+        searcher=searcher,
+        kb_root=kb_root,
+        debounce_seconds=2.0,  # Faster for live reload
+    )
+    _file_watcher.start()
+
+    # Start heartbeat task
+    asyncio.create_task(_heartbeat_loop())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop the file watcher on server shutdown."""
+    global _file_watcher
+    if _file_watcher is not None:
+        _file_watcher.stop()
+        _file_watcher = None
+
+
+async def _heartbeat_loop():
+    """Send periodic heartbeat to keep SSE connections alive."""
+    broadcaster = get_broadcaster()
+    while True:
+        await asyncio.sleep(30)
+        await broadcaster.broadcast(Event(type=EventType.HEARTBEAT))
+
+
+@app.get("/api/events")
+async def events():
+    """Server-Sent Events endpoint for live reload.
+
+    Clients connect here to receive real-time notifications when
+    KB files change. Events include:
+    - file_changed: A markdown file was modified
+    - file_created: A new markdown file was added
+    - file_deleted: A markdown file was removed
+    - reindex_complete: Re-indexing finished
+    - heartbeat: Keep-alive signal (every 30s)
+    """
+    broadcaster = get_broadcaster()
+
+    async def event_generator():
+        # Send initial connection event
+        yield Event(type=EventType.HEARTBEAT, data={"connected": True}).to_sse()
+
+        async for event in broadcaster.subscribe():
+            yield event.to_sse()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        },
+    )
+
 
 @app.get("/api/search", response_model=SearchResponseAPI)
 async def search(
