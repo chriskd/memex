@@ -1,80 +1,102 @@
 # voidlabs-kb
 
-Organization-wide knowledge base with semantic search for Claude Code.
+Organization-wide knowledge base with hybrid search (keyword + semantic).
 
 ## Features
 
 - **Hybrid search** - Combines keyword (Whoosh) and semantic (ChromaDB + sentence-transformers) search
-- **MCP tools** - search, add, update, get, list, backlinks, quality, reindex
-- **Slash commands** - `/kb search`, `/kb add`, `/kb quality`
-- **Session context** - Automatically surfaces relevant KB entries when starting sessions
+- **CLI tool** - `vl-kb` for token-efficient access from any environment
+- **MCP server** - For Claude Desktop and MCP-only environments
 - **Bidirectional links** - Obsidian-style `[[links]]` with backlink tracking
+- **Agent-optimized** - `vl-kb prime` for session context injection
+
+## CLI vs MCP
+
+**RECOMMENDED**: Use the `vl-kb` CLI for the best experience. This approach:
+
+- **Minimizes context usage** - CLI calls use ~0 tokens vs MCP tool schemas
+- **Lower latency** - Direct CLI calls are faster than MCP protocol overhead
+- **Universal** - Works with any AI assistant, not just MCP-compatible ones
+
+| Environment | Recommendation |
+|-------------|----------------|
+| ✅ Claude Code, Cursor, any shell access | Use `vl-kb` CLI |
+| ✅ MCP-only environments (Claude Desktop) | Use MCP server |
 
 ## Installation
 
-### Option 1: Plugin directory (recommended for development)
+### CLI (Recommended)
 
 ```bash
-claude --plugin-dir /path/to/voidlabs-kb
+# Install via uv (auto-installed in voidlabs devcontainers)
+uv tool install -e /path/to/voidlabs-kb
+
+# Verify installation
+vl-kb --version
 ```
 
-### Option 2: Copy to project
+### MCP Server
 
-Copy the entire directory to your project's `.claude-plugin/` folder:
-
-```bash
-cp -r /path/to/voidlabs-kb /your/project/.claude-plugin/voidlabs-kb
-```
-
-### Option 3: Global installation
-
-Add to your Claude Code settings (`~/.claude/settings.json`):
+Add to your Claude Code settings or `.mcp.json`:
 
 ```json
 {
-  "plugins": ["/path/to/voidlabs-kb"]
+  "mcpServers": {
+    "voidlabs-kb": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["--directory", "/path/to/voidlabs-kb", "run", "python", "-m", "voidlabs_kb"]
+    }
+  }
 }
 ```
 
-## Prerequisites
+## CLI Quick Reference
 
-- Python 3.11+
-- `uv` package manager (the MCP server uses `uv run`)
+```bash
+# Search (hybrid keyword + semantic)
+vl-kb search "deployment"              # Find entries
+vl-kb search "docker" --tags=infra     # Filter by tag
+vl-kb search "api" --mode=semantic     # Semantic only
 
-Dependencies are installed automatically via `uv` when the MCP server starts.
+# Read entries
+vl-kb get tooling/beads.md             # Full entry with content
+vl-kb get tooling/beads.md --metadata  # Just metadata
+vl-kb get tooling/beads.md --json      # JSON output
 
-## Usage
+# Browse
+vl-kb tree                             # Directory structure
+vl-kb list --tag=infrastructure        # Filter by tag
+vl-kb whats-new --days=7               # Recent changes
+vl-kb tags                             # List all tags with counts
 
-### Searching the KB
+# Create entries
+vl-kb add --title="My Entry" --tags="foo,bar" --content="# Content..."
+vl-kb add --title="..." --tags="..." --file=content.md
+cat notes.md | vl-kb add --title="..." --tags="..." --stdin
 
-```
-/kb search kubernetes deployment
-```
+# Update entries
+vl-kb update path/entry.md --tags="new,tags"
+vl-kb update path/entry.md --file=updated-content.md
 
-Or use the MCP tool directly:
-```
-search("kubernetes deployment")
-```
-
-### Adding entries
-
-```
-/kb add "Nginx reverse proxy setup"
-```
-
-The command will interactively guide you through:
-1. Duplicate checking
-2. Category selection
-3. Content entry
-4. Tag assignment
-
-### Checking quality
-
-```
-/kb quality
+# Maintenance
+vl-kb health                           # Audit for problems
+vl-kb suggest-links path/entry.md      # Find related entries
+vl-kb hubs                             # Most connected entries
+vl-kb reindex                          # Rebuild search indices
 ```
 
-Runs search accuracy tests to verify KB content is discoverable.
+### Agent Context with `vl-kb prime`
+
+Get AI-optimized workflow context at session start:
+
+```bash
+vl-kb prime              # Full CLI reference (~1-2k tokens)
+vl-kb prime --mcp        # Minimal output for MCP environments
+vl-kb prime --json       # JSON format for programmatic use
+```
+
+Designed for Claude Code hooks (SessionStart, PreCompact) to prevent agents from forgetting KB workflow after context compaction.
 
 ## Knowledge Base Structure
 
@@ -87,7 +109,8 @@ kb/
 ├── development/     # coding practices, languages
 ├── troubleshooting/ # problem solutions
 ├── architecture/    # system design, patterns
-└── patterns/        # reusable solutions
+├── tooling/         # tools and utilities
+└── projects/        # project-specific knowledge
 ```
 
 Each entry is a Markdown file with YAML frontmatter:
@@ -101,10 +124,14 @@ created: 2024-01-15
 
 # Kubernetes Pod Networking
 
-Content here...
+Content with [[bidirectional links]] to other entries.
 ```
 
-## MCP Tools
+Use `[[path/to/entry.md|Display Text]]` for wiki-style links.
+
+## MCP Tools Reference
+
+For MCP-only environments, these tools are available:
 
 | Tool | Description |
 |------|-------------|
@@ -113,32 +140,25 @@ Content here...
 | `update` | Modify existing entry |
 | `get` | Retrieve entry by path |
 | `list` | List entries (optionally by category) |
+| `whats_new` | Recently modified entries |
 | `backlinks` | Find entries linking to a given entry |
-| `quality` | Run search accuracy tests |
+| `suggest_links` | Find semantically related entries |
+| `tags` | List all tags with counts |
+| `health` | Audit KB for problems |
+| `hubs` | Most connected entries |
 | `reindex` | Rebuild search indices |
 
 ## Configuration
 
-The MCP server uses these environment variables (set automatically by the plugin):
+Environment variables (set automatically by plugin/devcontainer):
 
 - `KB_ROOT` - Path to knowledge base directory (default: `${CLAUDE_PLUGIN_ROOT}/kb`)
 - `INDEX_ROOT` - Path to search indices (default: `${CLAUDE_PLUGIN_ROOT}/.indices`)
-- `KB_PRELOAD` - Set to `1` to preload the embedding model at startup (reduces first-search latency from ~3s to instant)
+- `KB_PRELOAD` - Set to `1` to preload embedding model at startup
 
-To enable preloading, add to your `.mcp.json`:
+## Prerequisites
 
-```json
-{
-  "mcpServers": {
-    "voidlabs-kb": {
-      "env": {
-        "KB_PRELOAD": "1"
-      }
-    }
-  }
-}
-```
+- Python 3.11+
+- `uv` package manager
 
-## Contributor Tracking
-
-When you add or update entries via MCP tools, your git identity is automatically recorded in the entry's `contributors` field. This helps track who has contributed to organizational knowledge.
+Dependencies are installed automatically via `uv`.
