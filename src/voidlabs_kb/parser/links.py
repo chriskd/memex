@@ -3,15 +3,15 @@
 import re
 from pathlib import Path
 
+from .md_renderer import extract_links_only
 from .title_index import build_title_index, resolve_link_target
-
-# Pattern for [[link]] syntax - captures content between double brackets
-# Handles [[path/to/entry]] and [[entry]] formats
-LINK_PATTERN = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 def extract_links(content: str) -> list[str]:
     """Extract bidirectional links from markdown content.
+
+    Uses AST-based parsing via markdown-it-py for robust extraction
+    that handles edge cases like links in code blocks correctly.
 
     Args:
         content: Markdown content to extract links from.
@@ -19,19 +19,12 @@ def extract_links(content: str) -> list[str]:
     Returns:
         List of unique link targets (normalized, without .md extension).
     """
-    matches = LINK_PATTERN.findall(content)
+    return extract_links_only(content)
 
-    # Normalize and deduplicate
-    seen: set[str] = set()
-    links: list[str] = []
 
-    for link in matches:
-        normalized = _normalize_link(link)
-        if normalized and normalized not in seen:
-            seen.add(normalized)
-            links.append(normalized)
-
-    return links
+# Pattern for [[link]] syntax - used for link replacement operations
+# Handles [[path/to/entry]] and [[entry]] formats
+LINK_PATTERN = re.compile(r"\[\[([^\]]+)\]\]")
 
 
 def _normalize_link(link: str) -> str:
