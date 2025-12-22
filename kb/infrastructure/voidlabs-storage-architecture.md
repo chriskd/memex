@@ -7,8 +7,11 @@ tags:
   - virtiofs
   - infrastructure
 created: 2025-12-20
+updated: 2025-12-22
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
+edit_sources:
+  - voidlabs-kb
 ---
 
 # Voidlabs Storage Architecture
@@ -38,10 +41,13 @@ VMs have dual access methods:
 1. **NFS Mounts** - Traditional file sharing
    - Export path: `/srv/fast-nfs`, `/srv/slow-nfs`
    - Uses bindfs overlay for UID mapping
+   - **Recommended for workloads requiring full POSIX compliance** (Garage S3, databases, applications using xattrs)
 
 2. **virtiofs** - High-performance shared folders
    - Proxmox native feature
    - Better performance than NFS for local VMs
+   - **Limitations:** Does not support extended attributes (xattrs), certain ioctls, or advanced file locking
+   - See [[VirtioFS Limitations and Troubleshooting]] for known issues and solutions
 
 ## User/Permission Mapping
 
@@ -92,3 +98,5 @@ managed_hosts:
 
 - [[Voidlabs Infrastructure Overview]]
 - [[Voidlabs Provisioning Workflow]]
+- [[VirtioFS Limitations and Troubleshooting]]
+- [[Garage S3 Object Storage]]
