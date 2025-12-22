@@ -1060,9 +1060,11 @@
                 <ul class="link-list" id="links-in"></ul>
             </div>
 
-            <div class="panel-section" id="beads-section" style="display: none;">
+            <div class="panel-section" id="beads-section">
                 <div class="panel-header">Beads Issues</div>
-                <ul class="link-list" id="beads-issues"></ul>
+                <ul class="link-list" id="beads-issues">
+                    <li class="link-item">Loading beads...</li>
+                </ul>
             </div>
         </aside>
     </div>
@@ -1175,7 +1177,9 @@
         // Initialize beads
         async function initBeads() {
             try {
+                console.log('initBeads: fetching config...');
                 const config = await api.getBeadsConfig();
+                console.log('initBeads: config =', config);
                 state.beadsAvailable = config.available;
 
                 // Update kanban button state
@@ -1431,12 +1435,15 @@
             const section = $('#beads-section');
             const issuesList = $('#beads-issues');
 
+            issuesList.innerHTML = '<li class="link-item">Checking beads...</li>';
+
             if (!state.beadsAvailable) {
-                section.style.display = 'none';
+                issuesList.innerHTML = '<li class="link-item" style="color: orange;">Beads not available</li>';
                 return;
             }
 
             try {
+                issuesList.innerHTML = '<li class="link-item">Fetching...</li>';
                 const beadsData = await api.getEntryBeads(entry.path);
 
                 const allIssues = [
@@ -1445,11 +1452,10 @@
                 ];
 
                 if (allIssues.length === 0) {
-                    section.style.display = 'none';
+                    issuesList.innerHTML = '<li class="link-item" style="color: #888;">No linked issues</li>';
                     return;
                 }
 
-                section.style.display = 'block';
                 issuesList.innerHTML = allIssues.slice(0, 10).map(issue => `
                     <li class="link-item beads-issue-item" data-issue-id="${escapeHtml(issue.id)}">
                         <div class="link-title">
@@ -1462,7 +1468,7 @@
 
             } catch (e) {
                 console.error('Failed to load beads for entry:', e);
-                section.style.display = 'none';
+                issuesList.innerHTML = `<li class="link-item" style="color: red;">Error: ${e.message}</li>`;
             }
         }
 
