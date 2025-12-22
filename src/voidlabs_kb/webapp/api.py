@@ -14,7 +14,7 @@ from ..backlinks_cache import ensure_backlink_cache
 from ..config import get_kb_root
 from ..indexer import HybridSearcher
 from ..models import IndexStatus, KBEntry, SearchResult
-from ..parser import ParseError, extract_links, parse_entry
+from ..parser import ParseError, extract_links, parse_entry, render_markdown
 
 
 app = FastAPI(
@@ -114,81 +114,6 @@ class StatsResponse(BaseModel):
     recent_entries: list[dict]
 
 
-# Convert markdown to HTML (simple implementation)
-def _markdown_to_html(content: str) -> str:
-    """Convert markdown to HTML with wikilink support."""
-    import re
-    import html
-
-    # Escape HTML first
-    text = html.escape(content)
-
-    # Convert wikilinks to clickable links
-    text = re.sub(
-        r'\[\[([^\]]+)\]\]',
-        r'<a href="#" class="wikilink" data-path="\1">\1</a>',
-        text
-    )
-
-    # Headers
-    text = re.sub(r'^######\s+(.+)$', r'<h6>\1</h6>', text, flags=re.MULTILINE)
-    text = re.sub(r'^#####\s+(.+)$', r'<h5>\1</h5>', text, flags=re.MULTILINE)
-    text = re.sub(r'^####\s+(.+)$', r'<h4>\1</h4>', text, flags=re.MULTILINE)
-    text = re.sub(r'^###\s+(.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
-    text = re.sub(r'^##\s+(.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
-    text = re.sub(r'^#\s+(.+)$', r'<h1>\1</h1>', text, flags=re.MULTILINE)
-
-    # Code blocks
-    text = re.sub(
-        r'```(\w+)?\n(.*?)```',
-        r'<pre><code class="language-\1">\2</code></pre>',
-        text,
-        flags=re.DOTALL
-    )
-
-    # Inline code
-    text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
-
-    # Bold and italic
-    text = re.sub(r'\*\*\*(.+?)\*\*\*', r'<strong><em>\1</em></strong>', text)
-    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
-    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
-
-    # Links
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" target="_blank">\1</a>', text)
-
-    # Lists (simple)
-    lines = text.split('\n')
-    in_list = False
-    result = []
-    for line in lines:
-        if re.match(r'^[-*]\s+', line):
-            if not in_list:
-                result.append('<ul>')
-                in_list = True
-            line = re.sub(r'^[-*]\s+(.+)$', r'<li>\1</li>', line)
-        else:
-            if in_list:
-                result.append('</ul>')
-                in_list = False
-        result.append(line)
-    if in_list:
-        result.append('</ul>')
-    text = '\n'.join(result)
-
-    # Paragraphs
-    paragraphs = text.split('\n\n')
-    formatted = []
-    for p in paragraphs:
-        p = p.strip()
-        if p and not p.startswith('<'):
-            p = f'<p>{p}</p>'
-        formatted.append(p)
-    text = '\n'.join(formatted)
-
-    return text
-
-
 # API Routes
 
 @app.get("/api/search", response_model=SearchResponseAPI)
@@ -222,8 +147,10 @@ async def get_entry(path: str):
     except ParseError as e:
         raise HTTPException(status_code=500, detail=f"Parse error: {e}")
 
-    # Get links and backlinks
-    links = extract_links(content)
+    # Single-pass: get HTML and links from AST
+    md_result = render_markdown(content)
+
+    # Get backlinks
     all_backlinks = _get_backlink_index()
     path_key = path[:-3] if path.endswith(".md") else path
     backlinks = all_backlinks.get(path_key, [])
@@ -232,11 +159,11 @@ async def get_entry(path: str):
         path=path,
         title=metadata.title,
         content=content,
-        content_html=_markdown_to_html(content),
+        content_html=md_result.html,
         tags=list(metadata.tags),
         created=metadata.created.isoformat() if metadata.created else None,
         updated=metadata.updated.isoformat() if metadata.updated else None,
-        links=links,
+        links=md_result.links,
         backlinks=backlinks,
     )
 
