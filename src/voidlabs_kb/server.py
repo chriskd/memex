@@ -381,7 +381,8 @@ async def quality_tool(limit: int = 5, cutoff: int = 3) -> QualityReport:
     description=(
         "Create a new knowledge base entry. Generates a slug from the title "
         "and places the entry in the specified category or directory. "
-        "Returns the path and suggested links to related entries."
+        "Returns the path, suggested links to related entries, and suggested "
+        "additional tags based on content similarity and existing taxonomy."
     ),
 )
 async def add_tool(
@@ -405,7 +406,8 @@ async def add_tool(
         links: Optional list of paths to link to using [[link]] syntax.
 
     Returns:
-        Dict with 'path' of created file and 'suggested_links' to consider adding.
+        Dict with 'path' of created file, 'suggested_links' to consider adding,
+        and 'suggested_tags' based on content similarity and existing taxonomy.
     """
     kb_root = get_kb_root()
 
@@ -501,7 +503,16 @@ created: {today}{contributors_yaml}{source_project_yaml}
         min_score=0.5,
     )
 
-    return {"path": rel_path, "suggested_links": suggested_links}
+    # Compute tag suggestions for additional tags to consider
+    suggested_tags = _compute_tag_suggestions(
+        title=title,
+        content=final_content,
+        existing_tags=tags,
+        limit=5,
+        min_score=0.3,
+    )
+
+    return {"path": rel_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
 
 
 @mcp.tool(
@@ -509,7 +520,8 @@ created: {today}{contributors_yaml}{source_project_yaml}
     description=(
         "Update an existing knowledge base entry. "
         "Preserves frontmatter and updates the 'updated' date. "
-        "Returns the path and suggested links to related entries."
+        "Returns the path, suggested links to related entries, and suggested "
+        "additional tags based on content similarity and existing taxonomy."
     ),
 )
 async def update_tool(
@@ -527,7 +539,8 @@ async def update_tool(
         section_updates: Optional dict of section heading -> new content.
 
     Returns:
-        Dict with 'path' of updated file and 'suggested_links' to consider adding.
+        Dict with 'path' of updated file, 'suggested_links' to consider adding,
+        and 'suggested_tags' based on content similarity and existing taxonomy.
     """
     kb_root = get_kb_root()
     file_path = kb_root / path
@@ -642,7 +655,16 @@ async def update_tool(
         min_score=0.5,
     )
 
-    return {"path": relative_path, "suggested_links": suggested_links}
+    # Compute tag suggestions for additional tags to consider
+    suggested_tags = _compute_tag_suggestions(
+        title=metadata.title,
+        content=new_content,
+        existing_tags=new_tags,
+        limit=5,
+        min_score=0.3,
+    )
+
+    return {"path": relative_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
 
 
 @mcp.tool(
@@ -1258,7 +1280,7 @@ async def rmdir_tool(path: str, force: bool = False) -> str:
         Removed directory path.
 
     Raises:
-        ValueError: If directory not empty (without force), doesn't exist, or is a category root.
+        ValueError: If directory contains entries, not empty (without force), or doesn't exist.
     """
     kb_root = get_kb_root()
 
@@ -1270,11 +1292,6 @@ async def rmdir_tool(path: str, force: bool = False) -> str:
 
     if not abs_path.is_dir():
         raise ValueError(f"Path is not a directory: {path}")
-
-    # Protect category root directories
-    valid_categories = _get_valid_categories()
-    if normalized in valid_categories:
-        raise ValueError(f"Cannot remove category root directory: {path}")
 
     # Check if directory is empty (or force is True)
     has_files = any(abs_path.rglob("*"))
@@ -1797,6 +1814,145 @@ def _compute_link_suggestions(
             "path": result.path,
             "title": result.title,
             "score": round(result.score, 3),
+            "reason": reason,
+        })
+
+        if len(suggestions) >= limit:
+            break
+
+    return suggestions
+
+
+def _get_tag_taxonomy() -> dict[str, int]:
+    """Get all tags currently used in the KB with their usage counts.
+
+    Returns:
+        Dict mapping tag name to usage count.
+    """
+    kb_root = get_kb_root()
+    if not kb_root.exists():
+        return {}
+
+    tag_counts: dict[str, int] = {}
+
+    for md_file in kb_root.rglob("*.md"):
+        if md_file.name.startswith("_"):
+            continue
+        try:
+            metadata, _, _ = parse_entry(md_file)
+            for tag in metadata.tags:
+                tag_counts[tag] = tag_counts.get(tag, 0) + 1
+        except ParseError:
+            continue
+
+    return tag_counts
+
+
+def _compute_tag_suggestions(
+    title: str,
+    content: str,
+    existing_tags: list[str] | None = None,
+    limit: int = 5,
+    min_score: float = 0.3,
+) -> list[dict]:
+    """Compute tag suggestions based on content analysis and semantic similarity.
+
+    Combines three signals:
+    1. Semantic similarity - Tags from semantically similar KB entries
+    2. Keyword matching - Direct matches between content and existing tags
+    3. Taxonomy frequency - Slight preference for commonly used tags
+
+    Args:
+        title: Entry title.
+        content: Entry content.
+        existing_tags: Tags already assigned (to exclude from suggestions).
+        limit: Maximum suggestions to return.
+        min_score: Minimum relevance score threshold (0.0-1.0).
+
+    Returns:
+        List of {tag, score, reason} for suggested tags.
+    """
+    if existing_tags is None:
+        existing_tags = []
+
+    existing_set = set(existing_tags)
+
+    # Get the existing tag taxonomy
+    tag_taxonomy = _get_tag_taxonomy()
+    if not tag_taxonomy:
+        return []
+
+    # Scoring accumulators: tag -> (score, reasons)
+    tag_scores: dict[str, float] = {}
+    tag_reasons: dict[str, list[str]] = {}
+
+    # ===== Signal 1: Semantic similarity =====
+    # Find similar entries and collect their tags
+    searcher = _get_searcher()
+    query = f"{title} {content[:500]}"
+    search_results = searcher.search(query, limit=10, mode="semantic")
+
+    # Weight tags by similarity score of the entry they come from
+    for result in search_results:
+        if result.score < 0.3:  # Skip low-similarity entries
+            continue
+        for tag in result.tags:
+            if tag in existing_set:
+                continue
+            # Score contribution: similarity_score * 0.6 (primary signal)
+            contribution = result.score * 0.6
+            tag_scores[tag] = tag_scores.get(tag, 0) + contribution
+            if tag not in tag_reasons:
+                tag_reasons[tag] = []
+            tag_reasons[tag].append(f"Similar entry: {result.title}")
+
+    # ===== Signal 2: Keyword matching =====
+    # Check if existing tags appear as words in title or content
+    text_lower = f"{title} {content}".lower()
+    for tag in tag_taxonomy:
+        if tag in existing_set:
+            continue
+        tag_lower = tag.lower()
+        # Check for tag as a word boundary match
+        if re.search(rf"\b{re.escape(tag_lower)}\b", text_lower):
+            # Direct keyword match is a strong signal
+            tag_scores[tag] = tag_scores.get(tag, 0) + 0.5
+            if tag not in tag_reasons:
+                tag_reasons[tag] = []
+            tag_reasons[tag].append("Keyword match in content")
+
+    # ===== Signal 3: Taxonomy frequency =====
+    # Slight boost for commonly used tags (encourages consistency)
+    max_count = max(tag_taxonomy.values()) if tag_taxonomy else 1
+    for tag in tag_scores:
+        if tag in tag_taxonomy:
+            # Small boost proportional to usage (max 0.1 for most common)
+            frequency_boost = (tag_taxonomy[tag] / max_count) * 0.1
+            tag_scores[tag] += frequency_boost
+
+    # Filter and sort by score
+    suggestions = []
+    for tag, score in sorted(tag_scores.items(), key=lambda x: -x[1]):
+        if score < min_score:
+            continue
+        if tag in existing_set:
+            continue
+
+        # Normalize score to 0-1 range (cap at 1.0)
+        normalized_score = min(1.0, score)
+
+        # Summarize reasons
+        reasons = tag_reasons.get(tag, [])
+        if len(reasons) > 2:
+            reason = f"{reasons[0]} (+{len(reasons)-1} more)"
+        elif reasons:
+            reason = reasons[0]
+        else:
+            reason = "Taxonomy preference"
+
+        suggestions.append({
+            "tag": tag,
+            "score": round(normalized_score, 3),
             "reason": reason,
         })
 
