@@ -142,11 +142,13 @@ class WhooshIndex:
             max_score = max(r.score for r in results) if results else 1.0
             max_score = max_score if max_score > 0 else 1.0
 
+            from . import strip_markdown_for_snippet
+
             search_results = []
             for hit in results:
-                # Create snippet from content
+                # Create snippet from content, stripping markdown syntax
                 content = hit.get("content", "")
-                snippet = content[:200] + "..." if len(content) > 200 else content
+                snippet = strip_markdown_for_snippet(content, max_length=200)
 
                 tags = hit.get("tags", "")
                 tag_list = [t.strip() for t in tags.split(",") if t.strip()]

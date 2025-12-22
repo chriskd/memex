@@ -193,8 +193,10 @@ class ChromaIndex:
             # Cosine distance is 1 - cosine_similarity, so similarity = 1 - distance
             score = max(0.0, min(1.0, 1.0 - distance))
 
-            # Create snippet
-            snippet = doc[:200] + "..." if len(doc) > 200 else doc
+            # Create snippet, stripping markdown syntax
+            from . import strip_markdown_for_snippet
+
+            snippet = strip_markdown_for_snippet(doc, max_length=200)
 
             tags = meta.get("tags", "")
             tag_list = [t.strip() for t in tags.split(",") if t.strip()]
