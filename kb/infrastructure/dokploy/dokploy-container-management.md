@@ -148,9 +148,3 @@ For admin operations on shared services:
 - [[Dokploy Deployment Guide]] - CLI and API reference
 - [[Garage S3 Object Storage]] - Garage container operations
 - [[Voidlabs Infrastructure Overview]] - Server details
-
-## Related
-
-- [[infrastructure/dokploy/deployment-guide.md]]
-- [[infrastructure/garage-s3-object-storage.md]]
-- [[infrastructure/voidlabs-infrastructure-overview.md]]
