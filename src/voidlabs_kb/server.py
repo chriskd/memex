@@ -786,6 +786,86 @@ async def link_beads_tool(
 
 
 @mcp.tool(
+    name="register_beads_project",
+    description=(
+        "Register a beads project for cross-project issue resolution. "
+        "Use this when starting work on a project so its issues can be "
+        "resolved when linked from KB entries."
+    ),
+)
+async def register_beads_project_tool(
+    path: str,
+    prefix: str | None = None,
+) -> dict:
+    """Register a beads project in the KB registry.
+
+    Args:
+        path: Absolute path to the project directory containing .beads/.
+        prefix: Issue prefix (e.g., "dv", "epstein"). Auto-detected if not provided.
+
+    Returns:
+        Dict with 'prefix', 'path', and 'status' (added/exists/error).
+    """
+    from .beads_client import REGISTRY_FILE, BeadsClient, load_beads_registry
+
+    project_path = Path(path).resolve()
+
+    # Validate .beads/ exists
+    if not (project_path / ".beads").exists():
+        raise ValueError(f"No .beads/ directory found at: {project_path}")
+
+    # Auto-detect prefix if not provided
+    if not prefix:
+        client = BeadsClient(beads_root=project_path)
+        prefix = client.get_project_name()
+        if not prefix:
+            raise ValueError(
+                "Could not auto-detect project prefix. "
+                "Please provide it explicitly."
+            )
+
+    # Load existing registry
+    kb_root = get_kb_root()
+    registry_path = kb_root.parent / REGISTRY_FILE
+    if not registry_path.exists():
+        registry_path = kb_root / REGISTRY_FILE
+
+    existing = load_beads_registry()
+
+    # Check if already registered
+    if prefix in existing:
+        existing_path = existing[prefix]
+        if existing_path == project_path:
+            return {
+                "prefix": prefix,
+                "path": str(project_path),
+                "status": "exists",
+                "message": f"Project '{prefix}' already registered",
+            }
+        else:
+            # Different path - update it
+            pass
+
+    # Add to registry file
+    # Read existing content or create new
+    if registry_path.exists():
+        content = registry_path.read_text()
+    else:
+        content = "# Beads Registry\n# Maps issue ID prefixes to project directories\n\n"
+
+    # Append new entry
+    content += f"{prefix}: {project_path}\n"
+    registry_path.write_text(content)
+
+    return {
+        "prefix": prefix,
+        "path": str(project_path),
+        "status": "added",
+        "message": f"Registered project '{prefix}' at {project_path}",
+    }
+
+
+@mcp.tool(
     name="get",
     description=(
         "Get a full knowledge base entry including metadata, content, links, and backlinks."
