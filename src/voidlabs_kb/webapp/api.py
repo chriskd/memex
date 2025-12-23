@@ -206,7 +206,11 @@ _file_watcher = None
 async def startup_event():
     """Start the file watcher on server startup."""
     global _file_watcher
+    import logging
     from ..indexer.watcher import FileWatcher
+
+    # Configure logging for watcher module
+    logging.getLogger("voidlabs_kb.indexer.watcher").setLevel(logging.INFO)
 
     searcher = _get_searcher()
     kb_root = get_kb_root()
@@ -217,6 +221,7 @@ async def startup_event():
         debounce_seconds=2.0,  # Faster for live reload
     )
     _file_watcher.start()
+    print(f"[LiveReload] File watcher started for {kb_root}, running={_file_watcher.is_running}")
 
     # Start heartbeat task
     asyncio.create_task(_heartbeat_loop())

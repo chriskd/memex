@@ -1,16 +1,44 @@
 """File watcher for automatic re-indexing of changed markdown files."""
 
-import asyncio
 import logging
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 from ..backlinks_cache import rebuild_backlink_cache
 from ..config import get_kb_root
+
+
+def _is_in_docker() -> bool:
+    """Detect if running inside a Docker container."""
+    # Check for .dockerenv file
+    if Path("/.dockerenv").exists():
+        return True
+    # Check cgroup for docker
+    try:
+        with open("/proc/1/cgroup", "r") as f:
+            return "docker" in f.read()
+    except (FileNotFoundError, PermissionError):
+        pass
+    return False
+
+
+def _get_observer_class():
+    """Get the appropriate observer class for the environment.
+
+    Uses PollingObserver in Docker (inotify doesn't work across bind mounts)
+    or when USE_POLLING_WATCHER=1 is set.
+    """
+    use_polling = os.environ.get("USE_POLLING_WATCHER", "").lower() in ("1", "true", "yes")
+    if use_polling or _is_in_docker():
+        logger.info("Using PollingObserver for file watching (Docker or polling mode)")
+        return PollingObserver
+    return Observer
 
 if TYPE_CHECKING:
     from .hybrid import HybridSearcher
@@ -19,7 +47,11 @@ logger = logging.getLogger(__name__)
 
 
 class DebouncedHandler(FileSystemEventHandler):
-    """File system event handler with debouncing."""
+    """File system event handler with debouncing.
+
+    Uses threading.Timer for debouncing since watchdog runs in a separate thread
+    without an asyncio event loop.
+    """
 
     def __init__(
         self,
@@ -32,36 +64,33 @@ class DebouncedHandler(FileSystemEventHandler):
             callback: Function to call with changed files after debounce.
             debounce_seconds: Debounce window in seconds.
         """
+        import threading
+
         super().__init__()
         self._callback = callback
         self._debounce_seconds = debounce_seconds
         self._pending_files: set[Path] = set()
-        self._timer: asyncio.TimerHandle | None = None
-        self._loop: asyncio.AbstractEventLoop | None = None
-
-    def _get_loop(self) -> asyncio.AbstractEventLoop:
-        """Get or create the event loop."""
-        if self._loop is None or self._loop.is_closed():
-            try:
-                self._loop = asyncio.get_running_loop()
-            except RuntimeError:
-                self._loop = asyncio.new_event_loop()
-        return self._loop
+        self._timer: threading.Timer | None = None
+        self._lock = threading.Lock()
 
     def _schedule_callback(self) -> None:
         """Schedule the callback after debounce period."""
-        if self._timer is not None:
-            self._timer.cancel()
+        import threading
 
-        loop = self._get_loop()
+        with self._lock:
+            if self._timer is not None:
+                self._timer.cancel()
 
-        def fire():
-            if self._pending_files:
-                files = self._pending_files.copy()
-                self._pending_files.clear()
-                self._callback(files)
+            def fire():
+                with self._lock:
+                    if self._pending_files:
+                        files = self._pending_files.copy()
+                        self._pending_files.clear()
+                        self._callback(files)
 
-        self._timer = loop.call_later(self._debounce_seconds, fire)
+            self._timer = threading.Timer(self._debounce_seconds, fire)
+            self._timer.daemon = True
+            self._timer.start()
 
     def _handle_event(self, event: FileSystemEvent) -> None:
         """Handle a file system event."""
@@ -74,7 +103,8 @@ class DebouncedHandler(FileSystemEventHandler):
         if src_path.suffix.lower() != ".md":
             return
 
-        self._pending_files.add(src_path)
+        with self._lock:
+            self._pending_files.add(src_path)
         self._schedule_callback()
 
     def on_created(self, event: FileSystemEvent) -> None:
@@ -135,6 +165,7 @@ class FileWatcher:
         Args:
             files: Set of changed file paths.
         """
+        print(f"[LiveReload] Detected {len(files)} changed file(s)")
         logger.info(f"Re-indexing {len(files)} changed files")
 
         # Import here to avoid circular imports
@@ -212,7 +243,8 @@ class FileWatcher:
             logger.warning(f"KB root does not exist: {self._kb_root}")
             return
 
-        self._observer = Observer()
+        observer_class = _get_observer_class()
+        self._observer = observer_class()
         handler = DebouncedHandler(
             callback=self._on_files_changed,
             debounce_seconds=self._debounce_seconds,
