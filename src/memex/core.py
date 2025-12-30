@@ -628,7 +628,8 @@ def detect_potential_duplicates(
     # Use semantic search to find similar entries
     try:
         results = searcher.search(search_text, limit=limit * 2, mode="semantic")
-    except Exception:
+    except Exception as e:
+        log.warning("Duplicate detection failed: %s", e)
         return []
 
     duplicates = []
