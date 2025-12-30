@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from voidlabs_kb.models import ViewStats
-from voidlabs_kb.views_tracker import (
+from memex.models import ViewStats
+from memex.views_tracker import (
     cleanup_stale_entries,
     get_popular,
     load_views,

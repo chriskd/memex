@@ -1,14 +1,11 @@
-"""Tests for KB listing MCP tools (whats_new, popular)."""
+"""Tests for KB listing MCP tools (whats_new)."""
 
-import os
 from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
 
-from voidlabs_kb import core, server
-from voidlabs_kb.models import ViewStats
-from voidlabs_kb.views_tracker import save_views
+from memex import core, server
 
 
 async def _call_tool(tool_obj, /, *args, **kwargs):
@@ -151,7 +148,7 @@ class TestWhatsNewTool:
 
     @pytest.mark.asyncio
     async def test_whats_new_filters_by_category(self, kb_root):
-        """Category filter restricts results."""
+        """Category filter restricts results (via core function)."""
         today = date.today()
 
         _create_entry(
@@ -167,14 +164,15 @@ class TestWhatsNewTool:
             created=today - timedelta(days=1),
         )
 
-        results = await _call_tool(server.whats_new_tool, days=30, category="development")
+        # Use core function directly for category filter (removed from MCP tool)
+        results = await core.whats_new(days=30, category="development")
 
         assert len(results) == 1
         assert results[0]["title"] == "Dev Entry"
 
     @pytest.mark.asyncio
     async def test_whats_new_filters_by_tag(self, kb_root):
-        """Tag filter restricts results."""
+        """Tag filter restricts results (via core function)."""
         today = date.today()
 
         _create_entry(
@@ -190,7 +188,8 @@ class TestWhatsNewTool:
             created=today - timedelta(days=1),
         )
 
-        results = await _call_tool(server.whats_new_tool, days=30, tag="rust")
+        # Use core function directly for tag filter (removed from MCP tool)
+        results = await core.whats_new(days=30, tag="rust")
 
         assert len(results) == 1
         assert results[0]["title"] == "Rust Entry"
@@ -214,7 +213,7 @@ class TestWhatsNewTool:
 
     @pytest.mark.asyncio
     async def test_whats_new_include_flags(self, kb_root):
-        """include_created and include_updated flags work."""
+        """include_created and include_updated flags work (via core function)."""
         today = date.today()
 
         _create_entry(
@@ -231,16 +230,16 @@ class TestWhatsNewTool:
             updated=today - timedelta(days=1),
         )
 
-        # Only created
-        results_created = await _call_tool(
-            server.whats_new_tool, days=30, include_created=True, include_updated=False
+        # Only created (use core function directly - removed from MCP tool)
+        results_created = await core.whats_new(
+            days=30, include_created=True, include_updated=False
         )
         assert len(results_created) == 1
         assert results_created[0]["title"] == "New Entry"
 
         # Only updated
-        results_updated = await _call_tool(
-            server.whats_new_tool, days=30, include_created=False, include_updated=True
+        results_updated = await core.whats_new(
+            days=30, include_created=False, include_updated=True
         )
         assert len(results_updated) == 1
         assert results_updated[0]["title"] == "Updated Entry"
@@ -356,136 +355,13 @@ class TestWhatsNewTool:
         assert results[0]["source_project"] == "myapp"
 
 
-class TestPopularTool:
-    """Test popular MCP tool."""
-
-    @pytest.mark.asyncio
-    async def test_popular_returns_empty_when_no_views(self, kb_root, index_root):
-        """Returns empty list when no views recorded."""
-        _create_entry(
-            kb_root / "development" / "entry.md",
-            "Entry",
-            ["python"],
-            created=date.today(),
-        )
-
-        results = await _call_tool(server.popular_tool)
-
-        assert results == []
-
-    @pytest.mark.asyncio
-    async def test_popular_returns_entries_sorted_by_views(self, kb_root, index_root):
-        """Entries are sorted by view count descending."""
-        from datetime import datetime
-
-        today = date.today()
-        now = datetime.now()
-
-        _create_entry(kb_root / "development" / "low.md", "Low Views", ["python"], created=today)
-        _create_entry(kb_root / "development" / "high.md", "High Views", ["python"], created=today)
-        _create_entry(kb_root / "development" / "mid.md", "Mid Views", ["python"], created=today)
-
-        views = {
-            "development/low.md": ViewStats(total_views=5, last_viewed=now),
-            "development/high.md": ViewStats(total_views=100, last_viewed=now),
-            "development/mid.md": ViewStats(total_views=50, last_viewed=now),
-        }
-        save_views(views, index_root)
-
-        results = await _call_tool(server.popular_tool, limit=10)
-
-        titles = [r["title"] for r in results]
-        assert titles == ["High Views", "Mid Views", "Low Views"]
-
-    @pytest.mark.asyncio
-    async def test_popular_includes_view_count(self, kb_root, index_root):
-        """Results include view_count field."""
-        from datetime import datetime
-
-        today = date.today()
-        now = datetime.now()
-
-        _create_entry(kb_root / "development" / "entry.md", "Entry", ["python"], created=today)
-        views = {"development/entry.md": ViewStats(total_views=42, last_viewed=now)}
-        save_views(views, index_root)
-
-        results = await _call_tool(server.popular_tool)
-
-        assert results[0]["view_count"] == 42
-
-    @pytest.mark.asyncio
-    async def test_popular_filters_by_category(self, kb_root, index_root):
-        """Category filter restricts results."""
-        from datetime import datetime
-
-        today = date.today()
-        now = datetime.now()
-
-        _create_entry(kb_root / "development" / "dev.md", "Dev Entry", ["python"], created=today)
-        _create_entry(kb_root / "architecture" / "arch.md", "Arch Entry", ["design"], created=today)
-
-        views = {
-            "development/dev.md": ViewStats(total_views=10, last_viewed=now),
-            "architecture/arch.md": ViewStats(total_views=20, last_viewed=now),
-        }
-        save_views(views, index_root)
-
-        results = await _call_tool(server.popular_tool, category="development")
-
-        assert len(results) == 1
-        assert results[0]["title"] == "Dev Entry"
-
-    @pytest.mark.asyncio
-    async def test_popular_filters_by_tag(self, kb_root, index_root):
-        """Tag filter restricts results."""
-        from datetime import datetime
-
-        today = date.today()
-        now = datetime.now()
-
-        _create_entry(kb_root / "development" / "python.md", "Python Entry", ["python"], created=today)
-        _create_entry(kb_root / "development" / "rust.md", "Rust Entry", ["rust"], created=today)
-
-        views = {
-            "development/python.md": ViewStats(total_views=10, last_viewed=now),
-            "development/rust.md": ViewStats(total_views=20, last_viewed=now),
-        }
-        save_views(views, index_root)
-
-        results = await _call_tool(server.popular_tool, tag="rust")
-
-        assert len(results) == 1
-        assert results[0]["title"] == "Rust Entry"
-
-    @pytest.mark.asyncio
-    async def test_popular_skips_deleted_entries(self, kb_root, index_root):
-        """Entries with views but no file are skipped."""
-        from datetime import datetime
-
-        today = date.today()
-        now = datetime.now()
-
-        _create_entry(kb_root / "development" / "exists.md", "Exists", ["python"], created=today)
-
-        views = {
-            "development/exists.md": ViewStats(total_views=10, last_viewed=now),
-            "development/deleted.md": ViewStats(total_views=100, last_viewed=now),
-        }
-        save_views(views, index_root)
-
-        results = await _call_tool(server.popular_tool)
-
-        assert len(results) == 1
-        assert results[0]["title"] == "Exists"
-
-
 class TestGetToolViewTracking:
     """Test that get_tool records views."""
 
     @pytest.mark.asyncio
     async def test_get_tool_records_view(self, kb_root, index_root):
         """get_tool increments view count."""
-        from voidlabs_kb.views_tracker import load_views
+        from memex.views_tracker import load_views
 
         _create_entry(
             kb_root / "development" / "entry.md",

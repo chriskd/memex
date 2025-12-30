@@ -2,7 +2,7 @@
 
 import pytest
 
-from voidlabs_kb.parser.md_renderer import MarkdownResult, render_markdown
+from memex.parser.md_renderer import MarkdownResult, render_markdown
 
 
 class TestWikilinks:

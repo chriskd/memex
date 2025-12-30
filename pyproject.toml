@@ -1,7 +1,7 @@
 [project]
-name = "voidlabs-kb"
+name = "memex"
 version = "0.1.0"
-description = "Organization-wide knowledge base with semantic search"
+description = "Personal knowledge base with semantic search"
 requires-python = ">=3.11"
 dependencies = [
     "fastmcp>=2.14.1",
@@ -18,9 +18,9 @@ dependencies = [
 ]
 
 [project.scripts]
-voidlabs-kb = "voidlabs_kb.server:main"
-voidlabs-kb-web = "voidlabs_kb.webapp.api:main"
-vl-kb = "voidlabs_kb.cli:main"
+memex = "memex.server:main"
+memex-web = "memex.webapp.api:main"
+mx = "memex.cli:main"
 
 [build-system]
 requires = ["hatchling"]

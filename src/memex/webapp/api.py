@@ -24,7 +24,7 @@ from ..parser import ParseError, extract_links, parse_entry, render_markdown
 
 
 app = FastAPI(
-    title="Voidlabs KB Explorer",
+    title="Memex KB Explorer",
     description="Knowledge base explorer with graph visualization",
     version="1.0.0",
 )

@@ -1,16 +1,16 @@
-"""Project context discovery and loading for voidlabs-kb.
+"""Project context discovery and loading for memex.
 
 This module provides context-aware behavior when working within a project directory.
 A .kbcontext file tells the KB which paths are most relevant for that project.
 
 Example .kbcontext file:
-    primary: projects/voidlabs-kb    # Default write directory
+    primary: projects/memex    # Default write directory
     paths:                           # Boost these in search (supports globs)
-      - projects/voidlabs-kb
+      - projects/memex
       - tooling/beads
       - infrastructure/*
     default_tags:                    # Suggested for new entries
-      - voidlabs-kb
+      - memex
 """
 
 import os
@@ -33,7 +33,7 @@ class KBContext:
     """Project context configuration from .kbcontext file."""
 
     primary: str | None = None
-    """Default directory for new entries (e.g., 'projects/voidlabs-kb')."""
+    """Default directory for new entries (e.g., 'projects/memex')."""
 
     paths: list[str] = field(default_factory=list)
     """Paths to boost in search results. Supports glob patterns (* and **)."""
@@ -87,7 +87,7 @@ def matches_glob(path: str, pattern: str) -> bool:
     - Recursive wildcard: 'projects/**' matches any depth under projects/
 
     Args:
-        path: KB entry path (e.g., 'projects/voidlabs-kb/docs.md')
+        path: KB entry path (e.g., 'projects/memex/docs.md')
         pattern: Glob pattern from .kbcontext
 
     Returns:
@@ -276,7 +276,7 @@ def create_default_context(project_name: str, kb_directory: str | None = None) -
     directory = kb_directory or f"projects/{project_name}"
 
     return f"""# .kbcontext - Project knowledge base context
-# This file tells voidlabs-kb which KB entries are relevant to this project.
+# This file tells memex which KB entries are relevant to this project.
 
 # Default directory for new entries created from this project
 primary: {directory}

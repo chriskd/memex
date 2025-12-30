@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from voidlabs_kb.context import (
+from memex.context import (
     CONTEXT_FILENAME,
     KBContext,
     clear_context_cache,

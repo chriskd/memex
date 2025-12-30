@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from voidlabs_kb import core, server
-from voidlabs_kb.models import SearchResponse
+from memex import core, server
+from memex.models import SearchResponse
 
 
 async def _call_tool(tool_obj, /, *args, **kwargs):
@@ -72,7 +72,7 @@ class TestSearchContentDefault:
             "## Section\n\nFull content here that is longer than snippet.",
         )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Test")
 
         assert isinstance(response, SearchResponse)
@@ -89,7 +89,7 @@ class TestSearchContentDefault:
             "Content body.",
         )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Test")
 
         assert isinstance(response, SearchResponse)
@@ -110,7 +110,7 @@ class TestSearchWithContent:
             full_text,
         )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Test", include_content=True)
 
         assert len(response.results) >= 1
@@ -127,7 +127,7 @@ class TestSearchWithContent:
             tags=["python", "testing"],
         )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
 
         # Get results both ways
         without = await _call_tool(server.search_tool, "Unique")
@@ -148,7 +148,7 @@ class TestSearchWithContent:
                 f"Content for entry {i} with unique text.",
             )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Search Entry", limit=10, include_content=True)
 
         assert len(response.results) == 3
@@ -173,7 +173,7 @@ class TestSearchContentLimit:
                 f"Content for limit test entry {i}.",
             )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Limit Test", limit=5, include_content=True)
 
         # Should have warning about limit
@@ -195,7 +195,7 @@ class TestSearchContentLimit:
                 f"Content for under limit entry {i}.",
             )
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "Under Limit", limit=5, include_content=True)
 
         assert response.warnings == []
@@ -211,7 +211,7 @@ class TestSearchContentEdgeCases:
         entry_path = kb_root / "development" / "deleted.md"
         _create_entry(entry_path, "Will Be Deleted", "Content.")
 
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
 
         # Delete the file after indexing
         entry_path.unlink()
@@ -226,7 +226,7 @@ class TestSearchContentEdgeCases:
     @pytest.mark.asyncio
     async def test_empty_results_no_error(self, kb_root, index_root):
         """No error when hydrating empty results."""
-        await _call_tool(server.reindex_tool)
+        await core.reindex()
         response = await _call_tool(server.search_tool, "nonexistent query xyz", include_content=True)
 
         assert response.results == []

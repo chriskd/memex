@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 """
-vl-kb: CLI for voidlabs knowledge base
+mx: CLI for memex knowledge base
 
-Token-efficient alternative to MCP tools. Wraps existing voidlabs_kb functionality.
+Token-efficient alternative to MCP tools. Wraps existing memex functionality.
 
 Usage:
-    vl-kb search "query"              # Search entries
-    vl-kb get path/to/entry.md        # Read an entry
-    vl-kb add --title="..." --tags=.. # Create entry
-    vl-kb tree                        # Browse structure
-    vl-kb health                      # Audit KB health
+    mx search "query"              # Search entries
+    mx get path/to/entry.md        # Read an entry
+    mx add --title="..." --tags=.. # Create entry
+    mx tree                        # Browse structure
+    mx health                      # Audit KB health
 """
 
 import asyncio
@@ -83,18 +83,18 @@ def output(data, as_json: bool = False):
 
 
 @click.group()
-@click.version_option(version="0.1.0", prog_name="vl-kb")
+@click.version_option(version="0.1.0", prog_name="mx")
 def cli():
-    """vl-kb: Token-efficient CLI for voidlabs knowledge base.
+    """mx: Token-efficient CLI for memex knowledge base.
 
     Search, browse, and manage KB entries without MCP context overhead.
 
     \b
     Quick start:
-      vl-kb search "deployment"     # Find entries
-      vl-kb get tooling/beads.md    # Read an entry
-      vl-kb tree                    # Browse structure
-      vl-kb health                  # Check KB health
+      mx search "deployment"     # Find entries
+      mx get tooling/beads.md    # Read an entry
+      mx tree                    # Browse structure
+      mx health                  # Check KB health
     """
     pass
 
@@ -103,38 +103,38 @@ def cli():
 # Prime Command (Agent Context Injection)
 # ─────────────────────────────────────────────────────────────────────────────
 
-PRIME_OUTPUT = """# Voidlabs Knowledge Base
+PRIME_OUTPUT = """# Memex Knowledge Base
 
 > Search organizational knowledge before reinventing. Add discoveries for future agents.
 
-**⚡ Use `vl-kb` CLI instead of MCP tools** - CLI uses ~0 tokens vs MCP schema overhead.
+**⚡ Use `mx` CLI instead of MCP tools** - CLI uses ~0 tokens vs MCP schema overhead.
 
 ## CLI Quick Reference
 
 ```bash
 # Search (hybrid keyword + semantic)
-vl-kb search "deployment"              # Find entries
-vl-kb search "docker" --tags=infra     # Filter by tag
-vl-kb search "api" --mode=semantic     # Semantic only
+mx search "deployment"              # Find entries
+mx search "docker" --tags=infra     # Filter by tag
+mx search "api" --mode=semantic     # Semantic only
 
 # Read entries
-vl-kb get tooling/beads.md             # Full entry
-vl-kb get tooling/beads.md --metadata  # Just metadata
+mx get tooling/beads.md             # Full entry
+mx get tooling/beads.md --metadata  # Just metadata
 
 # Browse
-vl-kb tree                             # Directory structure
-vl-kb list --tag=infrastructure        # Filter by tag
-vl-kb whats-new --days=7               # Recent changes
-vl-kb whats-new --project=myapp        # Recent changes for a project
+mx tree                             # Directory structure
+mx list --tag=infrastructure        # Filter by tag
+mx whats-new --days=7               # Recent changes
+mx whats-new --project=myapp        # Recent changes for a project
 
 # Contribute
-vl-kb add --title="My Entry" --tags="foo,bar" --content="..."
-vl-kb add --title="..." --tags="..." --file=content.md
-cat notes.md | vl-kb add --title="..." --tags="..." --stdin
+mx add --title="My Entry" --tags="foo,bar" --content="..."
+mx add --title="..." --tags="..." --file=content.md
+cat notes.md | mx add --title="..." --tags="..." --stdin
 
 # Maintenance
-vl-kb health                           # Audit for problems
-vl-kb suggest-links path/entry.md      # Find related entries
+mx health                           # Audit for problems
+mx suggest-links path/entry.md      # Find related entries
 ```
 
 ## When to Search KB
@@ -169,7 +169,7 @@ Use `[[path/to/entry.md|Display Text]]` for links.
 """
 
 PRIME_MCP_OUTPUT = """# KB Quick Reference
-Search: `vl-kb search "query"` | Read: `vl-kb get path.md` | Add: `vl-kb add --title="..." --tags="..."`
+Search: `mx search "query"` | Read: `mx get path.md` | Add: `mx add --title="..." --tags="..."`
 """
 
 
@@ -197,9 +197,9 @@ def prime(full: bool, mcp: bool, as_json: bool):
 
     \b
     Examples:
-      vl-kb prime              # Auto-detect mode
-      vl-kb prime --full       # Force full output
-      vl-kb prime --mcp        # Force minimal output
+      mx prime              # Auto-detect mode
+      mx prime --full       # Force full output
+      mx prime --mcp        # Force minimal output
     """
     # Determine output mode
     if full:
@@ -234,9 +234,9 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, content: bool
 
     \b
     Examples:
-      vl-kb search "deployment"
-      vl-kb search "docker" --tags=infrastructure
-      vl-kb search "api" --mode=semantic --limit=5
+      mx search "deployment"
+      mx search "docker" --tags=infrastructure
+      mx search "api" --mode=semantic --limit=5
     """
     from .core import search as core_search
 
@@ -278,9 +278,9 @@ def get(path: str, as_json: bool, metadata: bool):
 
     \b
     Examples:
-      vl-kb get tooling/beads-issue-tracker.md
-      vl-kb get tooling/beads-issue-tracker.md --json
-      vl-kb get tooling/beads-issue-tracker.md --metadata
+      mx get tooling/beads-issue-tracker.md
+      mx get tooling/beads-issue-tracker.md --json
+      mx get tooling/beads-issue-tracker.md --metadata
     """
     from .core import get_entry
 
@@ -333,9 +333,9 @@ def add(
 
     \b
     Examples:
-      vl-kb add --title="My Entry" --tags="foo,bar" --content="# Content here"
-      vl-kb add --title="My Entry" --tags="foo,bar" --file=content.md
-      cat content.md | vl-kb add --title="My Entry" --tags="foo,bar" --stdin
+      mx add --title="My Entry" --tags="foo,bar" --content="# Content here"
+      mx add --title="My Entry" --tags="foo,bar" --file=content.md
+      cat content.md | mx add --title="My Entry" --tags="foo,bar" --stdin
     """
     from .core import add_entry
 
@@ -386,8 +386,8 @@ def update(path: str, tags: Optional[str], content: Optional[str], file_path: Op
 
     \b
     Examples:
-      vl-kb update path/entry.md --tags="new,tags"
-      vl-kb update path/entry.md --file=updated-content.md
+      mx update path/entry.md --tags="new,tags"
+      mx update path/entry.md --file=updated-content.md
     """
     from .core import update_entry
 
@@ -444,8 +444,8 @@ def tree(path: str, depth: int, as_json: bool):
 
     \b
     Examples:
-      vl-kb tree
-      vl-kb tree tooling --depth=2
+      mx tree
+      mx tree tooling --depth=2
     """
     from .core import tree as core_tree
 
@@ -475,9 +475,9 @@ def list_entries(tag: Optional[str], category: Optional[str], limit: int, as_jso
 
     \b
     Examples:
-      vl-kb list
-      vl-kb list --tag=tooling
-      vl-kb list --category=infrastructure --limit=10
+      mx list
+      mx list --tag=tooling
+      mx list --category=infrastructure --limit=10
     """
     from .core import list_entries as core_list_entries
 
@@ -509,9 +509,9 @@ def whats_new(days: int, limit: int, project: Optional[str], as_json: bool):
 
     \b
     Examples:
-      vl-kb whats-new
-      vl-kb whats-new --days=7 --limit=5
-      vl-kb whats-new --project=docviewer  # Filter by project
+      mx whats-new
+      mx whats-new --days=7 --limit=5
+      mx whats-new --project=docviewer  # Filter by project
     """
     from .core import whats_new as core_whats_new
 
@@ -548,8 +548,8 @@ def health(as_json: bool):
 
     \b
     Examples:
-      vl-kb health
-      vl-kb health --json
+      mx health
+      mx health --json
     """
     from .core import health as core_health
 
@@ -614,8 +614,8 @@ def tags(min_count: int, as_json: bool):
 
     \b
     Examples:
-      vl-kb tags
-      vl-kb tags --min-count=3
+      mx tags
+      mx tags --min-count=3
     """
     from .core import tags as core_tags
 
@@ -647,8 +647,8 @@ def hubs(limit: int, as_json: bool):
 
     \b
     Examples:
-      vl-kb hubs
-      vl-kb hubs --limit=5
+      mx hubs
+      mx hubs --limit=5
     """
     from .core import hubs as core_hubs
 
@@ -679,7 +679,7 @@ def suggest_links(path: str, limit: int, as_json: bool):
 
     \b
     Examples:
-      vl-kb suggest-links tooling/my-entry.md
+      mx suggest-links tooling/my-entry.md
     """
     from .core import suggest_links as core_suggest_links
 
@@ -715,7 +715,7 @@ def reindex():
 
     \b
     Examples:
-      vl-kb reindex
+      mx reindex
     """
     from .core import reindex as core_reindex
 
@@ -741,9 +741,9 @@ def context(ctx):
 
     \b
     Examples:
-      vl-kb context            # Show current context
-      vl-kb context init       # Create a new .kbcontext file
-      vl-kb context validate   # Check context paths exist in KB
+      mx context            # Show current context
+      mx context init       # Create a new .kbcontext file
+      mx context validate   # Check context paths exist in KB
     """
     # If no subcommand provided, show context
     if ctx.invoked_subcommand is None:
@@ -759,8 +759,8 @@ def context_show(as_json: bool):
 
     \b
     Examples:
-      vl-kb context show
-      vl-kb context show --json
+      mx context show
+      mx context show --json
     """
     from .context import get_kb_context
 
@@ -771,7 +771,7 @@ def context_show(as_json: bool):
             output({"found": False, "message": "No .kbcontext file found"}, as_json=True)
         else:
             click.echo("No .kbcontext file found.")
-            click.echo("Run 'vl-kb context init' to create one.")
+            click.echo("Run 'mx context init' to create one.")
         return
 
     if as_json:
@@ -809,9 +809,9 @@ def context_init(project: Optional[str], directory: Optional[str], force: bool):
 
     \b
     Examples:
-      vl-kb context init
-      vl-kb context init --project myapp
-      vl-kb context init --project myapp --directory projects/myapp/docs
+      mx context init
+      mx context init --project myapp
+      mx context init --project myapp --directory projects/myapp/docs
     """
     from .context import CONTEXT_FILENAME, create_default_context
 
@@ -845,8 +845,8 @@ def context_validate(as_json: bool):
 
     \b
     Examples:
-      vl-kb context validate
-      vl-kb context validate --json
+      mx context validate
+      mx context validate --json
     """
     from .config import get_kb_root
     from .context import get_kb_context, validate_context
@@ -894,8 +894,8 @@ def delete(path: str, force: bool, as_json: bool):
 
     \b
     Examples:
-      vl-kb delete path/to/entry.md
-      vl-kb delete path/to/entry.md --force
+      mx delete path/to/entry.md
+      mx delete path/to/entry.md --force
     """
     from .core import delete_entry
 
@@ -919,7 +919,7 @@ def delete(path: str, force: bool, as_json: bool):
 
 
 def main():
-    """Entry point for vl-kb CLI."""
+    """Entry point for mx CLI."""
     from ._logging import configure_logging
     configure_logging()
     cli()

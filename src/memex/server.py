@@ -1,4 +1,4 @@
-"""FastMCP server for voidlabs-kb.
+"""FastMCP server for memex.
 
 This module provides MCP protocol wrappers around the core business logic.
 All actual logic lives in core.py - this file just handles MCP serialization.
@@ -15,7 +15,7 @@ from .models import KBEntry, SearchResponse
 
 
 mcp = FastMCP(
-    name="voidlabs-kb",
+    name="memex",
     instructions="Knowledge base with semantic search. Use search/get/add/update for entries. Use [[links]] for connections.",
 )
 

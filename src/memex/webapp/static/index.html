@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Voidlabs Knowledge Base</title>
+    <title>Memex Knowledge Base</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Crimson+Pro:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
@@ -1815,8 +1815,8 @@
                         <div class="entry-path">${entry.path}</div>
                         <h1 class="entry-title">${entry.title}</h1>
                         <div class="entry-meta">
-                            ${entry.created ? `<div class="entry-meta-item">Created: <span>${entry.created}</span></div>` : ''}
-                            ${entry.updated ? `<div class="entry-meta-item">Updated: <span>${entry.updated}</span></div>` : ''}
+                            ${entry.created ? `<div class="entry-meta-item">Created: <span>${formatDate(entry.created)}</span></div>` : ''}
+                            ${entry.updated ? `<div class="entry-meta-item">Updated: <span>${formatDate(entry.updated)}</span></div>` : ''}
                         </div>
                         <div class="entry-tags">
                             ${entry.tags.map(t => `<span class="tag">${t}</span>`).join('')}
