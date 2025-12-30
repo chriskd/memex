@@ -1,8 +1,6 @@
 """Tests for KB directory management MCP tools."""
 
-import os
 from pathlib import Path
-from datetime import date
 
 import pytest
 

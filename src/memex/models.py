@@ -53,11 +53,19 @@ class SearchResult(BaseModel):
     source_project: str | None = None  # Project that created this entry
 
 
+class SearchSuggestion(BaseModel):
+    """A search suggestion when results are sparse."""
+
+    query: str  # The suggested query
+    reason: str  # Why this was suggested (e.g., "similar spelling", "related tag")
+
+
 class SearchResponse(BaseModel):
     """Response wrapper for search results with optional warnings."""
 
     results: list[SearchResult]
     warnings: list[str] = Field(default_factory=list)
+    suggestions: list[SearchSuggestion] = Field(default_factory=list)
 
 
 class KBEntry(BaseModel):
@@ -103,3 +111,23 @@ class ViewStats(BaseModel):
     total_views: int = 0
     last_viewed: datetime | None = None
     views_by_day: dict[str, int] = Field(default_factory=dict)  # ISO date -> count
+
+
+class PotentialDuplicate(BaseModel):
+    """A potential duplicate entry detected before creation."""
+
+    path: str  # Path to the existing entry
+    title: str  # Title of the existing entry
+    score: float  # Semantic similarity score (0-1)
+    tags: list[str] = Field(default_factory=list)  # Tags for context
+
+
+class AddEntryResponse(BaseModel):
+    """Response from add_entry including potential duplicates."""
+
+    path: str  # Path where entry was created (or would be created)
+    created: bool  # Whether the entry was actually created
+    suggested_links: list[dict] = Field(default_factory=list)
+    suggested_tags: list[dict] = Field(default_factory=list)
+    potential_duplicates: list[PotentialDuplicate] = Field(default_factory=list)
+    warning: str | None = None  # Warning message if duplicates detected

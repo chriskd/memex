@@ -1,7 +1,5 @@
 """Tests for markdown-it-py based renderer."""
 
-import pytest
-
 from memex.parser.md_renderer import MarkdownResult, render_markdown
 
 

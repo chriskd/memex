@@ -20,7 +20,7 @@ from ..backlinks_cache import ensure_backlink_cache
 from ..beads_client import find_beads_db, get_comments, list_issues, show_issue
 from ..config import get_kb_root
 from ..indexer import HybridSearcher
-from ..models import IndexStatus, KBEntry, SearchResult
+from ..models import SearchResult
 from ..parser import ParseError, extract_links, parse_entry, render_markdown
 
 
