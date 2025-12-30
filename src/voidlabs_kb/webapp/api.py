@@ -1,11 +1,14 @@
 """REST API for KB Explorer web application."""
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
+
+log = logging.getLogger(__name__)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -16,15 +19,7 @@ from .events import Event, EventType, get_broadcaster
 from ..backlinks_cache import ensure_backlink_cache
 from ..config import get_kb_root
 from ..indexer import HybridSearcher
-from ..beads_client import (
-    get_beads_client,
-    get_client_for_issue,
-    get_kanban_for_project,
-    list_registered_projects,
-    resolve_issue,
-    resolve_issues,
-)
-from ..models import BeadsIssue, IndexStatus, KBEntry, SearchResult
+from ..models import IndexStatus, KBEntry, SearchResult
 from ..parser import ParseError, extract_links, parse_entry, render_markdown
 
 
@@ -125,76 +120,6 @@ class StatsResponse(BaseModel):
     recent_entries: list[dict]
 
 
-# Beads response models
-
-
-class RegisteredProjectResponse(BaseModel):
-    """Registered beads project."""
-    prefix: str
-    path: str
-    available: bool
-
-
-class BeadsConfigResponse(BaseModel):
-    """Beads configuration info."""
-    available: bool
-    project: str | None = None
-    beads_root: str | None = None
-    registered_projects: list[RegisteredProjectResponse] = []
-
-
-class BeadsIssueResponse(BaseModel):
-    """Issue for API response."""
-    id: str
-    title: str
-    description: str | None
-    status: str
-    priority: int
-    priority_label: str  # "critical", "high", "medium", "low", "backlog"
-    issue_type: str
-    created_at: str
-    updated_at: str
-    closed_at: str | None
-    close_reason: str | None = None
-    dependency_count: int
-    dependent_count: int
-
-
-class BeadsCommentResponse(BaseModel):
-    """Comment for API response."""
-    id: str
-    content: str
-    content_html: str  # Rendered markdown
-    author: str
-    created_at: str
-
-
-class BeadsIssueDetailResponse(BaseModel):
-    """Detailed issue with comments for modal view."""
-    issue: BeadsIssueResponse
-    comments: list[BeadsCommentResponse]
-
-
-class BeadsKanbanColumnResponse(BaseModel):
-    """Kanban column for API response."""
-    status: str
-    label: str
-    issues: list[BeadsIssueResponse]
-
-
-class BeadsKanbanResponse(BaseModel):
-    """Kanban board data."""
-    project: str
-    columns: list[BeadsKanbanColumnResponse]
-    total_issues: int
-
-
-class EntryBeadsResponse(BaseModel):
-    """Beads info for a KB entry."""
-    linked_issues: list[BeadsIssueResponse]
-    project_issues: list[BeadsIssueResponse] | None = None
-
-
 # API Routes
 
 
@@ -206,11 +131,10 @@ _file_watcher = None
 async def startup_event():
     """Start the file watcher on server startup."""
     global _file_watcher
-    import logging
+    from .._logging import configure_logging
     from ..indexer.watcher import FileWatcher
 
-    # Configure logging for watcher module
-    logging.getLogger("voidlabs_kb.indexer.watcher").setLevel(logging.INFO)
+    configure_logging()
 
     searcher = _get_searcher()
     kb_root = get_kb_root()
@@ -221,7 +145,7 @@ async def startup_event():
         debounce_seconds=2.0,  # Faster for live reload
     )
     _file_watcher.start()
-    print(f"[LiveReload] File watcher started for {kb_root}, running={_file_watcher.is_running}")
+    log.info("File watcher started for %s", kb_root)
 
     # Start heartbeat task
     asyncio.create_task(_heartbeat_loop())
@@ -286,52 +210,6 @@ async def search(
     searcher = _get_searcher()
     results = searcher.search(q, limit=limit, mode=mode)
     return SearchResponseAPI(results=results, total=len(results))
-
-
-# NOTE: This route must come BEFORE the generic /api/entries/{path:path} route
-# because FastAPI's {path:path} is greedy and would match "/beads" as part of the path
-@app.get("/api/entries/{path:path}/beads", response_model=EntryBeadsResponse)
-async def get_entry_beads(path: str):
-    """Get beads issues linked from a KB entry.
-
-    Uses the beads registry to resolve issues from any registered project.
-    """
-    kb_root = get_kb_root()
-
-    # Ensure .md extension
-    if not path.endswith(".md"):
-        path = f"{path}.md"
-
-    file_path = kb_root / path
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail=f"Entry not found: {path}")
-
-    try:
-        metadata, content, _ = parse_entry(file_path)
-    except ParseError as e:
-        raise HTTPException(status_code=500, detail=f"Parse error: {e}")
-
-    # Get specifically linked issues using registry-aware resolution
-    linked_issues = []
-    if metadata.beads_issues:
-        linked_issues = resolve_issues(metadata.beads_issues)
-
-    # Get project issues if linked to a project
-    project_issues = None
-    if metadata.beads_project:
-        kanban = get_kanban_for_project(metadata.beads_project)
-        if kanban:
-            # Flatten all columns into a single list
-            project_issues = []
-            for col in kanban.columns:
-                project_issues.extend(col.issues)
-
-    return EntryBeadsResponse(
-        linked_issues=[_format_beads_issue(i) for i in linked_issues],
-        project_issues=[_format_beads_issue(i) for i in project_issues]
-        if project_issues
-        else None,
-    )
 
 
 @app.get("/api/entries/{path:path}", response_model=EntryResponse)
@@ -405,8 +283,8 @@ async def get_tree():
                 try:
                     metadata, _, _ = parse_entry(item)
                     title = metadata.title
-                except ParseError:
-                    pass
+                except ParseError as e:
+                    log.debug("Could not parse %s for tree: %s", item, e)
                 nodes.append(TreeNode(
                     name=item.name,
                     type="file",
@@ -594,144 +472,6 @@ async def get_recent(limit: int = 10):
     )
 
     return entries[:limit]
-
-
-# Beads API Routes
-
-
-def _format_beads_issue(issue: BeadsIssue) -> BeadsIssueResponse:
-    """Format issue for API response."""
-    priority_labels = {
-        0: "critical",
-        1: "high",
-        2: "medium",
-        3: "low",
-        4: "backlog",
-    }
-    return BeadsIssueResponse(
-        id=issue.id,
-        title=issue.title,
-        description=issue.description,
-        status=issue.status,
-        priority=issue.priority,
-        priority_label=priority_labels.get(issue.priority, "medium"),
-        issue_type=issue.issue_type,
-        created_at=issue.created_at.isoformat(),
-        updated_at=issue.updated_at.isoformat(),
-        closed_at=issue.closed_at.isoformat() if issue.closed_at else None,
-        close_reason=issue.close_reason,
-        dependency_count=issue.dependency_count,
-        dependent_count=issue.dependent_count,
-    )
-
-
-@app.get("/api/beads/config", response_model=BeadsConfigResponse)
-async def get_beads_config():
-    """Get beads integration status and configuration."""
-    client = get_beads_client()
-    registered = list_registered_projects()
-    return BeadsConfigResponse(
-        available=client.is_available,
-        project=client.get_project_name() if client.is_available else None,
-        beads_root=str(client.beads_root) if client.beads_root else None,
-        registered_projects=[
-            RegisteredProjectResponse(**p) for p in registered
-        ],
-    )
-
-
-@app.get("/api/beads/issues", response_model=list[BeadsIssueResponse])
-async def list_beads_issues(
-    status: Literal["open", "in_progress", "closed", "all"] = "all",
-    limit: int = Query(50, ge=1, le=500),
-    priority: int | None = Query(None, ge=0, le=4),
-):
-    """List beads issues with optional filters."""
-    client = get_beads_client()
-    if not client.is_available:
-        raise HTTPException(status_code=404, detail="Beads not available for this KB")
-
-    issues = client.list_issues(status=status, limit=limit, priority=priority)
-    return [_format_beads_issue(i) for i in issues]
-
-
-@app.get("/api/beads/kanban", response_model=BeadsKanbanResponse)
-async def get_beads_kanban(project: str | None = None):
-    """Get issues grouped by status for kanban display.
-
-    Args:
-        project: Project prefix to show (e.g., "dv", "kb").
-                 Uses registry for cross-project lookups.
-                 If None, uses the default KB beads project.
-    """
-    kanban_data = None
-
-    if project:
-        # Try registry-based lookup for cross-project
-        kanban_data = get_kanban_for_project(project)
-    else:
-        # Use default KB client
-        client = get_beads_client()
-        if client.is_available:
-            kanban_data = client.get_kanban_data()
-
-    if not kanban_data:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Beads project not found: {project}" if project else "No beads project available"
-        )
-
-    return BeadsKanbanResponse(
-        project=kanban_data.project,
-        columns=[
-            BeadsKanbanColumnResponse(
-                status=col.status,
-                label=col.label,
-                issues=[_format_beads_issue(i) for i in col.issues],
-            )
-            for col in kanban_data.columns
-        ],
-        total_issues=kanban_data.total_issues,
-    )
-
-
-@app.get("/api/beads/issues/{issue_id}", response_model=BeadsIssueDetailResponse)
-async def get_beads_issue_detail(issue_id: str):
-    """Get detailed issue information including comments.
-
-    This endpoint fetches the full issue data plus any comments,
-    supporting cross-project issue resolution via the registry.
-    """
-    # Get the appropriate client for this issue (handles cross-project)
-    client = get_client_for_issue(issue_id)
-    if client is None:
-        # Fall back to default client
-        client = get_beads_client()
-
-    if not client or not client.is_available:
-        raise HTTPException(status_code=404, detail="Beads not available")
-
-    # Get the issue
-    issue = client.get_issue(issue_id)
-    if not issue:
-        raise HTTPException(status_code=404, detail=f"Issue not found: {issue_id}")
-
-    # Get comments for the issue
-    comments = client.get_comments(issue_id)
-
-    return BeadsIssueDetailResponse(
-        issue=_format_beads_issue(issue),
-        comments=[
-            BeadsCommentResponse(
-                id=c.id,
-                content=c.content,
-                content_html=render_markdown(c.content).html,
-                author=c.author,
-                created_at=c.created_at.isoformat(),
-            )
-            for c in comments
-        ],
-    )
 
 
 # Mount static files and serve index

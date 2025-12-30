@@ -2,16 +2,26 @@
 
 from __future__ import annotations
 
+import logging
 import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from ..config import DEFAULT_SEARCH_LIMIT, RRF_K, get_kb_root
+from ..config import (
+    DEFAULT_SEARCH_LIMIT,
+    KB_PATH_CONTEXT_BOOST,
+    PROJECT_CONTEXT_BOOST,
+    RRF_K,
+    TAG_MATCH_BOOST,
+    get_kb_root,
+)
 from ..models import DocumentChunk, IndexStatus, SearchResult
 from .chroma_index import ChromaIndex
 from .whoosh_index import WhooshIndex
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..context import KBContext
@@ -186,8 +196,8 @@ class HybridSearcher:
         """Boost results with matching tags and project/path context.
 
         Applies two types of boosts:
-        1. Tag boost: +0.05 per matching tag in query (always stacks)
-        2. Context boost: MAX of project (+0.15) or KB path (+0.12) boost
+        1. Tag boost: TAG_MATCH_BOOST per matching tag in query (always stacks)
+        2. Context boost: MAX of PROJECT_CONTEXT_BOOST or KB_PATH_CONTEXT_BOOST
            - Project boost: entry was created from current project
            - Path boost: entry matches .kbcontext paths
            These don't stack to avoid overboosting correlated signals.
@@ -195,14 +205,14 @@ class HybridSearcher:
         if not results:
             return results
 
-        # Tag boost: +0.05 per matching tag (always applies, stacks with context)
+        # Tag boost: per matching tag (always applies, stacks with context)
         tokens = {tok for tok in re.split(r"\W+", query.lower()) if tok}
         if tokens:
             for result in results:
                 tag_tokens = {tag.lower() for tag in result.tags}
                 overlap = tokens.intersection(tag_tokens)
                 if overlap:
-                    result.score += 0.05 * len(overlap)
+                    result.score += TAG_MATCH_BOOST * len(overlap)
 
         # Context boost: apply MAX of project_context or kb_context path boost
         # These are correlated signals so we don't stack them
@@ -210,18 +220,18 @@ class HybridSearcher:
             project_boost = 0.0
             path_boost = 0.0
 
-            # Check project context boost (+0.15)
+            # Check project context boost
             if project_context and result.source_project == project_context:
-                project_boost = 0.15
+                project_boost = PROJECT_CONTEXT_BOOST
 
-            # Check KB context path boost (+0.12)
+            # Check KB context path boost
             if kb_context:
                 from ..context import matches_glob
 
                 boost_paths = kb_context.get_all_boost_paths()
                 for pattern in boost_paths:
                     if matches_glob(result.path, pattern):
-                        path_boost = 0.12
+                        path_boost = KB_PATH_CONTEXT_BOOST
                         break
 
             # Apply the higher of the two (don't stack)
@@ -336,8 +346,8 @@ class HybridSearcher:
                     chunk.model_copy(update={"path": relative_path}) for chunk in file_chunks
                 ]
                 chunks.extend(normalized_chunks)
-            except Exception:
-                # Skip files that can't be parsed
+            except Exception as e:
+                log.warning("Skipping %s during reindex: %s", md_file, e)
                 continue
 
         # Index all chunks

@@ -920,6 +920,8 @@ def delete(path: str, force: bool, as_json: bool):
 
 def main():
     """Entry point for vl-kb CLI."""
+    from ._logging import configure_logging
+    configure_logging()
     cli()
 
 
