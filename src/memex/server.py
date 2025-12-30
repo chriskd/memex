@@ -57,7 +57,12 @@ async def search_tool(
 
 @mcp.tool(
     name="add",
-    description="Create a new knowledge base entry. Returns path and suggested links/tags.",
+    description=(
+        "Create a new knowledge base entry. "
+        "Checks for potential duplicates first. "
+        "If duplicates detected, returns created=False with warning. "
+        "Use force=True to bypass duplicate check."
+    ),
 )
 async def add_tool(
     title: str,
@@ -66,8 +71,9 @@ async def add_tool(
     category: str = "",
     directory: str | None = None,
     links: list[str] | None = None,
-) -> dict:
-    """Create a new KB entry."""
+    force: bool = False,
+) -> core.AddEntryResponse:
+    """Create a new KB entry with duplicate detection."""
     return await core.add_entry(
         title=title,
         content=content,
@@ -75,6 +81,7 @@ async def add_tool(
         category=category,
         directory=directory,
         links=links,
+        force=force,
     )
 
 

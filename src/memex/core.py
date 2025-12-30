@@ -22,6 +22,8 @@ log = logging.getLogger(__name__)
 
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import (
+    DUPLICATE_DETECTION_LIMIT,
+    DUPLICATE_DETECTION_MIN_SCORE,
     LINK_SUGGESTION_MIN_SCORE,
     MAX_CONTENT_RESULTS,
     SIMILAR_ENTRY_TAG_WEIGHT,
@@ -32,7 +34,17 @@ from .context import KBContext, get_kb_context
 from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
-from .models import DocumentChunk, IndexStatus, KBEntry, QualityReport, SearchResponse, SearchResult
+from .models import (
+    AddEntryResponse,
+    DocumentChunk,
+    IndexStatus,
+    KBEntry,
+    PotentialDuplicate,
+    QualityReport,
+    SearchResponse,
+    SearchResult,
+    SearchSuggestion,
+)
 from .parser import ParseError, extract_links, parse_entry, update_links_batch
 
 
@@ -587,6 +599,150 @@ def compute_tag_suggestions(
     return suggestions
 
 
+def detect_potential_duplicates(
+    title: str,
+    content: str,
+    searcher: HybridSearcher,
+    min_score: float = DUPLICATE_DETECTION_MIN_SCORE,
+    limit: int = DUPLICATE_DETECTION_LIMIT,
+) -> list[PotentialDuplicate]:
+    """Detect potential duplicate entries based on semantic similarity.
+
+    Uses a combination of title and content to search for highly similar
+    existing entries that might be duplicates.
+
+    Args:
+        title: The title of the new entry.
+        content: The content of the new entry.
+        searcher: The hybrid searcher instance.
+        min_score: Minimum similarity score to consider as potential duplicate.
+        limit: Maximum number of potential duplicates to return.
+
+    Returns:
+        List of PotentialDuplicate objects for high-similarity matches.
+    """
+    # Combine title and first ~500 chars of content for semantic comparison
+    # This captures the essence of the entry without being too long
+    search_text = f"{title} {content[:500]}"
+
+    # Use semantic search to find similar entries
+    try:
+        results = searcher.search(search_text, limit=limit * 2, mode="semantic")
+    except Exception:
+        return []
+
+    duplicates = []
+    for result in results:
+        if result.score >= min_score:
+            duplicates.append(
+                PotentialDuplicate(
+                    path=result.path,
+                    title=result.title,
+                    score=round(result.score, 3),
+                    tags=result.tags,
+                )
+            )
+            if len(duplicates) >= limit:
+                break
+
+    return duplicates
+
+
+# Threshold below which we consider results "sparse" and suggest alternatives
+SPARSE_RESULTS_THRESHOLD = 3
+
+
+def _get_search_suggestions(
+    query: str,
+    results: list[SearchResult],
+    searcher: HybridSearcher,
+    max_suggestions: int = 3,
+) -> list[SearchSuggestion]:
+    """Generate search suggestions when results are sparse or empty.
+
+    Strategies:
+    1. Find entries with similar tags to query terms
+    2. Use semantic search to find conceptually related entries
+    3. Suggest tag-based browsing
+
+    Args:
+        query: Original search query.
+        results: Current search results (may be sparse/empty).
+        searcher: The hybrid searcher for semantic lookups.
+        max_suggestions: Maximum suggestions to return.
+
+    Returns:
+        List of SearchSuggestion objects.
+    """
+    suggestions: list[SearchSuggestion] = []
+    if len(results) >= SPARSE_RESULTS_THRESHOLD:
+        return suggestions
+
+    # Extract keywords from query
+    query_terms = {term.lower() for term in re.split(r"\W+", query) if len(term) >= 2}
+    kb_root = get_kb_root()
+
+    # Collect all available tags from the KB
+    all_tags: set[str] = set()
+    try:
+        for md_file in kb_root.rglob("*.md"):
+            try:
+                metadata, _, _ = parse_entry(md_file)
+                all_tags.update(tag.lower() for tag in metadata.tags)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Strategy 1: Suggest matching tags if query matches a tag exactly
+    tag_matches = query_terms.intersection(all_tags)
+    for tag in sorted(tag_matches)[:max_suggestions]:
+        suggestions.append(SearchSuggestion(
+            query=f"tag:{tag}",
+            reason=f"Filter by '{tag}' tag",
+        ))
+        if len(suggestions) >= max_suggestions:
+            return suggestions
+
+    # Strategy 2: Find similar tags using fuzzy matching
+    for term in query_terms:
+        if len(suggestions) >= max_suggestions:
+            break
+        for tag in sorted(all_tags):
+            # Check for substring matches or close matches
+            if term in tag or tag in term:
+                # Don't suggest if already an exact match
+                if tag not in tag_matches:
+                    suggestions.append(SearchSuggestion(
+                        query=f"tag:{tag}",
+                        reason=f"Similar to '{term}'",
+                    ))
+                    if len(suggestions) >= max_suggestions:
+                        return suggestions
+                    break
+
+    # Strategy 3: If semantic search returned something but keyword didn't,
+    # suggest a semantic-only search
+    if len(results) == 0:
+        # Try semantic search to see if there's something related
+        try:
+            semantic_results = searcher.search(query, limit=3, mode="semantic")
+            if semantic_results:
+                top_result = semantic_results[0]
+                # Suggest searching with terms from top semantic result
+                for tag in top_result.tags[:2]:
+                    suggestions.append(SearchSuggestion(
+                        query=tag,
+                        reason=f"Related: {top_result.title}",
+                    ))
+                    if len(suggestions) >= max_suggestions:
+                        return suggestions
+        except Exception:
+            pass
+
+    return suggestions
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Core business logic functions
 # ─────────────────────────────────────────────────────────────────────────────
@@ -641,7 +797,10 @@ async def search(
             results = results[:MAX_CONTENT_RESULTS]
         results = hydrate_content(results)
 
-    return SearchResponse(results=results, warnings=warnings)
+    # Generate suggestions for sparse/empty results
+    suggestions = _get_search_suggestions(query, results, searcher)
+
+    return SearchResponse(results=results, warnings=warnings, suggestions=suggestions)
 
 
 async def quality(limit: int = 5, cutoff: int = 3) -> QualityReport:
@@ -658,8 +817,10 @@ async def add_entry(
     directory: str | None = None,
     links: list[str] | None = None,
     kb_context: KBContext | None = None,
-) -> dict:
-    """Create a new KB entry.
+    check_duplicates: bool = True,
+    force: bool = False,
+) -> AddEntryResponse:
+    """Create a new KB entry with duplicate detection.
 
     Args:
         title: Entry title.
@@ -672,10 +833,12 @@ async def add_entry(
         links: Optional list of paths to link to using [[link]] syntax.
         kb_context: Optional project context. If not provided, auto-discovered from cwd.
                    Used for default directory (primary) and tag suggestions (default_tags).
+        check_duplicates: If True (default), check for semantically similar entries first.
+        force: If True, create entry even if potential duplicates are detected.
 
     Returns:
-        Dict with 'path' of created file, 'suggested_links' to consider adding,
-        and 'suggested_tags' based on content similarity and existing taxonomy.
+        AddEntryResponse with path, creation status, suggestions, and potential duplicates.
+        If duplicates detected and force=False, returns created=False with duplicates list.
     """
     kb_root = get_kb_root()
 
@@ -732,6 +895,27 @@ async def add_entry(
 
     if file_path.exists():
         raise ValueError(f"Entry already exists at {rel_path}")
+
+    # Check for potential duplicates before creating
+    potential_duplicates: list[PotentialDuplicate] = []
+    if check_duplicates and not force:
+        searcher = get_searcher()
+        potential_duplicates = detect_potential_duplicates(title, content, searcher)
+
+        if potential_duplicates:
+            # Found potential duplicates - return without creating
+            top_match = potential_duplicates[0]
+            warning = (
+                f"Potential duplicate detected: '{top_match.title}' ({top_match.path}) "
+                f"with {top_match.score:.0%} similarity. "
+                f"Use force=True to create anyway, or update the existing entry."
+            )
+            return AddEntryResponse(
+                path=rel_path,
+                created=False,
+                potential_duplicates=potential_duplicates,
+                warning=warning,
+            )
 
     # Add links to content if specified
     final_content = content
@@ -804,7 +988,12 @@ async def add_entry(
         # Prepend context suggestions to semantic suggestions
         suggested_tags = context_suggestions + suggested_tags
 
-    return {"path": rel_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
+    return AddEntryResponse(
+        path=rel_path,
+        created=True,
+        suggested_links=suggested_links,
+        suggested_tags=suggested_tags,
+    )
 
 
 async def update_entry(
@@ -1496,8 +1685,6 @@ async def rmdir(path: str, force: bool = False) -> str:
     Raises:
         ValueError: If directory contains entries, not empty (without force), or doesn't exist.
     """
-    kb_root = get_kb_root()
-
     # Validate path
     abs_path, normalized = validate_nested_path(path)
 

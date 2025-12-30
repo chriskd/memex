@@ -1,6 +1,5 @@
 """Tests for project context (.kbcontext) discovery and path matching."""
 
-import os
 from pathlib import Path
 
 import pytest
