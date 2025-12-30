@@ -497,17 +497,250 @@ def add(
         sys.exit(1)
 
     if as_json:
-        output(result, as_json=True)
+        output(result.model_dump() if hasattr(result, 'model_dump') else result, as_json=True)
     else:
-        click.echo(f"Created: {result['path']}")
-        if result.get('suggested_links'):
-            click.echo("\nSuggested links:")
-            for link in result['suggested_links'][:5]:
-                click.echo(f"  - {link['path']} ({link['score']:.2f})")
-        if result.get('suggested_tags'):
-            click.echo("\nSuggested tags:")
-            for tag in result['suggested_tags'][:5]:
-                click.echo(f"  - {tag['tag']} ({tag['reason']})")
+        # Handle AddEntryResponse or dict
+        if hasattr(result, 'created') and not result.created:
+            click.echo(f"Warning: {result.warning}")
+            click.echo(f"Potential duplicates:")
+            for dup in result.potential_duplicates[:3]:
+                click.echo(f"  - {dup.path} ({dup.score:.0%} similar)")
+            click.echo(f"\nUse --force to create anyway (if supported)")
+        else:
+            path = result.path if hasattr(result, 'path') else result.get('path')
+            click.echo(f"Created: {path}")
+
+            suggested_links = result.suggested_links if hasattr(result, 'suggested_links') else result.get('suggested_links', [])
+            if suggested_links:
+                click.echo("\nSuggested links:")
+                for link in suggested_links[:5]:
+                    score = link.get('score', 0) if isinstance(link, dict) else link.score
+                    path_str = link.get('path', '') if isinstance(link, dict) else link.path
+                    click.echo(f"  - {path_str} ({score:.2f})")
+
+            suggested_tags = result.suggested_tags if hasattr(result, 'suggested_tags') else result.get('suggested_tags', [])
+            if suggested_tags:
+                click.echo("\nSuggested tags:")
+                for tag in suggested_tags[:5]:
+                    tag_name = tag.get('tag', '') if isinstance(tag, dict) else tag.tag
+                    reason = tag.get('reason', '') if isinstance(tag, dict) else tag.reason
+                    click.echo(f"  - {tag_name} ({reason})")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Quick-Add Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _extract_title_from_content(content: str) -> str:
+    """Extract title from markdown content.
+
+    Tries:
+    1. First H1 heading (# Title)
+    2. First H2 heading (## Title)
+    3. First non-empty line
+    4. First 50 chars of content
+    """
+    import re
+
+    lines = content.strip().split("\n")
+
+    # Try H1 heading
+    for line in lines:
+        if line.startswith("# "):
+            return line[2:].strip()
+
+    # Try H2 heading
+    for line in lines:
+        if line.startswith("## "):
+            return line[3:].strip()
+
+    # Try first non-empty line (strip markdown syntax)
+    for line in lines:
+        clean = re.sub(r"^[#*>\-\s]+", "", line).strip()
+        if clean and len(clean) > 3:
+            # Truncate if too long
+            if len(clean) > 60:
+                clean = clean[:57] + "..."
+            return clean
+
+    # Fallback to first 50 chars
+    return content[:50].strip() + "..."
+
+
+def _suggest_tags_from_content(content: str, existing_tags: set) -> list[str]:
+    """Suggest tags based on content keywords.
+
+    Args:
+        content: The entry content.
+        existing_tags: Set of existing KB tags.
+
+    Returns:
+        List of suggested tags.
+    """
+    import re
+
+    # Extract words from content
+    words = re.findall(r'\b[a-zA-Z][a-zA-Z0-9-]+\b', content.lower())
+    word_counts: dict[str, int] = {}
+    for word in words:
+        if len(word) >= 3:
+            word_counts[word] = word_counts.get(word, 0) + 1
+
+    # Find matches with existing tags
+    matches = []
+    for tag in existing_tags:
+        tag_lower = tag.lower()
+        if tag_lower in word_counts:
+            matches.append((tag, word_counts[tag_lower]))
+
+    # Sort by frequency and return top matches
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return [m[0] for m in matches[:5]]
+
+
+def _suggest_category_from_content(content: str, categories: list[str]) -> Optional[str]:
+    """Suggest category based on content.
+
+    Args:
+        content: The entry content.
+        categories: List of valid categories.
+
+    Returns:
+        Suggested category or None.
+    """
+    content_lower = content.lower()
+
+    # Simple keyword matching
+    for cat in categories:
+        cat_lower = cat.lower()
+        if cat_lower in content_lower:
+            return cat
+
+    # Default to first category if available
+    return categories[0] if categories else None
+
+
+@cli.command("quick-add")
+@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option("--stdin", is_flag=True, help="Read content from stdin")
+@click.option("--content", "-c", help="Raw content to add")
+@click.option("--title", "-t", help="Override auto-detected title")
+@click.option("--tags", help="Override auto-suggested tags (comma-separated)")
+@click.option("--category", help="Override auto-suggested category")
+@click.option("--confirm", "-y", is_flag=True, help="Auto-confirm without prompting")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def quick_add(
+    file_path: Optional[str],
+    stdin: bool,
+    content: Optional[str],
+    title: Optional[str],
+    tags: Optional[str],
+    category: Optional[str],
+    confirm: bool,
+    as_json: bool,
+):
+    """Quickly add content with auto-generated metadata.
+
+    Analyzes raw content to suggest title, tags, and category.
+    In interactive mode, prompts for confirmation before creating.
+
+    \b
+    Examples:
+      mx quick-add --stdin              # Paste content, auto-generate all
+      mx quick-add -f notes.md          # From file with auto metadata
+      mx quick-add -c "..." -y          # Auto-confirm creation
+      echo "..." | mx quick-add --stdin --json  # Machine-readable
+    """
+    from .core import add_entry, get_valid_categories, compute_tag_suggestions
+
+    # Resolve content source
+    if stdin:
+        content = sys.stdin.read()
+    elif file_path:
+        content = Path(file_path).read_text()
+    elif not content:
+        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
+        sys.exit(1)
+
+    if not content.strip():
+        click.echo("Error: Content is empty", err=True)
+        sys.exit(1)
+
+    # Get existing KB structure
+    valid_categories = get_valid_categories()
+
+    # Collect all existing tags from KB
+    from .config import get_kb_root
+    from .parser import parse_entry
+
+    kb_root = get_kb_root()
+    existing_tags: set[str] = set()
+    try:
+        for md_file in kb_root.rglob("*.md"):
+            try:
+                metadata, _, _ = parse_entry(md_file)
+                existing_tags.update(metadata.tags)
+            except Exception:
+                continue
+    except Exception:
+        pass
+
+    # Auto-generate metadata
+    auto_title = title or _extract_title_from_content(content)
+    auto_tags = tags.split(",") if tags else _suggest_tags_from_content(content, existing_tags)
+    auto_category = category or _suggest_category_from_content(content, valid_categories)
+
+    # Ensure we have at least one tag
+    if not auto_tags:
+        auto_tags = ["uncategorized"]
+
+    if as_json:
+        # In JSON mode, output suggestions and let caller decide
+        output({
+            "title": auto_title,
+            "tags": auto_tags,
+            "category": auto_category,
+            "content_preview": content[:200] + "..." if len(content) > 200 else content,
+            "categories_available": valid_categories,
+        }, as_json=True)
+        return
+
+    # Interactive mode - show suggestions and prompt
+    click.echo("\n=== Quick Add Analysis ===\n")
+    click.echo(f"Title:    {auto_title}")
+    click.echo(f"Tags:     {', '.join(auto_tags)}")
+    click.echo(f"Category: {auto_category or '(none - will need to specify)'}")
+    click.echo(f"Content:  {len(content)} chars")
+
+    if not auto_category:
+        click.echo(f"\nAvailable categories: {', '.join(valid_categories)}")
+        auto_category = click.prompt("Category", default=valid_categories[0] if valid_categories else "notes")
+
+    if not confirm:
+        if not click.confirm("\nCreate entry with these settings?"):
+            click.echo("Aborted.")
+            return
+
+    # Create the entry
+    try:
+        result = run_async(add_entry(
+            title=auto_title,
+            content=content,
+            tags=auto_tags,
+            category=auto_category,
+            force=True,  # Skip duplicate check for quick-add
+        ))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if hasattr(result, 'created') and not result.created:
+        click.echo(f"\nWarning: {result.warning}")
+        click.echo(f"Path would be: {result.path}")
+    else:
+        path = result.path if hasattr(result, 'path') else result.get('path')
+        click.echo(f"\n✓ Created: {path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
