@@ -1,4 +1,4 @@
-# Voidlabs KB Explorer - Docker Compose
+# Memex Explorer - Docker Compose
 # Deploy with: docker compose up -d
 
 services:
@@ -6,8 +6,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: voidlabs-kb-explorer:latest
-    container_name: voidlabs-kb-explorer
+    image: memex-explorer:latest
+    container_name: memex-explorer
     restart: unless-stopped
     ports:
       - "8088:8080"

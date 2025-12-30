@@ -1,8 +1,8 @@
 ---
 name: kb-search
-description: Search the voidlabs knowledge base
+description: Search the knowledge base
 allowed-tools:
-  - mcp__plugin_voidlabs-kb_voidlabs-kb__search
+  - mcp__memex__search
 argument-hint: "<query>"
 ---
 
@@ -10,7 +10,7 @@ Search the knowledge base using the provided query.
 
 ## Workflow
 
-1. Call `mcp__plugin_voidlabs-kb_voidlabs-kb__search` with the user's query
+1. Call `mcp__memex__search` with the user's query
 2. Display results in a readable format:
    - Title
    - Path

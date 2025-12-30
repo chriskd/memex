@@ -6,10 +6,13 @@ to path-style [[path/to/entry]] links.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import NamedTuple
 
 import frontmatter
+
+log = logging.getLogger(__name__)
 
 
 class TitleEntry(NamedTuple):
@@ -44,7 +47,8 @@ def build_title_index(kb_root: Path) -> dict[str, str]:
 
         try:
             post = frontmatter.load(md_file)
-        except Exception:
+        except Exception as e:
+            log.debug("Skipping %s during title index build: %s", md_file, e)
             continue
 
         if not post.metadata:

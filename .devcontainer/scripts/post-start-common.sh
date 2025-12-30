@@ -232,8 +232,8 @@ setup_vlkb() {
         NEEDS_INSTALL=true
     elif [[ ! -f "$MARKER" ]]; then
         NEEDS_INSTALL=true
-    elif [[ "$VLKB_REPO/src/voidlabs_kb/cli.py" -nt "$MARKER" ]] || \
-         [[ "$VLKB_REPO/src/voidlabs_kb/core.py" -nt "$MARKER" ]] || \
+    elif [[ "$VLKB_REPO/src/memex/cli.py" -nt "$MARKER" ]] || \
+         [[ "$VLKB_REPO/src/memex/core.py" -nt "$MARKER" ]] || \
          [[ "$VLKB_REPO/pyproject.toml" -nt "$MARKER" ]]; then
         NEEDS_INSTALL=true
     fi
@@ -317,8 +317,24 @@ setup_chezmoi() {
 
     # Initialize chezmoi from git repo if not already done
     if [[ ! -d "$HOME/.local/share/chezmoi" ]]; then
+        # Ensure GitHub's SSH host key is in known_hosts (prevents interactive prompt)
+        mkdir -p "$HOME/.ssh"
+        if ! grep -q "github.com" "$HOME/.ssh/known_hosts" 2>/dev/null; then
+            log_feature "chezmoi" "Adding GitHub to known_hosts..."
+            ssh-keyscan -t ed25519,rsa github.com >> "$HOME/.ssh/known_hosts" 2>/dev/null
+        fi
+
+        # Check if SSH agent is available for passphrase-protected keys
+        if [[ -z "${SSH_AUTH_SOCK:-}" ]]; then
+            log_feature "chezmoi" "Warning: SSH agent not available, keys with passphrases won't work"
+        fi
+
         log_feature "chezmoi" "Initializing from $DOTFILES_REPO..."
-        chezmoi init "$DOTFILES_REPO"
+        # Use timeout to prevent indefinite hang (30 seconds should be plenty for clone)
+        if ! timeout 30 chezmoi init "$DOTFILES_REPO" 2>&1; then
+            log_feature "chezmoi" "Failed to initialize chezmoi (SSH auth issue?), skipping"
+            return 0
+        fi
     fi
 
     # Unset 1Password service token to avoid mode conflict with chezmoi

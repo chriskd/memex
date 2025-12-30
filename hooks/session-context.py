@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SessionStart hook that injects relevant KB context for voidlabs projects.
+"""SessionStart hook that injects relevant KB context for projects.
 
 This script is invoked when a Claude Code session starts. It searches the
 knowledge base for entries relevant to the current project and outputs
@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from voidlabs_kb.parser import parse_entry, ParseError
+from memex.parser import parse_entry, ParseError
 
 # Cache configuration
 CACHE_DIR = Path("/tmp")
@@ -25,7 +25,7 @@ CACHE_TTL_SECONDS = 3600  # 1 hour
 def get_cache_path(project_name: str) -> Path:
     """Get cache file path for a project."""
     safe_name = re.sub(r"[^\w\-]", "_", project_name)
-    return CACHE_DIR / f"voidlabs-kb-context-{safe_name}.json"
+    return CACHE_DIR / f"memex-context-{safe_name}.json"
 
 
 def load_cached_context(project_name: str) -> str | None:
@@ -235,18 +235,18 @@ def select_relevant_entries(
 def format_output(entries: list[dict], project_name: str) -> str:
     """Format entries as markdown output."""
     lines = [
-        "## Voidlabs Knowledge Base",
+        "## Memex Knowledge Base",
         "",
-        "You have access to an organizational knowledge base with documentation, patterns,",
+        "You have access to a knowledge base with documentation, patterns,",
         "and operational guides. **Search before creating** to avoid duplicates.",
         "",
         "**Quick Reference:**",
         "| Action | Tool/Command |",
         "|--------|--------------|",
-        "| Search | `mcp__voidlabs-kb__search` or `/kb search <query>` |",
-        "| Browse | `mcp__voidlabs-kb__list` or `mcp__voidlabs-kb__tree` |",
-        "| Read entry | `mcp__voidlabs-kb__get` with path |",
-        "| Add new | `mcp__voidlabs-kb__add` with title, content, tags |",
+        "| Search | `mcp__memex__search` or `/kb search <query>` |",
+        "| Browse | `mcp__memex__list` or `mcp__memex__tree` |",
+        "| Read entry | `mcp__memex__get` with path |",
+        "| Add new | `mcp__memex__add` with title, content, tags |",
         "",
     ]
 

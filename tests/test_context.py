@@ -64,8 +64,8 @@ class TestMatchesGlob:
 
     def test_prefix_match(self):
         """Test prefix matching without wildcards."""
-        assert matches_glob("projects/voidlabs-kb/docs.md", "projects/voidlabs-kb")
-        assert matches_glob("projects/voidlabs-kb/subdir/file.md", "projects/voidlabs-kb")
+        assert matches_glob("projects/memex/docs.md", "projects/memex")
+        assert matches_glob("projects/memex/subdir/file.md", "projects/memex")
 
     def test_no_match(self):
         """Test non-matching paths."""

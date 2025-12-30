@@ -1,16 +1,16 @@
 {
-  "name": "voidlabs-kb",
+  "name": "memex",
   "version": "0.1.0",
-  "description": "Organization-wide knowledge base with semantic search. Query and contribute to shared organizational knowledge across all voidlabs projects.",
+  "description": "Personal knowledge base with semantic search. Build and query your own knowledge graph with wiki-style links and hybrid search.",
   "author": {
-    "name": "voidlabs"
+    "name": "memex"
   },
   "license": "MIT",
   "keywords": [
     "knowledge-base",
     "semantic-search",
     "documentation",
-    "organizational-knowledge",
+    "personal-knowledge",
     "obsidian"
   ]
 }
