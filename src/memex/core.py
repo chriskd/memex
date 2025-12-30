@@ -1,4 +1,4 @@
-"""Core business logic for voidlabs-kb.
+"""Core business logic for memex.
 
 This module contains the pure business logic, separated from MCP protocol concerns.
 Both the MCP server (server.py) and CLI (cli.py) import from here.
@@ -53,7 +53,7 @@ def get_current_project() -> str | None:
     """Get the current project name from git remote or working directory.
 
     Returns:
-        Project name (e.g., "voidlabs-ansible") or None if unavailable.
+        Project name (e.g., "memex-ansible") or None if unavailable.
     """
     cwd = Path.cwd()
 

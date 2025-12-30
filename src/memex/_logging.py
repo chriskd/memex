@@ -1,4 +1,4 @@
-"""Logging configuration for voidlabs-kb.
+"""Logging configuration for memex.
 
 This module provides consistent logging across the codebase.
 
@@ -25,13 +25,13 @@ import sys
 
 
 def configure_logging() -> None:
-    """Configure logging for the voidlabs-kb package.
+    """Configure logging for the memex package.
 
     Call this once at application startup (e.g., in cli.py or server.py).
     Subsequent calls are no-ops.
     """
     # Get the package root logger
-    root_logger = logging.getLogger("voidlabs_kb")
+    root_logger = logging.getLogger("memex")
 
     # Skip if already configured (has handlers)
     if root_logger.handlers:
@@ -64,7 +64,7 @@ def get_logger(name: str) -> logging.Logger:
     """Get a logger for the given module name.
 
     This is a convenience wrapper that ensures the logger is in the
-    voidlabs_kb namespace.
+    memex namespace.
 
     Args:
         name: Module name (typically __name__).

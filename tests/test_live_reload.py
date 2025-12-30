@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from voidlabs_kb.webapp.events import Event, EventBroadcaster, EventType, get_broadcaster
+from memex.webapp.events import Event, EventBroadcaster, EventType, get_broadcaster
 
 
 class TestEventBroadcaster:

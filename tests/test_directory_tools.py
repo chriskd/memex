@@ -6,7 +6,7 @@ from datetime import date
 
 import pytest
 
-from voidlabs_kb import core, server
+from memex import core, server
 
 
 async def _call_tool(tool_obj, /, *args, **kwargs):
@@ -143,13 +143,12 @@ Mentions [[development/python/foo]].
 """
     )
 
-    params = {
-        "source": "development/python/foo.md",
-        "destination": "architecture/patterns/foo.md",
-        "update_links": True,
-    }
-
-    result = await _call_tool(server.move_tool, **params)
+    # update_links defaults to True in move_tool (param removed from MCP for simplicity)
+    result = await _call_tool(
+        server.move_tool,
+        source="development/python/foo.md",
+        destination="architecture/patterns/foo.md",
+    )
 
     assert any("development/python/foo.md -> architecture/patterns/foo.md" in entry for entry in result["moved"])
     assert result["links_updated"] == 1
@@ -159,13 +158,13 @@ Mentions [[development/python/foo]].
     updated_ref = referencing.read_text()
     assert "[[architecture/patterns/foo]]" in updated_ref
 
-    assert dummy_searcher.deleted == [params["source"]]
+    assert dummy_searcher.deleted == ["development/python/foo.md"]
     assert dummy_searcher.indexed
-    assert all(chunk.path == params["destination"] for chunk in dummy_searcher.indexed[0])
+    assert all(chunk.path == "architecture/patterns/foo.md" for chunk in dummy_searcher.indexed[0])
 
-    from voidlabs_kb.parser import parse_entry
+    from memex.parser import parse_entry
 
-    metadata, _, chunks = parse_entry(kb_root / params["destination"])
+    metadata, _, chunks = parse_entry(kb_root / "architecture/patterns/foo.md")
     assert metadata.title == "Foo Doc"
     assert any(chunk.content.strip() == "Foo body" for chunk in chunks)
 

@@ -1,4 +1,4 @@
-"""Configuration management for voidlabs-kb.
+"""Configuration management for memex.
 
 This module contains all configurable constants for the knowledge base.
 Magic numbers are documented here rather than scattered throughout the codebase.
