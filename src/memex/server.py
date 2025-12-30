@@ -10,7 +10,7 @@ from typing import Literal
 from fastmcp import FastMCP
 
 from . import core
-from .config import LINK_SUGGESTION_MIN_SCORE
+from .config import DEFAULT_SEARCH_LIMIT, LINK_SUGGESTION_MIN_SCORE
 from .models import KBEntry, SearchResponse
 
 
@@ -40,7 +40,7 @@ _get_current_project = core.get_current_project
 )
 async def search_tool(
     query: str,
-    limit: int = 10,
+    limit: int = DEFAULT_SEARCH_LIMIT,
     mode: Literal["hybrid", "keyword", "semantic"] = "hybrid",
     tags: list[str] | None = None,
     include_content: bool = False,
@@ -128,7 +128,7 @@ async def list_tool(
 )
 async def whats_new_tool(
     days: int = 30,
-    limit: int = 10,
+    limit: int = DEFAULT_SEARCH_LIMIT,
     project: str | None = None,
 ) -> list[dict]:
     """List recent KB entries."""

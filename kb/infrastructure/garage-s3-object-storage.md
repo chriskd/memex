@@ -173,3 +173,76 @@ Make permanent by adding to `/etc/fstab` or configuring via `infrastructure.yml`
 - [[VirtioFS Limitations and Troubleshooting]]
 - [[Dokploy Container Management]]
 
+## ### Storage Backend Requirements
+
+### Storage Backend Requirements
+
+Garage requires **full POSIX filesystem semantics** for its data directory:
+- Extended attributes (xattrs) support
+- Proper file locking
+- Complete ioctl support
+
+**CRITICAL:** VirtioFS does not support these features and will fail with:
+- `IO error: Not supported (os error 95)` on xattr operations
+- `Could not find expected marker file 'garage-marker'` after container restart
+
+**Always use NFS mounts**, not virtiofs:
+
+| Mount Type | Path Pattern | Works? |
+|------------|--------------|--------|
+| NFS | `/mnt/fast-nfs/...` | ✅ Yes |
+| VirtioFS | `/mnt/fast/...` | ❌ No |
+
+See [[VirtioFS Limitations and Troubleshooting]] for details.
+
+## ### Volume Configuration
+
+### Volume Configuration
+
+Garage data directories **MUST** be on NFS mounts, not virtiofs:
+
+```yaml
+# docker-compose.yml
+services:
+  garage-fast:
+    volumes:
+      # ✅ CORRECT: Use NFS mount path
+      - /mnt/fast-nfs/dokploy.voidlabs.cc/voidlabs-shared-services/garage/data:/var/lib/garage/data
+      # ❌ WRONG: VirtioFS path will fail
+      # - /mnt/fast/dokploy.voidlabs.cc/.../garage/data:/var/lib/garage/data
+```
+
+**Verify NFS is mounted on dokploy VM:**
+
+```bash
+# Check if NFS mounts exist
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc "mount | grep nfs"
+
+# Mount if missing
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc "
+  sudo mount -t nfs 192.168.50.2:/srv/fast-nfs /mnt/fast-nfs -o rw,soft,intr,timeo=30
+  sudo mount -t nfs 192.168.50.2:/srv/slow-nfs /mnt/slow-nfs -o rw,soft,intr,timeo=30
+"
+```
+
+NFS mounts should be persistent in `/etc/fstab`:
+
+```
+192.168.50.2:/srv/fast-nfs /mnt/fast-nfs nfs rw,soft,intr,timeo=30 0 0
+192.168.50.2:/srv/slow-nfs /mnt/slow-nfs nfs rw,soft,intr,timeo=30 0 0
+```
+
+## ## Existing Buckets
+
+## Existing Buckets
+
+| Bucket | Purpose | Access Keys |
+|--------|---------|-------------|
+| `efta-images` | EFTA/DOJ document images | `docviewer` (dev), `docviewer-prod` (production) |
+
+### Key Details
+
+| Key Name | Key ID | Buckets | Environment |
+|----------|--------|---------|-------------|
+| `docviewer` | `GKfdbcb1fcd0f2f1e7c36479e8` | efta-images, docviewer-images | Development |
+| `docviewer-prod` | `GK812ac25f8b505735494080f2` | efta-images | Production (Dokploy) |

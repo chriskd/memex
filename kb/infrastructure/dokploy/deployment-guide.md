@@ -275,5 +275,227 @@ If `dokploy.voidlabs.cc` is unreachable:
 3. Contact infrastructure team if persistent
 
 ## Related
+
+- [[dokploy-python-cli-reference]] - Complete CLI command reference
 - [[Voidlabs Common Patterns]] - Deployment patterns
 - [[DocViewer Project]] - Main docviewer documentation
+
+## ## SSH Access
+
+## SSH Access
+
+To SSH to the Dokploy VM:
+
+```bash
+# Use the ansible key with chris user
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc
+
+# Or with the ansible key loaded
+ssh chris@dokploy.voidlabs.cc
+```
+
+**Key points:**
+- IP: `192.168.51.87`
+- User: `chris` (not root)
+- Key: `~/.ssh/id_ed25519-ansible`
+
+### Direct Container Access
+
+```bash
+# Run docker commands
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc "docker ps"
+
+# Check logs
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc "docker logs <container>"
+
+# Exec into container
+ssh -i ~/.ssh/id_ed25519-ansible chris@dokploy.voidlabs.cc "docker exec -it <container> sh"
+```
+
+## ### Common Workflows
+
+### Common Workflows
+
+#### Deploy vs Redeploy
+
+**CRITICAL DIFFERENCE:**
+
+| Command | Git Pull? | Container Recreate? | Use When |
+|---------|-----------|---------------------|----------|
+| `deploy` | ✅ Yes | ✅ Yes | Code changed in git |
+| `redeploy` | ❌ No | ⚠️ Only if config changed | Just restart containers |
+
+**If you pushed code changes to git, you MUST use `deploy`, not `redeploy`!**
+
+```bash
+# After pushing code changes to git
+dokploy compose deploy <name>      # Pulls from git, recreates containers
+
+# Just restart existing containers (no git pull)
+dokploy compose redeploy <name>    # Only restarts, does NOT pull from git
+```
+
+#### Update Code and Redeploy
+
+```bash
+# 1. Make changes to compose file in repo
+cd /srv/fast/code/voidlabs-ansible
+vim dokploy/garage/docker-compose.yml
+
+# 2. Commit and push
+git add . && git commit -m "fix: update config" && git push
+
+# 3. Deploy (NOT redeploy) to pull changes
+dokploy compose deploy garage-with-ui
+```
+
+**WARNING:** Never edit files directly in `/etc/dokploy/compose/*/code/` - this bypasses Dokploy's workflow and will cause issues on next deploy.
+
+## ## Raw API Operations (curl)
+
+## Raw API Operations (curl)
+
+For operations not covered by the CLI:
+
+### Create Compose
+```bash
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-compose",
+    "projectId": "<PROJECT_ID>",
+    "environmentId": "<ENVIRONMENT_ID>",
+    "description": "My compose stack"
+  }' \
+  https://dokploy.voidlabs.cc/api/compose.create
+```
+
+### Configure Compose GitHub Source
+```bash
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "composeId": "<COMPOSE_ID>",
+    "sourceType": "github",
+    "repository": "repo-name",
+    "owner": "owner",
+    "branch": "main",
+    "composePath": "./docker-compose.prod.yml",
+    "githubId": "<GITHUB_ID>"
+  }' \
+  https://dokploy.voidlabs.cc/api/compose.update
+```
+
+### Set Compose Environment Variables
+```bash
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "composeId": "<COMPOSE_ID>",
+    "env": "KEY1=value1\nKEY2=value2"
+  }' \
+  https://dokploy.voidlabs.cc/api/compose.update
+```
+
+### Deploy Compose (pulls from git)
+```bash
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"composeId": "<COMPOSE_ID>"}' \
+  https://dokploy.voidlabs.cc/api/compose.deploy
+```
+
+### Delete Resources
+```bash
+# Delete application
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"applicationId": "<APP_ID>"}' \
+  https://dokploy.voidlabs.cc/api/application.delete
+
+# Delete postgres
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"postgresId": "<POSTGRES_ID>"}' \
+  https://dokploy.voidlabs.cc/api/postgres.remove
+
+# Delete compose
+curl -s -X POST \
+  -H "x-api-key: $DOKPLOY_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"composeId": "<COMPOSE_ID>"}' \
+  https://dokploy.voidlabs.cc/api/compose.delete
+```
+
+### List All Projects and Composes
+
+## Complete Command Reference
+
+### Complete Command Reference
+
+#### Application Commands (`dokploy app`)
+
+```bash
+dokploy app list [-v]                    # List all applications
+dokploy app status <id-or-name>          # Get application details
+dokploy app redeploy <id-or-name> [-t "reason"]  # Trigger redeploy
+dokploy app logs <id-or-name> [-n 5]     # Show deployment history
+dokploy app start <id-or-name>           # Start application
+dokploy app stop <id-or-name>            # Stop application
+dokploy app create <name> -p <project>   # Create new application
+dokploy app delete <id-or-name> [-f]     # Delete application
+```
+
+#### Compose Commands (`dokploy compose`)
+
+```bash
+dokploy compose list [-v]                # List all compose stacks
+dokploy compose info <id-or-name>        # Get compose details
+dokploy compose deploy <id-or-name>      # Initial deployment (pulls from git)
+dokploy compose redeploy <id-or-name> [-t "reason"]  # Redeploy (no git pull)
+dokploy compose start <id-or-name>       # Start compose
+dokploy compose stop <id-or-name>        # Stop compose
+dokploy compose logs <id-or-name> [-n 5] # Show deployment history
+dokploy compose services <id-or-name>    # List services in stack
+dokploy compose create <name> -p <project>  # Create new compose stack
+dokploy compose update <id-or-name> [options]  # Update compose settings
+dokploy compose delete <id-or-name> [-f] # Delete compose stack
+```
+
+#### Compose Environment Variables (`dokploy compose env`)
+
+```bash
+dokploy compose env list <id-or-name>           # List env vars
+dokploy compose env set <id-or-name> KEY=value  # Set env vars (merges)
+dokploy compose env set <id-or-name> -r KEY=val # Replace all vars
+dokploy compose env unset <id-or-name> KEY      # Remove env var
+```
+
+#### Domain Commands (`dokploy domains`)
+
+```bash
+dokploy domains list <compose>           # List domains for compose
+dokploy domains add <compose> <host> <service> <port> [--path /api] [--strip-path]
+dokploy domains update <domain_id> [--host x] [--port y] [--service z]
+dokploy domains rm <domain_id>           # Delete domain
+```
+
+#### Docker Commands (`dokploy docker`)
+
+```bash
+dokploy docker containers <app-name>     # List containers (debugging)
+dokploy docker restart <container-id>    # Restart container
+dokploy docker config <container-id>     # Get container config
+```
+
+#### Project Commands (`dokploy projects`)
+
+```bash
+dokploy projects list                    # List all projects
+```

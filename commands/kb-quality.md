@@ -2,7 +2,7 @@
 name: kb-quality
 description: Evaluate KB search accuracy
 allowed-tools:
-  - mcp__plugin_voidlabs-kb_voidlabs-kb__quality
+  - mcp__memex__quality
 argument-hint: "[limit] [cutoff]"
 ---
 
@@ -10,7 +10,7 @@ Run the KB quality checks to understand current search accuracy.
 
 ## Workflow
 
-1. Call `mcp__plugin_voidlabs-kb_voidlabs-kb__quality(limit=<limit>, cutoff=<cutoff>)`
+1. Call `mcp__memex__quality(limit=<limit>, cutoff=<cutoff>)`
 2. Present:
    - Overall accuracy percentage
    - Total queries evaluated

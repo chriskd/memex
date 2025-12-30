@@ -46,6 +46,11 @@ DEFAULT_SEARCH_LIMIT = 10
 # Maximum number of results allowed (prevents expensive queries)
 MAX_SEARCH_LIMIT = 50
 
+# Maximum directory traversal depth when searching for .kbcontext files
+# Prevents infinite loops on circular symlinks or unusual filesystems.
+# 50 levels is far beyond typical project depths (5-10 levels).
+MAX_CONTEXT_SEARCH_DEPTH = 50
+
 # Maximum results to hydrate with full document content
 # Higher values increase response size; keep small for API performance
 MAX_CONTENT_RESULTS = 20

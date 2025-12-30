@@ -19,6 +19,9 @@ services:
       - /srv/fast/ai-cli-configs/codex:/home/chris/.codex:cached
       - /srv/fast/ai-cli-configs/factory:/home/chris/.factory:cached
       - ${HOME}/.ssh:/home/chris/.ssh:cached
+      # SSH agent forwarding (for passphrase-protected keys)
+      # Empty fallback prevents failure when SSH_AUTH_SOCK isn't set
+      - ${SSH_AUTH_SOCK:-/dev/null}:/ssh-agent:ro
       # Persistent package caches - shared across all devcontainers
       - /srv/fast/caches/uv:/home/chris/.cache/uv:cached
       - /srv/fast/caches/pip:/home/chris/.cache/pip:cached
@@ -40,8 +43,12 @@ services:
       - PHASE_SERVICE_TOKEN=${PHASE_SERVICE_TOKEN}
       - PHASE_ENV=${PHASE_ENV}
       - PHASE_APP=${PHASE_APP}
+      # SSH agent forwarding (matches volume mount above)
+      - SSH_AUTH_SOCK=/ssh-agent
       # Cache directories (volumes mounted above)
       - HF_HOME=/home/chris/.cache/huggingface
+      # LLM breadcrumb metadata - identifies which model is running
+      - LLM_MODEL=claude-opus-4-5
 
     # Keep container running
     command: sleep infinity

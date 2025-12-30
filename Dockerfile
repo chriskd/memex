@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Voidlabs KB Explorer - Production Dockerfile
+# Memex Explorer - Production Dockerfile
 # Multi-stage build with aggressive caching for fast rebuilds
 
 # Stage 1: Build
@@ -21,8 +21,8 @@ WORKDIR /app
 COPY pyproject.toml .
 
 # Create stub source structure for hatchling to find the package
-RUN mkdir -p src/voidlabs_kb && \
-    echo '__version__ = "0.0.0"' > src/voidlabs_kb/__init__.py
+RUN mkdir -p src/memex && \
+    echo '__version__ = "0.0.0"' > src/memex/__init__.py
 
 # Create virtual environment and install dependencies with BuildKit cache
 # The mount caches persist across builds, so repeated builds reuse downloaded packages
@@ -39,7 +39,7 @@ COPY src/ src/
 
 # Reinstall package with actual source (deps already installed, this is fast)
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv pip install . --reinstall-package voidlabs-kb
+    uv pip install . --reinstall-package memex
 
 # Pre-download the embedding model with BuildKit cache
 # Cache persists across builds - model only downloads once
@@ -96,4 +96,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # Run the web server
-CMD ["python", "-m", "voidlabs_kb.webapp.api"]
+CMD ["python", "-m", "memex.webapp.api"]

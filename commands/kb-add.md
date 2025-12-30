@@ -2,9 +2,9 @@
 name: kb-add
 description: Add a new entry to the knowledge base
 allowed-tools:
-  - mcp__plugin_voidlabs-kb_voidlabs-kb__add
-  - mcp__plugin_voidlabs-kb_voidlabs-kb__search
-  - mcp__plugin_voidlabs-kb_voidlabs-kb__list
+  - mcp__memex__add
+  - mcp__memex__search
+  - mcp__memex__list
   - AskUserQuestion
 argument-hint: "[title]"
 ---
@@ -16,7 +16,7 @@ Interactive workflow to add a new knowledge base entry.
 ### 1. Check for Duplicates
 If a title is provided, search for similar entries first:
 ```
-mcp__plugin_voidlabs-kb_voidlabs-kb__search(query=<title>)
+mcp__memex__search(query=<title>)
 ```
 If duplicates found, ask user if they want to continue or update existing.
 
@@ -47,7 +47,7 @@ Use `AskUserQuestion` to collect:
 
 ### 3. Create the Entry
 ```
-mcp__plugin_voidlabs-kb_voidlabs-kb__add(
+mcp__memex__add(
   title=<title>,
   category=<category>,
   content=<content>,

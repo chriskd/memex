@@ -1,10 +1,10 @@
 #!/bin/bash
-# voidlabs-kb project-specific setup (runs once on container creation)
+# memex project-specific setup (runs once on container creation)
 # This script is called by devcontainer.json postCreateCommand
 
 set -e
 
-echo "Setting up voidlabs-kb development environment..."
+echo "Setting up memex development environment..."
 
 # Add your project-specific setup here:
 # - Install dependencies
@@ -12,4 +12,4 @@ echo "Setting up voidlabs-kb development environment..."
 # - Run database migrations
 # - etc.
 
-echo "voidlabs-kb setup complete!"
+echo "memex setup complete!"

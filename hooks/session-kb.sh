@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SessionStart hook: Show KB quick reference and relevant entries
-# Runs with uv to ensure voidlabs_kb module is available
+# Runs with uv to ensure memex module is available
 
 set -euo pipefail
 

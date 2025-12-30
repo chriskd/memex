@@ -1,8 +1,8 @@
 """Whoosh-based BM25 keyword search index."""
 
-from pathlib import Path
-
+import logging
 from datetime import date
+from pathlib import Path
 
 from whoosh import index
 from whoosh.fields import ID, KEYWORD, STORED, TEXT, Schema
@@ -10,6 +10,8 @@ from whoosh.qparser import MultifieldParser, OrGroup
 
 from ..config import get_index_root
 from ..models import DocumentChunk, SearchResult
+
+log = logging.getLogger(__name__)
 
 
 class WhooshIndex:
@@ -127,8 +129,9 @@ class WhooshIndex:
 
             try:
                 parsed_query = parser.parse(query)
-            except Exception:
+            except Exception as e:
                 # If parsing fails, try a simple term query
+                log.debug("Query parsing failed for '%s', using term query fallback: %s", query, e)
                 from whoosh.query import Term
 
                 parsed_query = Term("content", query.lower())

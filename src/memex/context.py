@@ -19,6 +19,8 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
+from .config import MAX_CONTEXT_SEARCH_DEPTH
+
 import yaml
 
 # Context filename
@@ -154,10 +156,9 @@ def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
     current = (start_dir or Path.cwd()).resolve()
 
     # Prevent infinite loop - stop at filesystem root
-    max_depth = 50
     depth = 0
 
-    while depth < max_depth:
+    while depth < MAX_CONTEXT_SEARCH_DEPTH:
         context_file = current / CONTEXT_FILENAME
         if context_file.exists():
             return _load_context_file(context_file)

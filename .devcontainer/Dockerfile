@@ -1,4 +1,4 @@
-# voidlabs-kb Development Container
+# memex Development Container
 # Uses prebuilt base image from local registry for fast startup
 # Base includes: Go, Node, Phase CLI, git, zsh, tmux, Homebrew (with fzf, neovim, uv, worktrunk)
 #

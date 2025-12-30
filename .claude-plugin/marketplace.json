@@ -1,13 +1,13 @@
 {
-  "name": "voidlabs-kb",
-  "description": "Voidlabs organization knowledge base plugins",
+  "name": "memex",
+  "description": "Personal knowledge base plugins",
   "owner": {
-    "name": "voidlabs"
+    "name": "memex"
   },
   "plugins": [
     {
-      "name": "voidlabs-kb",
-      "description": "Organization-wide knowledge base with semantic search. Query and contribute to shared organizational knowledge across all voidlabs projects.",
+      "name": "memex",
+      "description": "Personal knowledge base with semantic search. Build and query your own knowledge graph with wiki-style links and hybrid search.",
       "version": "0.1.0",
       "source": "./"
     }
