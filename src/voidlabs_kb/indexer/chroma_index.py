@@ -1,11 +1,14 @@
 """ChromaDB-based semantic search index with embeddings."""
 
+import logging
 from datetime import date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from ..config import EMBEDDING_MODEL, get_index_root
 from ..models import DocumentChunk, SearchResult
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import chromadb
@@ -246,8 +249,8 @@ class ChromaIndex:
             # Delete and recreate collection
             try:
                 self._client.delete_collection(self.COLLECTION_NAME)
-            except Exception:
-                pass
+            except Exception as e:
+                log.debug("Could not delete collection during clear: %s", e)
             # Create fresh collection and update cached reference
             self._collection = self._client.get_or_create_collection(
                 name=self.COLLECTION_NAME,

@@ -9,6 +9,7 @@ Design principles:
 - Lazy initialization of expensive resources (searcher, embeddings)
 """
 
+import logging
 import os
 import re
 import shutil
@@ -17,9 +18,18 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Literal
 
+log = logging.getLogger(__name__)
+
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
-from .config import MAX_CONTENT_RESULTS, get_kb_root
+from .config import (
+    LINK_SUGGESTION_MIN_SCORE,
+    MAX_CONTENT_RESULTS,
+    SIMILAR_ENTRY_TAG_WEIGHT,
+    TAG_SUGGESTION_MIN_SCORE,
+    get_kb_root,
+)
 from .context import KBContext, get_kb_context
+from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
 from .models import DocumentChunk, IndexStatus, KBEntry, QualityReport, SearchResponse, SearchResult
@@ -67,8 +77,8 @@ def get_current_project() -> str | None:
             https_match = re.search(r"/([^/]+?)(?:\.git)?$", remote_url)
             if https_match:
                 return https_match.group(1)
-    except (subprocess.TimeoutExpired, OSError):
-        pass
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log.debug("Could not get git remote URL: %s", e)
 
     # Fallback to directory name
     return cwd.name
@@ -102,8 +112,8 @@ def get_current_contributor() -> str | None:
             return f"{name} <{email}>"
         elif name:
             return name
-    except (subprocess.TimeoutExpired, OSError):
-        pass
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log.debug("Could not get git user config: %s", e)
 
     # Fall back to environment variables
     name = os.environ.get("GIT_AUTHOR_NAME") or os.environ.get("USER")
@@ -152,8 +162,8 @@ def get_git_branch() -> str | None:
         if result.returncode == 0:
             branch = result.stdout.strip()
             return branch if branch else None
-    except (subprocess.TimeoutExpired, OSError):
-        pass
+    except (subprocess.TimeoutExpired, OSError) as e:
+        log.debug("Could not get git branch: %s", e)
     return None
 
 
@@ -197,18 +207,12 @@ def get_searcher() -> HybridSearcher:
 
 
 def slugify(title: str) -> str:
-    """Convert title to URL-friendly slug."""
-    # Lowercase
+    """Convert title to URL-friendly slug (lowercase, hyphens, alphanumeric only)."""
     slug = title.lower()
-    # Replace spaces and underscores with hyphens
     slug = re.sub(r"[\s_]+", "-", slug)
-    # Remove non-alphanumeric characters (except hyphens)
     slug = re.sub(r"[^a-z0-9-]", "", slug)
-    # Remove consecutive hyphens
     slug = re.sub(r"-+", "-", slug)
-    # Strip leading/trailing hyphens
-    slug = slug.strip("-")
-    return slug
+    return slug.strip("-")
 
 
 def get_valid_categories() -> list[str]:
@@ -345,9 +349,8 @@ def hydrate_content(results: list[SearchResult]) -> list[SearchResult]:
         if file_path.exists():
             try:
                 _, content, _ = parse_entry(file_path)
-            except ParseError:
-                # Fall back to None if parsing fails
-                pass
+            except ParseError as e:
+                log.warning("Failed to parse %s for hydration: %s", file_path, e)
 
         # Create new result with content
         hydrated.append(
@@ -379,7 +382,7 @@ def compute_link_suggestions(
     self_path: str,
     existing_links: set[str] | None = None,
     limit: int = 5,
-    min_score: float = 0.5,
+    min_score: float = LINK_SUGGESTION_MIN_SCORE,
 ) -> list[dict]:
     """Compute link suggestions based on semantic similarity.
 
@@ -475,7 +478,7 @@ def compute_tag_suggestions(
     content: str,
     existing_tags: list[str] | None = None,
     limit: int = 5,
-    min_score: float = 0.3,
+    min_score: float = TAG_SUGGESTION_MIN_SCORE,
 ) -> list[dict]:
     """Compute tag suggestions based on content analysis and semantic similarity.
 
@@ -516,7 +519,7 @@ def compute_tag_suggestions(
 
     # Weight tags by similarity score of the entry they come from
     for result in search_results:
-        if result.score < 0.3:  # Skip low-similarity entries
+        if result.score < TAG_SUGGESTION_MIN_SCORE:
             continue
         for tag in result.tags:
             if tag in existing_set:
@@ -538,7 +541,7 @@ def compute_tag_suggestions(
         # Check for tag as a word boundary match
         if re.search(rf"\b{re.escape(tag_lower)}\b", text_lower):
             # Direct keyword match is a strong signal
-            tag_scores[tag] = tag_scores.get(tag, 0) + 0.5
+            tag_scores[tag] = tag_scores.get(tag, 0) + SIMILAR_ENTRY_TAG_WEIGHT
             if tag not in tag_reasons:
                 tag_reasons[tag] = []
             tag_reasons[tag].append("Keyword match in content")
@@ -738,36 +741,18 @@ async def add_entry(
             link_section += f"- [[{link}]]\n"
         final_content += link_section
 
-    # Build frontmatter
-    today = date.today().isoformat()
-    tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
+    # Build metadata and frontmatter using utilities
+    metadata = create_new_metadata(
+        title=title,
+        tags=tags,
+        source_project=get_current_project(),
+        contributor=get_current_contributor(),
+        model=get_llm_model(),
+        git_branch=get_git_branch(),
+        actor=get_actor_identity(),
+    )
+    frontmatter = build_frontmatter(metadata)
 
-    # Get contributor identity
-    contributor = get_current_contributor()
-    contributors_yaml = f"\ncontributors:\n  - {contributor}" if contributor else ""
-
-    # Get source project context
-    source_project = get_current_project()
-    source_project_yaml = f"\nsource_project: {source_project}" if source_project else ""
-
-    # Get breadcrumb metadata (agent/LLM provenance)
-    model = get_llm_model()
-    model_yaml = f"\nmodel: {model}" if model else ""
-
-    git_branch = get_git_branch()
-    git_branch_yaml = f"\ngit_branch: {git_branch}" if git_branch else ""
-
-    actor = get_actor_identity()
-    last_edited_by_yaml = f"\nlast_edited_by: {actor}" if actor else ""
-
-    frontmatter = f"""---
-title: {title}
-tags:
-{tags_yaml}
-created: {today}{contributors_yaml}{source_project_yaml}{model_yaml}{git_branch_yaml}{last_edited_by_yaml}
----
-
-"""
     # Write the file
     file_path.write_text(frontmatter + final_content, encoding="utf-8")
     rebuild_backlink_cache(kb_root)
@@ -780,9 +765,8 @@ created: {today}{contributors_yaml}{source_project_yaml}{model_yaml}{git_branch_
             relative_path = relative_kb_path(kb_root, file_path)
             normalized_chunks = normalize_chunks(chunks, relative_path)
             searcher.index_chunks(normalized_chunks)
-    except ParseError:
-        # File was written but indexing failed - still return success
-        pass
+    except ParseError as e:
+        log.warning("Created entry but failed to index %s: %s", rel_path, e)
 
     # Compute link suggestions for the new entry
     existing_links = set(links) if links else set()
@@ -859,86 +843,21 @@ async def update_entry(
     except ParseError as e:
         raise ValueError(f"Failed to parse existing entry: {e}") from e
 
-    # Update metadata
-    today = date.today()
+    # Update metadata using utilities
     new_tags = tags if tags is not None else list(metadata.tags)
-
     if not new_tags:
         raise ValueError("At least one tag is required")
 
-    # Add current contributor if not already present
-    contributors = list(metadata.contributors)
-    current_contributor = get_current_contributor()
-    if current_contributor and current_contributor not in contributors:
-        contributors.append(current_contributor)
-
-    # Track edit sources (projects that have edited this entry)
-    edit_sources = list(metadata.edit_sources)
-    current_project = get_current_project()
-    if current_project and current_project not in edit_sources:
-        # Don't add if it's the same as source_project (original creator)
-        if current_project != metadata.source_project:
-            edit_sources.append(current_project)
-
-    # Build updated frontmatter
-    tags_yaml = "\n".join(f"  - {tag}" for tag in new_tags)
-    contributors_yaml = "\n".join(f"  - {c}" for c in contributors)
-    aliases_yaml = "\n".join(f"  - {a}" for a in metadata.aliases)
-    edit_sources_yaml = "\n".join(f"  - {s}" for s in edit_sources)
-
-    frontmatter_parts = [
-        "---",
-        f"title: {metadata.title}",
-        "tags:",
-        tags_yaml,
-        f"created: {metadata.created.isoformat()}",
-        f"updated: {today.isoformat()}",
-    ]
-
-    if contributors:
-        frontmatter_parts.append("contributors:")
-        frontmatter_parts.append(contributors_yaml)
-
-    if metadata.aliases:
-        frontmatter_parts.append("aliases:")
-        frontmatter_parts.append(aliases_yaml)
-
-    if metadata.status != "published":
-        frontmatter_parts.append(f"status: {metadata.status}")
-
-    # Preserve source_project from original creation
-    if metadata.source_project:
-        frontmatter_parts.append(f"source_project: {metadata.source_project}")
-
-    # Add edit_sources if any projects have edited this
-    if edit_sources:
-        frontmatter_parts.append("edit_sources:")
-        frontmatter_parts.append(edit_sources_yaml)
-
-    # Preserve beads integration fields
-    if metadata.beads_issues:
-        beads_issues_yaml = "\n".join(f"  - {i}" for i in metadata.beads_issues)
-        frontmatter_parts.append("beads_issues:")
-        frontmatter_parts.append(beads_issues_yaml)
-
-    if metadata.beads_project:
-        frontmatter_parts.append(f"beads_project: {metadata.beads_project}")
-
-    # Update breadcrumb metadata (agent/LLM provenance)
-    model = get_llm_model()
-    if model:
-        frontmatter_parts.append(f"model: {model}")
-
-    git_branch = get_git_branch()
-    if git_branch:
-        frontmatter_parts.append(f"git_branch: {git_branch}")
-
-    actor = get_actor_identity()
-    if actor:
-        frontmatter_parts.append(f"last_edited_by: {actor}")
-
-    frontmatter_parts.append("---\n\n")
-    frontmatter = "\n".join(frontmatter_parts)
+    updated_metadata = update_metadata_for_edit(
+        metadata,
+        new_tags=new_tags,
+        new_contributor=get_current_contributor(),
+        edit_source=get_current_project(),
+        model=get_llm_model(),
+        git_branch=get_git_branch(),
+        actor=get_actor_identity(),
+    )
+    frontmatter = build_frontmatter(updated_metadata)
 
     new_content = content if content is not None else existing_content
     if section_updates:
@@ -960,9 +879,10 @@ async def update_entry(
         if chunks:
             normalized_chunks = normalize_chunks(chunks, relative_path)
             searcher.index_chunks(normalized_chunks)
-    except (ParseError, Exception):
-        # Indexing failed but file was updated
-        pass
+    except ParseError as e:
+        log.warning("Updated entry but failed to re-index %s: %s", relative_path, e)
+    except Exception as e:
+        log.error("Unexpected error re-indexing %s: %s", relative_path, e)
 
     # Compute link suggestions based on updated content
     existing_links = set(extract_links(new_content))
@@ -986,174 +906,6 @@ async def update_entry(
     )
 
     return {"path": relative_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
-
-
-async def link_beads(
-    path: str,
-    issues: list[str] | None = None,
-    project: str | None = None,
-) -> dict:
-    """Link a KB entry to beads issues.
-
-    Args:
-        path: Path to the entry relative to KB root (e.g., "projects/foo.md").
-        issues: List of beads issue IDs to link (e.g., ["proj-123", "proj-456"]).
-        project: Beads project name to link all its issues.
-
-    Returns:
-        Dict with 'path', 'linked_issues', and 'project' if set.
-    """
-    if not issues and not project:
-        raise ValueError("Provide at least one of: issues, project")
-
-    kb_root = get_kb_root()
-    file_path = kb_root / path
-
-    if not file_path.exists():
-        raise ValueError(f"Entry not found: {path}")
-
-    # Parse existing entry
-    try:
-        metadata, content, _ = parse_entry(file_path)
-    except ParseError as e:
-        raise ValueError(f"Failed to parse entry: {e}") from e
-
-    # Merge with existing beads_issues (avoid duplicates)
-    existing_issues = set(metadata.beads_issues)
-    new_issues = list(existing_issues)
-    for issue_id in (issues or []):
-        if issue_id not in existing_issues:
-            new_issues.append(issue_id)
-
-    # Update beads_project if provided
-    new_project = project if project else metadata.beads_project
-
-    # Rebuild frontmatter with beads fields
-    today = date.today()
-    tags_yaml = "\n".join(f"  - {tag}" for tag in metadata.tags)
-    contributors_yaml = "\n".join(f"  - {c}" for c in metadata.contributors)
-    aliases_yaml = "\n".join(f"  - {a}" for a in metadata.aliases)
-    edit_sources_yaml = "\n".join(f"  - {s}" for s in metadata.edit_sources)
-
-    frontmatter_parts = [
-        "---",
-        f"title: {metadata.title}",
-        "tags:",
-        tags_yaml,
-        f"created: {metadata.created.isoformat()}",
-        f"updated: {today.isoformat()}",
-    ]
-
-    if metadata.contributors:
-        frontmatter_parts.append("contributors:")
-        frontmatter_parts.append(contributors_yaml)
-
-    if metadata.aliases:
-        frontmatter_parts.append("aliases:")
-        frontmatter_parts.append(aliases_yaml)
-
-    if metadata.status != "published":
-        frontmatter_parts.append(f"status: {metadata.status}")
-
-    if metadata.source_project:
-        frontmatter_parts.append(f"source_project: {metadata.source_project}")
-
-    if metadata.edit_sources:
-        frontmatter_parts.append("edit_sources:")
-        frontmatter_parts.append(edit_sources_yaml)
-
-    # Add beads fields
-    if new_issues:
-        beads_issues_yaml = "\n".join(f"  - {i}" for i in new_issues)
-        frontmatter_parts.append("beads_issues:")
-        frontmatter_parts.append(beads_issues_yaml)
-
-    if new_project:
-        frontmatter_parts.append(f"beads_project: {new_project}")
-
-    frontmatter_parts.append("---\n\n")
-    frontmatter = "\n".join(frontmatter_parts)
-
-    # Write updated file
-    file_path.write_text(frontmatter + content, encoding="utf-8")
-
-    return {
-        "path": path,
-        "linked_issues": new_issues,
-        "project": new_project,
-    }
-
-
-async def register_beads_project(
-    path: str,
-    prefix: str | None = None,
-) -> dict:
-    """Register a beads project in the KB registry.
-
-    Args:
-        path: Absolute path to the project directory containing .beads/.
-        prefix: Issue prefix (e.g., "dv", "epstein"). Auto-detected if not provided.
-
-    Returns:
-        Dict with 'prefix', 'path', and 'status' (added/exists/error).
-    """
-    from .beads_client import REGISTRY_FILE, BeadsClient, load_beads_registry
-
-    project_path = Path(path).resolve()
-
-    # Validate .beads/ exists
-    if not (project_path / ".beads").exists():
-        raise ValueError(f"No .beads/ directory found at: {project_path}")
-
-    # Auto-detect prefix if not provided
-    if not prefix:
-        client = BeadsClient(beads_root=project_path)
-        prefix = client.get_project_name()
-        if not prefix:
-            raise ValueError(
-                "Could not auto-detect project prefix. "
-                "Please provide it explicitly."
-            )
-
-    # Load existing registry
-    kb_root = get_kb_root()
-    registry_path = kb_root.parent / REGISTRY_FILE
-    if not registry_path.exists():
-        registry_path = kb_root / REGISTRY_FILE
-
-    existing = load_beads_registry()
-
-    # Check if already registered
-    if prefix in existing:
-        existing_path = existing[prefix]
-        if existing_path == project_path:
-            return {
-                "prefix": prefix,
-                "path": str(project_path),
-                "status": "exists",
-                "message": f"Project '{prefix}' already registered",
-            }
-        else:
-            # Different path - update it
-            pass
-
-    # Add to registry file
-    # Read existing content or create new
-    if registry_path.exists():
-        content = registry_path.read_text()
-    else:
-        content = "# Beads Registry\n# Maps issue ID prefixes to project directories\n\n"
-
-    # Append new entry
-    content += f"{prefix}: {project_path}\n"
-    registry_path.write_text(content)
-
-    return {
-        "prefix": prefix,
-        "path": str(project_path),
-        "status": "added",
-        "message": f"Registered project '{prefix}' at {project_path}",
-    }
 
 
 async def get_entry(path: str) -> KBEntry:
@@ -1193,8 +945,8 @@ async def get_entry(path: str) -> KBEntry:
         from .views_tracker import record_view
 
         record_view(path)
-    except Exception:
-        pass  # Don't let view tracking failures affect get
+    except Exception as e:
+        log.debug("Failed to record view for %s: %s", path, e)
 
     return KBEntry(
         path=path,
@@ -1497,8 +1249,8 @@ async def reindex() -> IndexStatus:
             if not p.name.startswith("_")
         }
         cleanup_stale_entries(valid_paths)
-    except Exception:
-        pass  # Don't fail reindex if cleanup fails
+    except Exception as e:
+        log.warning("Failed to cleanup stale view entries: %s", e)
 
     status = searcher.status()
     return status
@@ -1555,8 +1307,8 @@ async def tree(
                 try:
                     metadata, _, _ = parse_entry(item)
                     title = metadata.title
-                except (ParseError, Exception):
-                    pass
+                except (ParseError, Exception) as e:
+                    log.debug("Could not parse title from %s: %s", item, e)
                 result[item.name] = {"_type": "file", "title": title}
 
         return result
@@ -1718,8 +1470,8 @@ async def move(
                     normalized_chunks = normalize_chunks(chunks, new_path_md)
                     searcher.index_chunks(normalized_chunks)
                     entries_reindexed += 1
-            except ParseError:
-                pass
+            except ParseError as e:
+                log.warning("Could not reindex moved file %s: %s", new_path_md, e)
 
     # Rebuild backlink cache
     rebuild_backlink_cache(kb_root)
@@ -1825,8 +1577,8 @@ async def delete_entry(path: str, force: bool = False) -> dict:
         from .views_tracker import delete_entry_views
 
         delete_entry_views(normalized)
-    except Exception:
-        pass  # Don't fail delete if view cleanup fails
+    except Exception as e:
+        log.debug("Failed to delete view tracking for %s: %s", normalized, e)
 
     # Delete the file
     abs_path.unlink()
@@ -2109,8 +1861,8 @@ async def hubs(limit: int = 10) -> list[dict]:
             try:
                 metadata, _, _ = parse_entry(file_path)
                 title = metadata.title
-            except ParseError:
-                pass
+            except ParseError as e:
+                log.debug("Could not parse title from %s: %s", file_path, e)
 
         results.append({
             "path": f"{path_key}.md",
@@ -2175,14 +1927,14 @@ async def dead_ends(limit: int = 10) -> list[dict]:
 async def suggest_links(
     path: str,
     limit: int = 5,
-    min_score: float = 0.5,
+    min_score: float = LINK_SUGGESTION_MIN_SCORE,
 ) -> list[dict]:
     """Suggest links to add to an entry based on content similarity.
 
     Args:
         path: Path to the entry to suggest links for.
         limit: Maximum suggestions to return (default 5).
-        min_score: Minimum similarity score threshold (default 0.5).
+        min_score: Minimum similarity score threshold.
 
     Returns:
         List of {path, title, score, reason} for suggested links.
