@@ -1777,3 +1777,651 @@ class TestEdgeCasesAndErrors:
 
         assert result.exit_code == 0
         assert "0.1.0" in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Helper Function Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestExtractTitleFromContent:
+    """Tests for _extract_title_from_content helper."""
+
+    def test_extract_h1_heading(self):
+        """Test extraction from H1 heading."""
+        from memex.cli import _extract_title_from_content
+
+        content = "# My Title\n\nSome content here."
+        assert _extract_title_from_content(content) == "My Title"
+
+    def test_extract_h2_heading(self):
+        """Test extraction from H2 heading when no H1."""
+        from memex.cli import _extract_title_from_content
+
+        content = "## Second Level Title\n\nContent."
+        assert _extract_title_from_content(content) == "Second Level Title"
+
+    def test_extract_first_line(self):
+        """Test extraction from first non-empty line."""
+        from memex.cli import _extract_title_from_content
+
+        content = "This is the title line\n\nMore content."
+        assert _extract_title_from_content(content) == "This is the title line"
+
+    def test_truncate_long_title(self):
+        """Test that long titles are truncated."""
+        from memex.cli import _extract_title_from_content
+
+        content = "A" * 100 + "\n\nContent"
+        result = _extract_title_from_content(content)
+        assert len(result) <= 60
+        assert result.endswith("...")
+
+    def test_fallback_to_content_snippet(self):
+        """Test fallback when no clear title found."""
+        from memex.cli import _extract_title_from_content
+
+        content = "abc"  # Very short, no heading
+        result = _extract_title_from_content(content)
+        assert "..." in result
+
+
+class TestDetectCurrentProject:
+    """Tests for _detect_current_project helper."""
+
+    def test_detect_from_git_remote_ssh(self, tmp_path, monkeypatch):
+        """Test detection from SSH git remote."""
+        from memex.cli import _detect_current_project
+
+        monkeypatch.chdir(tmp_path)
+
+        # Mock subprocess to return SSH remote
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="git@github.com:user/myproject.git\n"
+            )
+            result = _detect_current_project()
+            assert result == "myproject"
+
+    def test_detect_from_git_remote_https(self, tmp_path, monkeypatch):
+        """Test detection from HTTPS git remote."""
+        from memex.cli import _detect_current_project
+
+        monkeypatch.chdir(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(
+                returncode=0,
+                stdout="https://github.com/user/another-project.git\n"
+            )
+            result = _detect_current_project()
+            assert result == "another-project"
+
+    def test_fallback_to_directory_name(self, tmp_path, monkeypatch):
+        """Test fallback to directory name when git fails."""
+        from memex.cli import _detect_current_project
+
+        monkeypatch.chdir(tmp_path)
+
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=1, stdout="")
+            result = _detect_current_project()
+            assert result == tmp_path.name
+
+
+class TestDetectMcpMode:
+    """Tests for _detect_mcp_mode helper."""
+
+    def test_mcp_enabled_via_claude_settings(self, tmp_path, monkeypatch):
+        """Test detection via ~/.claude/settings.json."""
+        from memex.cli import _detect_mcp_mode
+
+        # Create mock settings file
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        settings = claude_dir / "settings.json"
+        settings.write_text(json.dumps({
+            "mcpServers": {"memex-kb": {"command": "mx"}}
+        }))
+
+        with patch("pathlib.Path.home", return_value=tmp_path):
+            assert _detect_mcp_mode() is True
+
+    def test_mcp_enabled_via_mcp_json(self, tmp_path, monkeypatch):
+        """Test detection via .mcp.json in project directory."""
+        from memex.cli import _detect_mcp_mode
+
+        monkeypatch.chdir(tmp_path)
+
+        # Create .mcp.json
+        mcp_json = tmp_path / ".mcp.json"
+        mcp_json.write_text(json.dumps({
+            "mcpServers": {"my-memex": {"command": "serve"}}
+        }))
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "nonexistent"):
+            assert _detect_mcp_mode() is True
+
+    def test_mcp_not_enabled(self, tmp_path, monkeypatch):
+        """Test when MCP is not configured."""
+        from memex.cli import _detect_mcp_mode
+
+        monkeypatch.chdir(tmp_path)
+
+        with patch("pathlib.Path.home", return_value=tmp_path / "nonexistent"):
+            assert _detect_mcp_mode() is False
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Beads Commands Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestBeadsCommands:
+    """Tests for beads subcommands."""
+
+    @pytest.fixture
+    def mock_beads_registry(self, tmp_path):
+        """Create a mock beads registry."""
+        return {
+            "test-project": tmp_path / "test-project",
+            "other": tmp_path / "other",
+        }
+
+    @pytest.fixture
+    def mock_beads_db(self):
+        """Mock beads database object."""
+        db = MagicMock()
+        db.db_path = Path("/tmp/test/.beads/beads.db")
+        return db
+
+    @pytest.fixture
+    def mock_issues(self):
+        """Sample issues for testing."""
+        return [
+            {
+                "id": "test-project-1",
+                "title": "First issue",
+                "status": "open",
+                "priority": 1,
+                "issue_type": "bug",
+                "created_at": "2024-01-15",
+                "created_by": "user",
+                "description": "Bug description",
+            },
+            {
+                "id": "test-project-2",
+                "title": "Second issue",
+                "status": "in_progress",
+                "priority": 2,
+                "issue_type": "task",
+                "created_at": "2024-01-16",
+                "created_by": "user",
+            },
+            {
+                "id": "test-project-3",
+                "title": "Closed issue",
+                "status": "closed",
+                "priority": 3,
+                "issue_type": "feature",
+                "created_at": "2024-01-17",
+                "created_by": "user",
+            },
+        ]
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_list_basic(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test basic beads list command."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "list", "-p", "test-project"])
+
+        assert result.exit_code == 0
+        assert "First issue" in result.output
+        assert "Second issue" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_list_with_status_filter(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads list with status filter."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "list", "-p", "test-project", "--status", "open"])
+
+        assert result.exit_code == 0
+        assert "First issue" in result.output
+        # in_progress and closed should be filtered out
+        assert "Closed issue" not in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_list_json_output(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads list with JSON output."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "list", "-p", "test-project", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert len(data) == 3
+        assert data[0]["id"] == "test-project-1"
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_list_no_issues(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, tmp_path
+    ):
+        """Test beads list with no issues."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = []
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "list", "-p", "test-project"])
+
+        assert result.exit_code == 0
+        assert "No issues found" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.show_issue")
+    @patch("memex.beads_client.get_comments")
+    def test_beads_show_basic(
+        self, mock_comments, mock_show, mock_get_db, mock_registry,
+        runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads show command."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_show.return_value = mock_issues[0]
+        mock_comments.return_value = []
+
+        result = runner.invoke(cli, ["beads", "show", "test-project-1"])
+
+        assert result.exit_code == 0
+        assert "First issue" in result.output
+        assert "bug" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.show_issue")
+    @patch("memex.beads_client.get_comments")
+    def test_beads_show_with_comments(
+        self, mock_comments, mock_show, mock_get_db, mock_registry,
+        runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads show with comments."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_show.return_value = mock_issues[0]
+        mock_comments.return_value = [
+            {"created_at": "2024-01-18", "author": "dev", "content": "Working on this"}
+        ]
+
+        result = runner.invoke(cli, ["beads", "show", "test-project-1"])
+
+        assert result.exit_code == 0
+        assert "Comments (1)" in result.output
+        assert "Working on this" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.show_issue")
+    @patch("memex.beads_client.get_comments")
+    def test_beads_show_json_output(
+        self, mock_comments, mock_show, mock_get_db, mock_registry,
+        runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads show with JSON output."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_show.return_value = mock_issues[0]
+        mock_comments.return_value = []
+
+        result = runner.invoke(cli, ["beads", "show", "test-project-1", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "issue" in data
+        assert data["issue"]["title"] == "First issue"
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.show_issue")
+    def test_beads_show_not_found(
+        self, mock_show, mock_get_db, mock_registry, runner, mock_beads_db, tmp_path
+    ):
+        """Test beads show when issue not found."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_show.return_value = None
+
+        result = runner.invoke(cli, ["beads", "show", "test-project-999"])
+
+        assert result.exit_code != 0
+        assert "Issue not found" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_kanban_basic(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads kanban command."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "kanban", "-p", "test-project"])
+
+        assert result.exit_code == 0
+        assert "Kanban" in result.output
+        assert "OPEN" in result.output
+        assert "IN PROGRESS" in result.output
+        assert "CLOSED" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_kanban_compact(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads kanban compact mode."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "kanban", "-p", "test-project", "--compact"])
+
+        assert result.exit_code == 0
+        # Compact mode shows titles without priority labels
+        assert "Kanban" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_kanban_json_output(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads kanban with JSON output."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "kanban", "-p", "test-project", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "columns" in data
+        assert data["project"] == "test-project"
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_status_basic(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads status command."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "status", "-p", "test-project"])
+
+        assert result.exit_code == 0
+        assert "Beads Status" in result.output
+        assert "By Status" in result.output
+        assert "By Priority" in result.output
+        assert "By Type" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.cli._get_beads_db_or_fail")
+    @patch("memex.beads_client.list_issues")
+    def test_beads_status_json_output(
+        self, mock_list, mock_get_db, mock_registry, runner, mock_beads_db, mock_issues, tmp_path
+    ):
+        """Test beads status with JSON output."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_get_db.return_value = mock_beads_db
+        mock_list.return_value = mock_issues
+
+        with patch("memex.cli.Path.cwd", return_value=tmp_path):
+            result = runner.invoke(cli, ["beads", "status", "-p", "test-project", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "by_status" in data
+        assert "by_priority" in data
+        assert "by_type" in data
+        assert data["total"] == 3
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.beads_client.find_beads_db")
+    @patch("memex.config.get_kb_root")
+    def test_beads_projects_basic(
+        self, mock_kb_root, mock_find_db, mock_registry, runner, mock_beads_db, tmp_path
+    ):
+        """Test beads projects command."""
+        mock_registry.return_value = {"test-project": tmp_path, "other": tmp_path / "other"}
+        mock_find_db.side_effect = [mock_beads_db, None]  # First found, second not
+        mock_kb_root.return_value = tmp_path
+
+        result = runner.invoke(cli, ["beads", "projects"])
+
+        assert result.exit_code == 0
+        assert "BEADS PROJECTS" in result.output
+        assert "test-project" in result.output
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.beads_client.find_beads_db")
+    @patch("memex.config.get_kb_root")
+    def test_beads_projects_json_output(
+        self, mock_kb_root, mock_find_db, mock_registry, runner, mock_beads_db, tmp_path
+    ):
+        """Test beads projects with JSON output."""
+        mock_registry.return_value = {"test-project": tmp_path}
+        mock_find_db.return_value = mock_beads_db
+        mock_kb_root.return_value = tmp_path
+
+        result = runner.invoke(cli, ["beads", "projects", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "projects" in data
+        assert len(data["projects"]) == 1
+
+    @patch("memex.cli._load_beads_registry")
+    @patch("memex.beads_client.find_beads_db")
+    @patch("memex.config.get_kb_root")
+    def test_beads_projects_empty(self, mock_kb_root, mock_find_db, mock_registry, runner, tmp_path):
+        """Test beads projects when no projects registered."""
+        mock_registry.return_value = {}
+        mock_kb_root.return_value = tmp_path
+
+        result = runner.invoke(cli, ["beads", "projects"])
+
+        assert result.exit_code == 0
+        assert "No projects registered" in result.output
+
+
+class TestBeadsHelperFunctions:
+    """Tests for beads helper functions."""
+
+    def test_load_beads_registry_valid(self, tmp_path):
+        """Test loading valid beads registry."""
+        from memex.cli import _load_beads_registry
+
+        # Create registry file
+        registry_content = """
+test-project: ./test-project
+other: /absolute/path
+"""
+        with patch("memex.config.get_kb_root", return_value=tmp_path):
+            registry_file = tmp_path / ".beads-registry.yaml"
+            registry_file.write_text(registry_content)
+
+            result = _load_beads_registry()
+
+            assert "test-project" in result
+            assert "other" in result
+
+    def test_load_beads_registry_missing(self, tmp_path):
+        """Test loading when registry doesn't exist."""
+        from memex.cli import _load_beads_registry
+
+        with patch("memex.config.get_kb_root", return_value=tmp_path):
+            result = _load_beads_registry()
+            assert result == {}
+
+    def test_resolve_beads_project_explicit(self, tmp_path):
+        """Test resolving explicit project."""
+        from memex.cli import _resolve_beads_project
+
+        with patch("memex.cli._load_beads_registry", return_value={"myproj": tmp_path}):
+            prefix, path = _resolve_beads_project("myproj")
+            assert prefix == "myproj"
+            assert path == tmp_path
+
+    def test_resolve_beads_project_unknown(self, tmp_path):
+        """Test resolving unknown project raises error."""
+        from memex.cli import _resolve_beads_project
+
+        with patch("memex.cli._load_beads_registry", return_value={"known": tmp_path}):
+            with pytest.raises(Exception) as exc:
+                _resolve_beads_project("unknown")
+            assert "Unknown project" in str(exc.value)
+
+    def test_parse_issue_id_with_prefix(self, tmp_path):
+        """Test parsing issue ID with project prefix."""
+        from memex.cli import _parse_issue_id
+
+        with patch("memex.cli._load_beads_registry", return_value={"myproj": tmp_path}):
+            prefix, full_id = _parse_issue_id("myproj-123", None)
+            assert prefix == "myproj"
+            assert full_id == "myproj-123"
+
+    def test_parse_issue_id_with_explicit_project(self, tmp_path):
+        """Test parsing issue ID with explicit project."""
+        from memex.cli import _parse_issue_id
+
+        with patch("memex.cli._load_beads_registry", return_value={"proj": tmp_path}):
+            prefix, full_id = _parse_issue_id("123", "proj")
+            assert prefix == "proj"
+            assert full_id == "proj-123"
+
+    def test_parse_issue_id_ambiguous(self, tmp_path):
+        """Test parsing ambiguous issue ID raises error."""
+        from memex.cli import _parse_issue_id
+
+        with patch("memex.cli._load_beads_registry", return_value={}):
+            with pytest.raises(Exception) as exc:
+                _parse_issue_id("123", None)
+            assert "Cannot determine project" in str(exc.value)
+
+
+class TestAddCommandErrorPaths:
+    """Tests for add command error handling paths."""
+
+    @patch("memex.core.preview_add_entry")
+    def test_add_dry_run_category_error(self, mock_preview, runner):
+        """Test add dry-run with missing category shows guidance."""
+        mock_preview.side_effect = ValueError(
+            "Either 'category' or 'directory' must be provided"
+        )
+
+        with patch("memex.core.get_valid_categories", return_value=["tooling", "guides"]):
+            result = runner.invoke(
+                cli,
+                ["add", "--title", "Test", "--tags", "test", "--content", "content", "--dry-run"],
+            )
+
+        assert result.exit_code != 0
+        assert "Error" in result.output
+
+    @patch("memex.core.preview_add_entry")
+    def test_add_dry_run_generic_error(self, mock_preview, runner):
+        """Test add dry-run with generic error."""
+        mock_preview.side_effect = RuntimeError("Something went wrong")
+
+        result = runner.invoke(
+            cli,
+            ["add", "--title", "Test", "--tags", "test", "--content", "content", "--dry-run"],
+        )
+
+        assert result.exit_code != 0
+        assert "Something went wrong" in result.output
+
+    @patch("memex.core.preview_add_entry")
+    def test_add_dry_run_shows_warning(self, mock_preview, runner):
+        """Test add dry-run displays duplicate warning."""
+
+        async def mock_async_preview(*args, **kwargs):
+            preview = MagicMock()
+            preview.absolute_path = "/kb/tooling/test.md"
+            preview.frontmatter = "---\ntitle: Test\n---\n"
+            preview.content = "Content"
+            preview.warning = "Similar entry exists"
+            preview.potential_duplicates = [
+                MagicMock(path="tooling/similar.md", score=0.85)
+            ]
+            preview.model_dump = MagicMock(return_value={})
+            return preview
+
+        mock_preview.side_effect = mock_async_preview
+
+        result = runner.invoke(
+            cli,
+            ["add", "--title", "Test", "--tags", "test", "--content", "content", "--dry-run"],
+        )
+
+        assert result.exit_code == 0
+        assert "Warning" in result.output
+        assert "Potential duplicates" in result.output
+
+    @patch("memex.core.preview_add_entry")
+    def test_add_dry_run_shows_force_skipped(self, mock_preview, runner):
+        """Test add dry-run with --force shows skipped message."""
+
+        async def mock_async_preview(*args, **kwargs):
+            preview = MagicMock()
+            preview.absolute_path = "/kb/tooling/test.md"
+            preview.frontmatter = "---\ntitle: Test\n---\n"
+            preview.content = "Content"
+            preview.warning = None
+            preview.potential_duplicates = []
+            return preview
+
+        mock_preview.side_effect = mock_async_preview
+
+        result = runner.invoke(
+            cli,
+            ["add", "--title", "Test", "--tags", "test", "--content", "content", "--dry-run", "--force"],
+        )
+
+        assert result.exit_code == 0
+        assert "Duplicate check skipped" in result.output
