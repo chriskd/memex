@@ -1386,17 +1386,21 @@ name = "memex"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "chromadb" },
     { name = "click" },
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "pydantic" },
     { name = "python-frontmatter" },
-    { name = "sentence-transformers" },
     { name = "tiktoken" },
     { name = "uvicorn" },
     { name = "watchdog" },
     { name = "whoosh-reloaded" },
+]
+
+[package.optional-dependencies]
+semantic = [
+    { name = "chromadb" },
+    { name = "sentence-transformers" },
 ]
 
 [package.dev-dependencies]
@@ -1409,18 +1413,19 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chromadb", specifier = ">=0.5.0,<1.0.0" },
+    { name = "chromadb", marker = "extra == 'semantic'", specifier = ">=0.5.0,<1.0.0" },
     { name = "click", specifier = ">=8.1.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "fastmcp", specifier = ">=2.14.1" },
     { name = "pydantic", specifier = ">=2.12.0" },
     { name = "python-frontmatter", specifier = ">=1.1.0" },
-    { name = "sentence-transformers", specifier = ">=3.0.0" },
+    { name = "sentence-transformers", marker = "extra == 'semantic'", specifier = ">=3.0.0" },
     { name = "tiktoken", specifier = ">=0.5.0" },
     { name = "uvicorn", specifier = ">=0.32.0" },
     { name = "watchdog", specifier = ">=4.0.0" },
     { name = "whoosh-reloaded", specifier = ">=2.7.4" },
 ]
+provides-extras = ["semantic"]
 
 [package.metadata.requires-dev]
 dev = [
