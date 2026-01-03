@@ -16,6 +16,28 @@ if TYPE_CHECKING:
     from sentence_transformers import SentenceTransformer
 
 
+_SEMANTIC_DEPS_MESSAGE = (
+    "Semantic search dependencies are not installed. "
+    "Install with `uv pip install -e '.[semantic]'`."
+)
+
+
+def _require_chromadb():
+    try:
+        import chromadb
+    except ImportError as exc:
+        raise RuntimeError(_SEMANTIC_DEPS_MESSAGE) from exc
+    return chromadb
+
+
+def _require_sentence_transformers():
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as exc:
+        raise RuntimeError(_SEMANTIC_DEPS_MESSAGE) from exc
+    return SentenceTransformer
+
+
 class ChromaIndex:
     """Semantic search using ChromaDB with sentence-transformers embeddings."""
 
@@ -35,8 +57,7 @@ class ChromaIndex:
     def _get_model(self) -> "SentenceTransformer":
         """Lazy-load the embedding model."""
         if self._model is None:
-            from sentence_transformers import SentenceTransformer
-
+            SentenceTransformer = _require_sentence_transformers()
             self._model = SentenceTransformer(EMBEDDING_MODEL)
         return self._model
 
@@ -45,7 +66,7 @@ class ChromaIndex:
         if self._collection is not None:
             return self._collection
 
-        import chromadb
+        chromadb = _require_chromadb()
         import shutil
 
         self._index_dir.mkdir(parents=True, exist_ok=True)

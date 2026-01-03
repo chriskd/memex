@@ -21,6 +21,9 @@ git clone https://github.com/chriskd/memex.git
 cd memex
 uv tool install -e .
 
+# Enable semantic search dependencies (ChromaDB + sentence-transformers)
+uv tool install -e ".[semantic]"
+
 # Verify installation
 mx --version
 ```
