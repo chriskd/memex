@@ -12,6 +12,8 @@ import pytest
 from memex import core
 from memex.parser import ParseError
 
+pytestmark = pytest.mark.semantic
+
 
 @pytest.fixture(autouse=True)
 def reset_searcher_state(monkeypatch):

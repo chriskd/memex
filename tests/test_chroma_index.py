@@ -9,6 +9,8 @@ import pytest
 from memex.indexer.chroma_index import ChromaIndex
 from memex.models import DocumentChunk, EntryMetadata
 
+pytestmark = pytest.mark.semantic
+
 
 @pytest.fixture
 def index_dir(tmp_path) -> Path:

@@ -133,6 +133,7 @@ class TestIndexManifest:
 # =============================================================================
 
 
+@pytest.mark.semantic
 class TestIncrementalReindex:
     """Test incremental reindexing in HybridSearcher."""
 

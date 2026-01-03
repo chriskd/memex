@@ -143,6 +143,7 @@ class TestWhooshTokenCounts:
         assert token_counts == {10, 11, 12}
 
 
+@pytest.mark.semantic
 class TestChromaTokenCounts:
     """Tests for token counts in ChromaDB index."""
 
@@ -200,6 +201,7 @@ class TestChromaTokenCounts:
         assert token_counts == {20, 21, 22}
 
 
+@pytest.mark.semantic
 class TestHybridSearchTokenCounts:
     """Tests for token counts through hybrid search."""
 

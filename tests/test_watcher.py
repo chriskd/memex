@@ -15,6 +15,8 @@ from memex.indexer.whoosh_index import WhooshIndex
 from memex.indexer.chroma_index import ChromaIndex
 from memex.models import DocumentChunk, EntryMetadata
 
+pytestmark = pytest.mark.semantic
+
 
 @pytest.fixture
 def index_dirs(tmp_path) -> tuple[Path, Path]:

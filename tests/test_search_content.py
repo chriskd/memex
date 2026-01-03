@@ -8,6 +8,8 @@ import pytest
 from memex import core, server
 from memex.models import SearchResponse
 
+pytestmark = pytest.mark.semantic
+
 
 async def _call_tool(tool_obj, /, *args, **kwargs):
     """Invoke the wrapped coroutine behind an MCP FunctionTool."""

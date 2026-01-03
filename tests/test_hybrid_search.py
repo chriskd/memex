@@ -13,6 +13,8 @@ from memex.indexer.hybrid import HybridSearcher
 from memex.indexer.whoosh_index import WhooshIndex
 from memex.models import DocumentChunk, EntryMetadata, SearchResult
 
+pytestmark = pytest.mark.semantic
+
 
 @pytest.fixture
 def index_dirs(tmp_path) -> tuple[Path, Path]:
