@@ -74,6 +74,7 @@ class HybridSearcher:
         mode: SearchMode = "hybrid",
         project_context: str | None = None,
         kb_context: KBContext | None = None,
+        apply_adjustments: bool = True,
     ) -> list[SearchResult]:
         """Search the knowledge base.
 
@@ -83,6 +84,7 @@ class HybridSearcher:
             mode: Search mode - "hybrid", "keyword", or "semantic".
             project_context: Current project name for context boosting.
             kb_context: Project context for path-based boosting.
+            apply_adjustments: If True, apply tag/context boosts and normalize scores.
 
         Returns:
             List of search results, deduplicated by document path.
@@ -92,12 +94,20 @@ class HybridSearcher:
 
         if mode == "keyword":
             results = self._whoosh.search(query, limit=fetch_limit)
-            results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
+            if apply_adjustments:
+                results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         elif mode == "semantic":
             results = self._chroma.search(query, limit=fetch_limit)
-            results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
+            if apply_adjustments:
+                results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         else:
-            results = self._hybrid_search(query, limit=fetch_limit, project_context=project_context, kb_context=kb_context)
+            results = self._hybrid_search(
+                query,
+                limit=fetch_limit,
+                project_context=project_context,
+                kb_context=kb_context,
+                apply_adjustments=apply_adjustments,
+            )
 
         # Deduplicate by path, keeping highest-scoring chunk per document
         return self._deduplicate_by_path(results, limit)
@@ -108,6 +118,7 @@ class HybridSearcher:
         limit: int,
         project_context: str | None = None,
         kb_context: KBContext | None = None,
+        apply_adjustments: bool = True,
     ) -> list[SearchResult]:
         """Perform hybrid search using Reciprocal Rank Fusion.
 
@@ -129,12 +140,24 @@ class HybridSearcher:
         if not whoosh_results and not chroma_results:
             return []
         if not whoosh_results:
-            return self._apply_ranking_adjustments(query, chroma_results[:limit], project_context, kb_context)
+            if apply_adjustments:
+                return self._apply_ranking_adjustments(query, chroma_results[:limit], project_context, kb_context)
+            return chroma_results[:limit]
         if not chroma_results:
-            return self._apply_ranking_adjustments(query, whoosh_results[:limit], project_context, kb_context)
+            if apply_adjustments:
+                return self._apply_ranking_adjustments(query, whoosh_results[:limit], project_context, kb_context)
+            return whoosh_results[:limit]
 
         # Apply RRF
-        return self._rrf_merge(query, whoosh_results, chroma_results, limit, project_context, kb_context)
+        return self._rrf_merge(
+            query,
+            whoosh_results,
+            chroma_results,
+            limit,
+            project_context,
+            kb_context,
+            apply_adjustments=apply_adjustments,
+        )
 
     def _rrf_merge(
         self,
@@ -144,6 +167,7 @@ class HybridSearcher:
         limit: int,
         project_context: str | None = None,
         kb_context: KBContext | None = None,
+        apply_adjustments: bool = True,
     ) -> list[SearchResult]:
         """Merge results using Reciprocal Rank Fusion.
 
@@ -204,7 +228,9 @@ class HybridSearcher:
                 )
             )
 
-        return self._apply_ranking_adjustments(query, final_results, project_context, kb_context)
+        if apply_adjustments:
+            return self._apply_ranking_adjustments(query, final_results, project_context, kb_context)
+        return final_results
 
     def _apply_ranking_adjustments(
         self,
