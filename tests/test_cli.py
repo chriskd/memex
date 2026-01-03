@@ -96,6 +96,27 @@ def mock_add_result():
     return result
 
 
+@pytest.fixture
+def mock_add_preview():
+    """Mock add entry preview result."""
+    result = MagicMock()
+    result.path = "tooling/preview-entry.md"
+    result.absolute_path = "/kb/tooling/preview-entry.md"
+    result.frontmatter = "---\n" "title: Preview\n" "tags:\n" "  - foo\n" "created: 2026-01-03\n" "---\n\n"
+    result.content = "# Preview\n\nContent."
+    result.warning = None
+    result.potential_duplicates = []
+    result.model_dump = MagicMock(return_value={
+        "path": "tooling/preview-entry.md",
+        "absolute_path": "/kb/tooling/preview-entry.md",
+        "frontmatter": result.frontmatter,
+        "content": result.content,
+        "warning": None,
+        "potential_duplicates": [],
+    })
+    return result
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Utility Function Tests
 # ─────────────────────────────────────────────────────────────────────────────
@@ -415,6 +436,45 @@ class TestAddCommand:
 
         assert result.exit_code == 0
         assert "Created" in result.output
+
+    @patch("memex.cli.run_async")
+    def test_add_dry_run_outputs_preview(self, mock_run_async, runner, mock_add_preview):
+        """Test add command dry-run preview output."""
+        mock_run_async.return_value = mock_add_preview
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Preview Entry",
+            "--tags", "foo",
+            "--content", "# Preview\n\nContent.",
+            "--dry-run",
+        ])
+
+        assert result.exit_code == 0
+        assert "Would create: /kb/tooling/preview-entry.md" in result.output
+        assert "title: Preview" in result.output
+        assert "# Preview" in result.output
+        assert "No duplicates detected." in result.output
+
+    @patch("memex.cli.run_async")
+    def test_add_dry_run_json_output(self, mock_run_async, runner, mock_add_preview):
+        """Test add command dry-run JSON output."""
+        mock_run_async.return_value = mock_add_preview
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Preview Entry",
+            "--tags", "foo",
+            "--content", "# Preview\n\nContent.",
+            "--dry-run",
+            "--json",
+        ])
+
+        assert result.exit_code == 0
+        output_data = json.loads(result.output)
+        assert output_data["absolute_path"] == "/kb/tooling/preview-entry.md"
+        assert "frontmatter" in output_data
+        assert "content" in output_data
 
     def test_add_no_content_source(self, runner):
         """Test add command fails without content source."""

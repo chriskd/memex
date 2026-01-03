@@ -505,6 +505,7 @@ def get(path: str, as_json: bool, metadata: bool):
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--force", is_flag=True, help="Create even if potential duplicates are detected")
+@click.option("--dry-run", is_flag=True, help="Preview path/frontmatter/content without creating")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
     title: str,
@@ -514,6 +515,7 @@ def add(
     file_path: Optional[str],
     stdin: bool,
     force: bool,
+    dry_run: bool,
     as_json: bool,
 ):
     """Create a new knowledge base entry.
@@ -523,6 +525,7 @@ def add(
       mx add --title="My Entry" --tags="foo,bar" --content="# Content here"
       mx add --title="My Entry" --tags="foo,bar" --file=content.md
       cat content.md | mx add --title="My Entry" --tags="foo,bar" --stdin
+      mx add --title="My Entry" --tags="foo,bar" --content="..." --dry-run
 
     \b
     Required:
@@ -533,9 +536,10 @@ def add(
     \b
     Common issues:
       - Duplicate detected? Use --force to override
+      - Preview first? Use --dry-run to inspect the output
       - Missing category? Run 'mx context init' or pass --category
     """
-    from .core import add_entry
+    from .core import add_entry, preview_add_entry
 
     # Resolve content source
     if stdin:
@@ -547,6 +551,41 @@ def add(
         sys.exit(1)
 
     tag_list = [t.strip() for t in tags.split(",")]
+
+    if dry_run:
+        try:
+            preview = run_async(preview_add_entry(
+                title=title,
+                content=content,
+                tags=tag_list,
+                category=category,
+                force=force,
+            ))
+        except Exception as e:
+            message = str(e)
+            if "Either 'category' or 'directory' must be provided" in message:
+                click.echo(_format_missing_category_error(tag_list, message), err=True)
+            else:
+                click.echo(f"Error: {_normalize_error_message(message)}", err=True)
+            sys.exit(1)
+
+        if as_json:
+            output(preview.model_dump() if hasattr(preview, 'model_dump') else preview, as_json=True)
+            return
+
+        click.echo(f"Would create: {preview.absolute_path}")
+        click.echo(preview.frontmatter + preview.content)
+
+        if preview.warning:
+            click.echo(f"\nWarning: {preview.warning}")
+            click.echo("Potential duplicates:")
+            for dup in preview.potential_duplicates[:3]:
+                click.echo(f"  - {dup.path} ({dup.score:.0%} similar)")
+        elif force:
+            click.echo("\nDuplicate check skipped (--force).")
+        else:
+            click.echo("\nNo duplicates detected.")
+        return
 
     def _print_created(add_result):
         path = add_result.path if hasattr(add_result, 'path') else add_result.get('path')

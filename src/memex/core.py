@@ -38,6 +38,7 @@ from .frontmatter import build_frontmatter, create_new_metadata, update_metadata
 from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
 from .models import (
+    AddEntryPreview,
     AddEntryResponse,
     DocumentChunk,
     IndexStatus,
@@ -925,40 +926,13 @@ async def add_entry(
         kb_context = get_kb_context()
 
     # Determine target directory: prefer 'directory' over 'category' over context.primary
-    if directory:
-        # Validate the directory is within KB, auto-create if needed
-        abs_dir, normalized_dir = validate_nested_path(directory, kb_root)
-        if abs_dir.exists() and not abs_dir.is_dir():
-            raise ValueError(f"Path exists but is not a directory: {directory}")
-        # Auto-create directory if it doesn't exist
-        abs_dir.mkdir(parents=True, exist_ok=True)
-        target_dir = abs_dir
-        rel_dir = normalized_dir
-    elif category:
-        # Auto-create category directory if it doesn't exist
-        target_dir = kb_root / category
-        target_dir.mkdir(parents=True, exist_ok=True)
-        rel_dir = category
-    elif kb_context and kb_context.primary:
-        # Use context primary directory
-        abs_dir, normalized_dir = validate_nested_path(kb_context.primary, kb_root)
-        if abs_dir.exists() and not abs_dir.is_dir():
-            raise ValueError(f"Context primary path exists but is not a directory: {kb_context.primary}")
-        # Auto-create directory if it doesn't exist
-        abs_dir.mkdir(parents=True, exist_ok=True)
-        target_dir = abs_dir
-        rel_dir = normalized_dir
-    else:
-        valid_categories = get_valid_categories(kb_root)
-        context_hint = (
-            " (no .kbcontext file found with 'primary' field)"
-            if kb_context is None
-            else ""
-        )
-        raise ValueError(
-            f"Either 'category' or 'directory' must be provided{context_hint}. "
-            f"Existing categories: {', '.join(valid_categories)}"
-        )
+    target_dir, rel_dir = _resolve_add_entry_directory(
+        kb_root=kb_root,
+        category=category,
+        directory=directory,
+        kb_context=kb_context,
+        create_dirs=True,
+    )
 
     if not tags:
         raise ValueError("At least one tag is required")
@@ -1078,6 +1052,94 @@ async def add_entry(
         created=True,
         suggested_links=suggested_links,
         suggested_tags=suggested_tags,
+    )
+
+
+async def preview_add_entry(
+    title: str,
+    content: str,
+    tags: list[str],
+    category: str = "",
+    directory: str | None = None,
+    links: list[str] | None = None,
+    kb_context: KBContext | None = None,
+    check_duplicates: bool = True,
+    force: bool = False,
+) -> AddEntryPreview:
+    """Preview a new KB entry without writing to disk.
+
+    Returns path, generated frontmatter, final content, and any duplicate warnings.
+    """
+    kb_root = get_kb_root()
+
+    if kb_context is None:
+        kb_context = get_kb_context()
+
+    target_dir, rel_dir = _resolve_add_entry_directory(
+        kb_root=kb_root,
+        category=category,
+        directory=directory,
+        kb_context=kb_context,
+        create_dirs=False,
+    )
+
+    if not tags:
+        raise ValueError("At least one tag is required")
+
+    slug = slugify(title)
+    if not slug:
+        raise ValueError("Title must contain at least one alphanumeric character")
+
+    file_path = target_dir / f"{slug}.md"
+    rel_path = f"{rel_dir}/{slug}.md"
+
+    if file_path.exists():
+        raise ValueError(f"Entry already exists at {rel_path}")
+
+    potential_duplicates: list[PotentialDuplicate] = []
+    warning = None
+    if check_duplicates and not force:
+        searcher = get_searcher()
+        potential_duplicates = detect_potential_duplicates(title, content, searcher)
+        if potential_duplicates:
+            top_match = potential_duplicates[0]
+            warning = (
+                f"Potential duplicate detected: '{top_match.title}' ({top_match.path}) "
+                f"with {top_match.score:.0%} similarity. "
+                f"Use force=True to create anyway, or update the existing entry."
+            )
+
+    final_content = content
+    if links:
+        link_section = "\n\n## Related\n\n"
+        for link in links:
+            link_section += f"- [[{link}]]\n"
+        final_content += link_section
+
+    source_project, contributor, git_branch = await asyncio.gather(
+        get_current_project_async(),
+        get_current_contributor_async(),
+        get_git_branch_async(),
+    )
+
+    metadata = create_new_metadata(
+        title=title,
+        tags=tags,
+        source_project=source_project,
+        contributor=contributor,
+        model=get_llm_model(),
+        git_branch=git_branch,
+        actor=get_actor_identity(),
+    )
+    frontmatter = build_frontmatter(metadata)
+
+    return AddEntryPreview(
+        path=rel_path,
+        absolute_path=str(file_path),
+        frontmatter=frontmatter,
+        content=final_content,
+        potential_duplicates=potential_duplicates,
+        warning=warning,
     )
 
 
@@ -1312,6 +1374,51 @@ async def list_entries(
             break
 
     return results
+
+
+def _resolve_add_entry_directory(
+    *,
+    kb_root: Path,
+    category: str,
+    directory: str | None,
+    kb_context: KBContext | None,
+    create_dirs: bool,
+) -> tuple[Path, str]:
+    """Resolve and optionally create the target directory for new entries."""
+    if directory:
+        abs_dir, normalized_dir = validate_nested_path(directory, kb_root)
+        if abs_dir.exists() and not abs_dir.is_dir():
+            raise ValueError(f"Path exists but is not a directory: {directory}")
+        if create_dirs:
+            abs_dir.mkdir(parents=True, exist_ok=True)
+        return abs_dir, normalized_dir
+
+    if category:
+        target_dir = kb_root / category
+        if target_dir.exists() and not target_dir.is_dir():
+            raise ValueError(f"Path exists but is not a directory: {category}")
+        if create_dirs:
+            target_dir.mkdir(parents=True, exist_ok=True)
+        return target_dir, category
+
+    if kb_context and kb_context.primary:
+        abs_dir, normalized_dir = validate_nested_path(kb_context.primary, kb_root)
+        if abs_dir.exists() and not abs_dir.is_dir():
+            raise ValueError(f"Context primary path exists but is not a directory: {kb_context.primary}")
+        if create_dirs:
+            abs_dir.mkdir(parents=True, exist_ok=True)
+        return abs_dir, normalized_dir
+
+    valid_categories = get_valid_categories(kb_root)
+    context_hint = (
+        " (no .kbcontext file found with 'primary' field)"
+        if kb_context is None
+        else ""
+    )
+    raise ValueError(
+        f"Either 'category' or 'directory' must be provided{context_hint}. "
+        f"Existing categories: {', '.join(valid_categories)}"
+    )
 
 
 async def whats_new(

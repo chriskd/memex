@@ -131,3 +131,14 @@ class AddEntryResponse(BaseModel):
     suggested_tags: list[dict] = Field(default_factory=list)
     potential_duplicates: list[PotentialDuplicate] = Field(default_factory=list)
     warning: str | None = None  # Warning message if duplicates detected
+
+
+class AddEntryPreview(BaseModel):
+    """Preview data for add_entry without creating a file."""
+
+    path: str  # Relative path where entry would be created
+    absolute_path: str  # Absolute path on disk
+    frontmatter: str  # Generated YAML frontmatter
+    content: str  # Final content (including related links if provided)
+    potential_duplicates: list[PotentialDuplicate] = Field(default_factory=list)
+    warning: str | None = None  # Warning message if duplicates detected
