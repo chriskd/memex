@@ -2,12 +2,15 @@
 
 from datetime import date
 from pathlib import Path
+from types import SimpleNamespace
+import threading
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 
 from memex.indexer.hybrid import HybridSearcher
-from memex.indexer.watcher import FileWatcher
+from memex.indexer import watcher as watcher_module
+from memex.indexer.watcher import DebouncedHandler, FileWatcher
 from memex.indexer.whoosh_index import WhooshIndex
 from memex.indexer.chroma_index import ChromaIndex
 from memex.models import DocumentChunk, EntryMetadata
@@ -255,3 +258,179 @@ Content that will be deleted.
         # File should be removed from index
         results = hybrid_searcher.search("deleted", mode="keyword")
         assert all("to_delete.md" not in r.path for r in results)
+
+
+class TestDebouncedHandler:
+    """Tests for DebouncedHandler event handling and debouncing."""
+
+    def test_ignores_directories_and_non_markdown(self):
+        """Non-markdown files and directories are ignored."""
+        callback = MagicMock()
+        handler = DebouncedHandler(callback=callback, debounce_seconds=0.1)
+        handler._schedule_callback = MagicMock()
+
+        directory_event = SimpleNamespace(src_path="/tmp/dir", is_directory=True)
+        handler.on_created(directory_event)
+
+        text_event = SimpleNamespace(src_path="/tmp/file.txt", is_directory=False)
+        handler.on_modified(text_event)
+
+        assert handler._pending_files == set()
+        handler._schedule_callback.assert_not_called()
+
+    def test_adds_markdown_files_and_schedules_callback(self):
+        """Markdown events are collected and scheduled."""
+        callback = MagicMock()
+        handler = DebouncedHandler(callback=callback, debounce_seconds=0.1)
+        handler._schedule_callback = MagicMock()
+
+        md_event = SimpleNamespace(src_path="/tmp/file.md", is_directory=False)
+        handler.on_created(md_event)
+
+        assert handler._pending_files == {Path("/tmp/file.md")}
+        handler._schedule_callback.assert_called_once()
+
+    def test_on_moved_tracks_src_and_dest(self):
+        """Moved events collect both source and destination markdown files."""
+        callback = MagicMock()
+        handler = DebouncedHandler(callback=callback, debounce_seconds=0.1)
+        handler._schedule_callback = MagicMock()
+
+        move_event = SimpleNamespace(
+            src_path="/tmp/old.md",
+            dest_path="/tmp/new.md",
+            is_directory=False,
+        )
+        handler.on_moved(move_event)
+
+        assert handler._pending_files == {Path("/tmp/old.md"), Path("/tmp/new.md")}
+        handler._schedule_callback.assert_called_once()
+
+    def test_debounce_batches_events_and_cancels_previous_timer(self, monkeypatch):
+        """Multiple events in the debounce window batch into one callback."""
+        callback = MagicMock()
+        handler = DebouncedHandler(callback=callback, debounce_seconds=0.5)
+
+        timers = []
+
+        class FakeTimer:
+            def __init__(self, interval, function):
+                self.interval = interval
+                self.function = function
+                self.canceled = False
+                self.started = False
+
+            def start(self):
+                self.started = True
+
+            def cancel(self):
+                self.canceled = True
+
+            def fire(self):
+                if not self.canceled:
+                    self.function()
+
+        def fake_timer(interval, function):
+            timer = FakeTimer(interval, function)
+            timers.append(timer)
+            return timer
+
+        monkeypatch.setattr(threading, "Timer", fake_timer)
+
+        handler.on_created(SimpleNamespace(src_path="/tmp/a.md", is_directory=False))
+        handler.on_modified(SimpleNamespace(src_path="/tmp/b.md", is_directory=False))
+
+        assert len(timers) == 2
+        assert timers[0].canceled is True
+
+        timers[1].fire()
+
+        callback.assert_called_once()
+        called_paths = callback.call_args[0][0]
+        assert called_paths == {Path("/tmp/a.md"), Path("/tmp/b.md")}
+        assert handler._pending_files == set()
+
+
+class TestFileWatcherLifecycle:
+    """Tests for FileWatcher start/stop lifecycle."""
+
+    def test_init_uses_default_kb_root(self, tmp_path):
+        """KB root defaults to config when not provided."""
+        searcher = MagicMock()
+        default_root = tmp_path / "kb-default"
+        with patch.object(watcher_module, "get_kb_root", return_value=default_root):
+            watcher = FileWatcher(searcher)
+        assert watcher._kb_root == default_root
+
+    def test_get_observer_class_uses_polling_when_forced(self, monkeypatch):
+        """USE_POLLING_WATCHER forces PollingObserver usage."""
+        monkeypatch.setenv("USE_POLLING_WATCHER", "1")
+        with patch.object(watcher_module, "_is_in_docker", return_value=False):
+            observer_class = watcher_module._get_observer_class()
+        assert observer_class is watcher_module.PollingObserver
+
+    def test_get_observer_class_defaults_to_observer(self, monkeypatch):
+        """Observer is used when not in Docker and polling not enabled."""
+        monkeypatch.delenv("USE_POLLING_WATCHER", raising=False)
+        with patch.object(watcher_module, "_is_in_docker", return_value=False):
+            observer_class = watcher_module._get_observer_class()
+        assert observer_class is watcher_module.Observer
+
+    def test_start_and_stop_manage_observer(self, tmp_path):
+        """Starting schedules the observer; stopping cleans up."""
+        searcher = MagicMock()
+        kb_root = tmp_path / "kb"
+        kb_root.mkdir()
+
+        class FakeObserver:
+            def __init__(self):
+                self.scheduled = None
+                self.started = False
+                self.stopped = False
+                self.joined = None
+
+            def schedule(self, handler, path, recursive=False):
+                self.scheduled = (handler, path, recursive)
+
+            def start(self):
+                self.started = True
+
+            def stop(self):
+                self.stopped = True
+
+            def join(self, timeout=None):
+                self.joined = timeout
+
+        with patch.object(watcher_module, "_get_observer_class", return_value=FakeObserver):
+            watcher = FileWatcher(searcher, kb_root=kb_root, debounce_seconds=0.2)
+            watcher.start()
+
+        assert watcher.is_running is True
+        assert watcher._observer is not None
+        observer = watcher._observer
+        handler, path, recursive = observer.scheduled
+        assert isinstance(handler, DebouncedHandler)
+        assert handler._debounce_seconds == 0.2
+        assert path == str(kb_root)
+        assert recursive is True
+        assert observer.started is True
+
+        watcher.stop()
+
+        assert watcher.is_running is False
+        assert watcher._observer is None
+        assert observer.stopped is True
+        assert observer.joined == 5.0
+
+    def test_start_skips_when_kb_root_missing(self, tmp_path):
+        """Missing KB root prevents observer setup."""
+        searcher = MagicMock()
+        kb_root = tmp_path / "missing"
+
+        with patch.object(watcher_module, "_get_observer_class") as get_observer:
+            watcher = FileWatcher(searcher, kb_root=kb_root)
+            watcher.start()
+
+        assert watcher.is_running is False
+        assert watcher._observer is None
+        get_observer.assert_not_called()
