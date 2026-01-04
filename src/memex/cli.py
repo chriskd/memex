@@ -428,6 +428,15 @@ def search(
       mx search "api" --mode=semantic --limit=5
     """
     from .core import search as core_search
+    from .indexer.chroma_index import semantic_deps_available
+
+    # Fail early if semantic search requested but deps not installed
+    if mode == "semantic" and not semantic_deps_available():
+        raise click.ClickException(
+            "Semantic search requires additional dependencies.\n"
+            "Install with: uv pip install -e '.[semantic]'\n"
+            "Or use --mode=keyword for keyword-only search."
+        )
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
