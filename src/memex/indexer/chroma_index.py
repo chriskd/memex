@@ -300,6 +300,7 @@ class ChromaIndex:
             Returns empty list if semantic dependencies are not installed.
         """
         if not semantic_deps_available():
+            log.warning("Semantic search unavailable: %s", _SEMANTIC_DEPS_MESSAGE)
             return []
         collection = self._get_collection()
 
