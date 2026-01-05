@@ -780,7 +780,12 @@ def init_kb(
 @cli.command()
 @click.argument("query")
 @click.option("--tags", "-t", help="Filter by tags (comma-separated)")
-@click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
+@click.option(
+    "--mode",
+    type=click.Choice(["hybrid", "keyword", "semantic"]),
+    default="hybrid",
+    help="Search mode: hybrid (keyword+semantic, default), keyword (fast, exact), semantic (meaning-based, requires [semantic] extras)",
+)
 @click.option("--limit", "-n", default=10, help="Max results")
 @click.option("--content", "-c", is_flag=True, help="Include full content in results")
 @click.option("--no-history", is_flag=True, help="Don't record this search in history")
