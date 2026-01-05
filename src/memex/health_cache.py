@@ -94,7 +94,7 @@ def _parse_file_metadata(md_file: Path) -> tuple[dict[str, Any] | None, str | No
 
     Returns:
         Tuple of (metadata_dict, error_message).
-        On success: (dict with title/created/updated/links, None)
+        On success: (dict with title/description/created/updated/links, None)
         On error: (None, error message string)
     """
     try:
@@ -102,6 +102,7 @@ def _parse_file_metadata(md_file: Path) -> tuple[dict[str, Any] | None, str | No
         links = extract_links(content)
         return {
             "title": metadata.title,
+            "description": metadata.description,
             "created": _date_to_str(metadata.created),
             "updated": _date_to_str(metadata.updated),
             "links": links,
@@ -296,6 +297,7 @@ def get_entry_metadata(
         result[path_key] = {
             "path": meta.get("rel_path", f"{path_key}.md"),
             "title": meta.get("title", ""),
+            "description": meta.get("description"),
             "created": _str_to_date(meta.get("created")),
             "updated": _str_to_date(meta.get("updated")),
             "links": meta.get("links", []),

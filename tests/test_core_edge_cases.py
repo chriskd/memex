@@ -1329,3 +1329,143 @@ class TestAsyncGitHelpers:
         # Search should work and not block
         result = await core.search(query="search async test")
         assert isinstance(result.results, list)
+
+
+class TestGenerateDescriptions:
+    """Tests for generate_descriptions function."""
+
+    def _create_entry_with_description(
+        self,
+        path: Path,
+        title: str,
+        content_body: str,
+        tags: list[str] | None = None,
+        description: str | None = None,
+    ) -> None:
+        """Helper to create a KB entry with optional description."""
+        tags = tags or ["test"]
+        tags_yaml = "\n".join(f"  - {tag}" for tag in tags)
+        desc_line = f"description: {description}\n" if description else ""
+        content = f"""---
+title: {title}
+{desc_line}tags:
+{tags_yaml}
+created: {date.today().isoformat()}
+---
+
+{content_body}
+"""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_dry_run(self, kb_root, index_root):
+        """Dry run mode previews descriptions without writing."""
+        # Create entry without description
+        _create_entry(
+            kb_root / "development" / "no-desc.md",
+            "No Description Entry",
+            "This is the first sentence. More content follows here.",
+        )
+
+        results = await core.generate_descriptions(dry_run=True)
+
+        assert len(results) == 1
+        assert results[0]["status"] == "preview"
+        assert results[0]["path"] == "development/no-desc.md"
+        assert results[0]["description"] is not None
+        assert "first sentence" in results[0]["description"]
+
+        # File should not be modified
+        content = (kb_root / "development" / "no-desc.md").read_text()
+        assert "description:" not in content
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_updates_files(self, kb_root, index_root):
+        """Non-dry-run mode updates files with descriptions."""
+        _create_entry(
+            kb_root / "development" / "update-me.md",
+            "Update Me",
+            "This entry will get a description. It has good content.",
+        )
+
+        results = await core.generate_descriptions(dry_run=False)
+
+        assert len(results) == 1
+        assert results[0]["status"] == "updated"
+
+        # File should now have description
+        content = (kb_root / "development" / "update-me.md").read_text()
+        assert "description:" in content
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_skips_entries_with_descriptions(
+        self, kb_root, index_root
+    ):
+        """Entries that already have descriptions are skipped."""
+        self._create_entry_with_description(
+            kb_root / "development" / "has-desc.md",
+            "Has Description",
+            "Content here.",
+            description="Already has a description",
+        )
+
+        results = await core.generate_descriptions(dry_run=True)
+
+        # Should return empty since entry already has description
+        assert len(results) == 0
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_respects_limit(self, kb_root, index_root):
+        """Limit parameter restricts number of entries processed."""
+        for i in range(5):
+            _create_entry(
+                kb_root / "development" / f"entry-{i}.md",
+                f"Entry {i}",
+                f"Content for entry {i}. This is some text.",
+            )
+
+        results = await core.generate_descriptions(dry_run=True, limit=2)
+
+        assert len(results) == 2
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_extracts_first_sentence(
+        self, kb_root, index_root
+    ):
+        """Description is extracted from first sentence."""
+        _create_entry(
+            kb_root / "development" / "sentence.md",
+            "Sentence Test",
+            "This is the first sentence. This is the second sentence. And more text.",
+        )
+
+        results = await core.generate_descriptions(dry_run=True)
+
+        assert len(results) == 1
+        # Should get first sentence
+        assert results[0]["description"] == "This is the first sentence."
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_handles_no_entries(self, kb_root, index_root):
+        """Returns empty list when no entries need descriptions."""
+        results = await core.generate_descriptions(dry_run=True)
+        assert results == []
+
+    @pytest.mark.asyncio
+    async def test_generate_descriptions_truncates_long_descriptions(
+        self, kb_root, index_root
+    ):
+        """Long content is truncated to reasonable length."""
+        long_content = "A" * 500 + " word " + "B" * 500
+        _create_entry(
+            kb_root / "development" / "long.md",
+            "Long Content",
+            long_content,
+        )
+
+        results = await core.generate_descriptions(dry_run=True)
+
+        assert len(results) == 1
+        # Description should be truncated (max 120 chars by default)
+        assert len(results[0]["description"]) <= 125  # 120 + "..."

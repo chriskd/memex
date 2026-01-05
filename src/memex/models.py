@@ -10,6 +10,7 @@ class EntryMetadata(BaseModel):
     """Frontmatter metadata for a KB entry."""
 
     title: str
+    description: str | None = None  # One-line summary of entry content
     tags: list[str] = Field(min_length=1)
     created: date
     updated: date | None = None
