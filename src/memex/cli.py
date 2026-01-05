@@ -1559,7 +1559,12 @@ def info(as_json: bool):
         sys.exit(1)
 
     categories = get_valid_categories(kb_root)
-    entry_count = sum(1 for _ in kb_root.rglob("*.md")) if kb_root.exists() else 0
+    # Exclude hidden (.) and special (_) files, consistent with tree command
+    entry_count = (
+        sum(1 for p in kb_root.rglob("*.md") if not p.name.startswith((".", "_")))
+        if kb_root.exists()
+        else 0
+    )
 
     payload = {
         "kb_root": str(kb_root),
