@@ -53,9 +53,10 @@ class TestHealthCacheBasics:
 
     def test_load_cache_empty(self, tmp_path):
         """Load from non-existent cache returns empty dict."""
-        files, mtime = load_cache(tmp_path)
+        files, mtime, parse_errors = load_cache(tmp_path)
         assert files == {}
         assert mtime == 0.0
+        assert parse_errors == []
 
     def test_save_and_load_cache(self, tmp_path):
         """Save and load cache round-trips correctly."""
@@ -69,11 +70,13 @@ class TestHealthCacheBasics:
                 "links": ["other/entry"],
             }
         }
-        save_cache(files, 123.456, tmp_path)
+        parse_errors = [{"path": "broken.md", "error": "Test error"}]
+        save_cache(files, 123.456, tmp_path, parse_errors)
 
-        loaded_files, loaded_mtime = load_cache(tmp_path)
+        loaded_files, loaded_mtime, loaded_errors = load_cache(tmp_path)
         assert loaded_files == files
         assert loaded_mtime == 123.456
+        assert loaded_errors == parse_errors
 
     def test_cache_path_creates_directory(self, tmp_path):
         """Cache path creates parent directory if needed."""
@@ -97,21 +100,24 @@ class TestParseFileMetadata:
             created=date(2024, 1, 15),
         )
 
-        meta = _parse_file_metadata(entry_path)
+        meta, error = _parse_file_metadata(entry_path)
 
         assert meta is not None
+        assert error is None
         assert meta["title"] == "Test Entry"
         assert meta["created"] == "2024-01-15"
         assert meta["updated"] is None
         assert "link/to/other" in meta["links"]
 
-    def test_parse_invalid_entry_returns_none(self, tmp_path):
-        """Invalid entry returns None."""
+    def test_parse_invalid_entry_returns_error(self, tmp_path):
+        """Invalid entry returns None and error message."""
         entry_path = tmp_path / "invalid.md"
         entry_path.write_text("No frontmatter here")
 
-        meta = _parse_file_metadata(entry_path)
+        meta, error = _parse_file_metadata(entry_path)
         assert meta is None
+        assert error is not None
+        assert "frontmatter" in error.lower()
 
 
 class TestRebuildHealthCache:
@@ -381,3 +387,103 @@ class TestHealthCacheIntegration:
 
         assert len(result["broken_links"]) == 1
         assert result["broken_links"][0]["broken_link"] == "nonexistent"
+
+    @pytest.mark.asyncio
+    async def test_health_reports_parse_errors(self, tmp_path, monkeypatch):
+        """Parse errors are tracked and reported in health."""
+        from memex import core
+
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        monkeypatch.setattr(core, "get_kb_root", lambda: kb_root)
+        monkeypatch.setenv("MEMEX_INDEX_ROOT", str(index_root))
+
+        # Create a valid entry
+        _create_entry(
+            kb_root / "valid.md",
+            title="Valid Entry",
+            tags=["test"],
+        )
+
+        # Create an invalid entry (no frontmatter)
+        broken_path = kb_root / "broken.md"
+        broken_path.parent.mkdir(parents=True, exist_ok=True)
+        broken_path.write_text("No frontmatter here, just text.")
+
+        result = await core.health()
+
+        # Should report the parse error
+        assert len(result["parse_errors"]) == 1
+        assert result["parse_errors"][0]["path"] == "broken.md"
+        assert "frontmatter" in result["parse_errors"][0]["error"].lower()
+
+        # Should still count valid entries
+        assert result["summary"]["total_entries"] == 1
+        assert result["summary"]["parse_errors_count"] == 1
+
+        # Health score should be penalized
+        assert result["summary"]["health_score"] < 100
+
+
+class TestParseErrorsFunction:
+    """Test get_parse_errors function."""
+
+    def test_get_parse_errors_returns_cached_errors(self, tmp_path):
+        """get_parse_errors returns parse errors from cache."""
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        # Create valid entry
+        _create_entry(kb_root / "valid.md", title="Valid", tags=["test"])
+
+        # Create invalid entry
+        broken_path = kb_root / "broken.md"
+        broken_path.parent.mkdir(parents=True, exist_ok=True)
+        broken_path.write_text("No frontmatter")
+
+        # Build cache
+        rebuild_health_cache(kb_root, index_root)
+
+        # Get parse errors
+        from memex.health_cache import get_parse_errors
+
+        errors = get_parse_errors(index_root)
+
+        assert len(errors) == 1
+        assert errors[0]["path"] == "broken.md"
+
+    @pytest.mark.asyncio
+    async def test_health_suggests_similar_targets_for_broken_links(
+        self, tmp_path, monkeypatch
+    ):
+        """Broken links get suggestions for similar valid targets."""
+        from memex import core
+
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        monkeypatch.setattr(core, "get_kb_root", lambda: kb_root)
+        monkeypatch.setenv("MEMEX_INDEX_ROOT", str(index_root))
+
+        # Create an entry with a broken link that's similar to another entry
+        _create_entry(
+            kb_root / "source.md",
+            title="Source",
+            tags=["test"],
+            content="Link to [[dev/guidlines]] (typo).",  # typo: guidlines
+        )
+        _create_entry(
+            kb_root / "dev" / "guidelines.md",  # correct spelling
+            title="Guidelines",
+            tags=["test"],
+        )
+
+        result = await core.health()
+
+        assert len(result["broken_links"]) == 1
+        broken = result["broken_links"][0]
+        assert broken["broken_link"] == "dev/guidlines"
+        # Should suggest the similar target
+        assert "suggestion" in broken
+        assert broken["suggestion"] == "dev/guidelines"
