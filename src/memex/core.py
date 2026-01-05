@@ -2312,6 +2312,7 @@ async def health(
     check_broken_links: bool = True,
     check_stale: bool = True,
     check_empty_dirs: bool = True,
+    check_missing_descriptions: bool = True,
 ) -> dict:
     """Audit KB health.
 
@@ -2321,6 +2322,7 @@ async def health(
         check_broken_links: Check for [[links]] pointing to non-existent entries.
         check_stale: Check for entries not updated recently.
         check_empty_dirs: Check for directories with no entries.
+        check_missing_descriptions: Check for entries without description metadata.
 
     Returns:
         Dict with lists of issues found in each category.
@@ -2333,6 +2335,7 @@ async def health(
             "broken_links": [],
             "stale": [],
             "empty_dirs": [],
+            "missing_descriptions": [],
             "summary": {"total_issues": 0},
         }
 
@@ -2341,6 +2344,7 @@ async def health(
         "broken_links": [],
         "stale": [],
         "empty_dirs": [],
+        "missing_descriptions": [],
         "parse_errors": [],
     }
 
@@ -2435,6 +2439,15 @@ async def health(
             if not has_entries:
                 results["empty_dirs"].append(rel_dir)
 
+    # Check for entries missing descriptions
+    if check_missing_descriptions:
+        for path_key, entry in all_entries.items():
+            if not entry.get("description"):
+                results["missing_descriptions"].append({
+                    "path": entry["path"],
+                    "title": entry["title"],
+                })
+
     # Add summary with health score
     total_issues = sum(len(v) for v in results.values() if isinstance(v, list))
     total_entries = len(all_entries)
@@ -2453,9 +2466,13 @@ async def health(
         stale_penalty = min(15, len(results["stale"]) * 1)
         # Empty dirs are trivial (1 point each, max 10 deduction)
         empty_penalty = min(10, len(results["empty_dirs"]) * 1)
+        # Missing descriptions are informational (0.5 points each, max 5 deduction)
+        # Low penalty since descriptions are optional but improve discoverability
+        description_penalty = min(5, len(results["missing_descriptions"]) * 0.5)
 
         total_penalty = (
             parse_penalty + broken_penalty + orphan_penalty + stale_penalty + empty_penalty
+            + description_penalty
         )
         score = max(0, 100 - total_penalty)
 
@@ -2467,8 +2484,166 @@ async def health(
         "broken_links_count": len(results["broken_links"]),
         "stale_count": len(results["stale"]),
         "empty_dirs_count": len(results["empty_dirs"]),
+        "missing_descriptions_count": len(results["missing_descriptions"]),
         "total_entries": total_entries,
     }
+
+    return results
+
+
+def _generate_description_from_content(
+    content: str, max_length: int = 120, title: str | None = None
+) -> str:
+    """Generate a one-line description from entry content.
+
+    Extracts the first meaningful sentence or phrase from the content,
+    stripping markdown formatting. If the content starts with the title
+    (common in markdown with H1 headers), it skips past the title.
+
+    Args:
+        content: Raw markdown content of the entry.
+        max_length: Maximum description length (default 120).
+        title: Optional title to skip if content starts with it.
+
+    Returns:
+        A clean one-line description.
+    """
+    if not content:
+        return ""
+
+    # Import here to avoid circular imports
+    from .indexer import strip_markdown_for_snippet
+
+    # Get a longer snippet to work with
+    clean_text = strip_markdown_for_snippet(content, max_length=500)
+
+    if not clean_text:
+        return ""
+
+    # If content starts with the title (common when H1 matches title), skip it
+    if title:
+        # Check if clean_text starts with the title (possibly followed by whitespace)
+        title_normalized = title.strip()
+        if clean_text.startswith(title_normalized):
+            clean_text = clean_text[len(title_normalized):].strip()
+            if not clean_text:
+                return ""
+
+    # Try to find the first complete sentence
+    # Look for sentence-ending punctuation followed by space or end
+    sentence_match = re.match(r"^(.+?[.!?])(?:\s|$)", clean_text)
+    if sentence_match:
+        description = sentence_match.group(1).strip()
+        if len(description) <= max_length:
+            return description
+
+    # Fallback: truncate at word boundary
+    if len(clean_text) <= max_length:
+        return clean_text
+
+    # Find last space before max_length
+    truncated = clean_text[:max_length]
+    last_space = truncated.rfind(" ")
+    if last_space > max_length * 0.5:  # At least half the content
+        return truncated[:last_space] + "..."
+    return truncated + "..."
+
+
+async def generate_descriptions(
+    dry_run: bool = False,
+    limit: int | None = None,
+) -> list[dict]:
+    """Generate descriptions for entries that are missing them.
+
+    Reads entry content and generates a one-line summary based on the
+    first meaningful sentence or paragraph.
+
+    Args:
+        dry_run: If True, only preview changes without writing.
+        limit: Maximum number of entries to process.
+
+    Returns:
+        List of {path, title, description, status} for each processed entry.
+        status is 'updated', 'skipped' (already has description), or 'preview' (dry_run).
+    """
+    from .parser import parse_entry
+
+    kb_root = get_kb_root()
+
+    if not kb_root.exists():
+        return []
+
+    results: list[dict] = []
+    processed = 0
+
+    # Get entries missing descriptions from health cache
+    all_entries = get_entry_metadata(kb_root)
+
+    for path_key, entry in all_entries.items():
+        if entry.get("description"):
+            # Already has description
+            continue
+
+        if limit and processed >= limit:
+            break
+
+        rel_path = entry["path"]
+        file_path = kb_root / rel_path
+
+        if not file_path.exists():
+            continue
+
+        try:
+            metadata, content, _ = parse_entry(file_path)
+
+            # Generate description from content, passing title to skip if it appears at start
+            description = _generate_description_from_content(content, title=metadata.title)
+
+            if not description:
+                results.append({
+                    "path": rel_path,
+                    "title": entry["title"],
+                    "description": None,
+                    "status": "skipped",
+                    "reason": "Could not generate description from content",
+                })
+                continue
+
+            if dry_run:
+                results.append({
+                    "path": rel_path,
+                    "title": entry["title"],
+                    "description": description,
+                    "status": "preview",
+                })
+            else:
+                # Update the file with new description
+                metadata.description = description
+
+                # Rebuild frontmatter with new description
+                new_frontmatter = build_frontmatter(metadata)
+
+                # Write updated content
+                new_content = f"{new_frontmatter}{content}"
+                file_path.write_text(new_content)
+
+                results.append({
+                    "path": rel_path,
+                    "title": entry["title"],
+                    "description": description,
+                    "status": "updated",
+                })
+
+            processed += 1
+
+        except Exception as e:
+            results.append({
+                "path": rel_path,
+                "title": entry["title"],
+                "description": None,
+                "status": "error",
+                "reason": str(e),
+            })
 
     return results
 

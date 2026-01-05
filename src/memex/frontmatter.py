@@ -31,6 +31,8 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
 
     # Required fields
     data["title"] = metadata.title
+    if metadata.description:
+        data["description"] = metadata.description
     data["tags"] = list(metadata.tags)
     data["created"] = metadata.created
 
@@ -87,6 +89,7 @@ def create_new_metadata(
     title: str,
     tags: list[str],
     *,
+    description: str | None = None,
     source_project: str | None = None,
     contributor: str | None = None,
     model: str | None = None,
@@ -101,6 +104,7 @@ def create_new_metadata(
     Args:
         title: Entry title.
         tags: Entry tags (at least one required).
+        description: One-line summary of entry content.
         source_project: Project context where entry is being created.
         contributor: Contributor identity (name or "Name <email>").
         model: LLM model identifier if created by an agent.
@@ -112,6 +116,7 @@ def create_new_metadata(
     """
     return EntryMetadata(
         title=title,
+        description=description,
         tags=tags,
         created=date.today(),
         updated=None,
@@ -127,6 +132,7 @@ def update_metadata_for_edit(
     metadata: EntryMetadata,
     *,
     new_tags: list[str] | None = None,
+    new_description: str | None = None,
     new_contributor: str | None = None,
     edit_source: str | None = None,
     model: str | None = None,
@@ -141,6 +147,7 @@ def update_metadata_for_edit(
     Args:
         metadata: Existing entry metadata.
         new_tags: Updated tags (or None to preserve existing).
+        new_description: Updated description (or None to preserve existing).
         new_contributor: New contributor to add to contributors list.
         edit_source: Project making the edit (added to edit_sources if different).
         model: LLM model identifier for the edit.
@@ -162,6 +169,7 @@ def update_metadata_for_edit(
 
     return EntryMetadata(
         title=metadata.title,
+        description=new_description if new_description is not None else metadata.description,
         tags=new_tags if new_tags is not None else list(metadata.tags),
         created=metadata.created,
         updated=date.today(),

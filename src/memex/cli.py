@@ -1851,7 +1851,8 @@ def whats_new(days: int, limit: int, project: str | None, as_json: bool):
 def health(as_json: bool):
     """Audit knowledge base for problems.
 
-    Checks for orphaned entries, broken links, stale content, empty directories.
+    Checks for orphaned entries, broken links, stale content, empty directories,
+    and entries missing descriptions.
 
     \b
     Examples:
@@ -1929,6 +1930,17 @@ def health(as_json: bool):
         else:
             click.echo("\n✓ No empty directories")
 
+        # Missing descriptions
+        missing_descs = result.get("missing_descriptions", [])
+        if missing_descs:
+            click.echo(f"\nℹ Missing descriptions ({len(missing_descs)}):")
+            for m in missing_descs[:10]:
+                click.echo(f"  - {m['path']}")
+            if len(missing_descs) > 10:
+                click.echo(f"  ... and {len(missing_descs) - 10} more")
+        else:
+            click.echo("\n✓ All entries have descriptions")
+
         # Show fix guidance if there are issues
         total_issues = summary.get("total_issues", 0)
         if total_issues > 0:
@@ -1944,6 +1956,71 @@ def health(as_json: bool):
                 click.echo("  • Stale: Review and update entries, or mark them as archived")
             if empty_dirs:
                 click.echo("  • Empty dirs: Add entries or remove with 'rmdir'")
+            if missing_descs:
+                click.echo("  • Missing descriptions: Add 'description:' to frontmatter or run 'mx summarize'")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Summarize Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--dry-run", is_flag=True, help="Preview changes without writing")
+@click.option("--limit", type=int, help="Maximum entries to process")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def summarize(dry_run: bool, limit: int | None, as_json: bool):
+    """Generate descriptions for entries missing them.
+
+    Extracts a one-line summary from entry content to use as the description
+    field in frontmatter. This improves search results and entry discoverability.
+
+    \b
+    Examples:
+      mx summarize --dry-run         # Preview what would be generated
+      mx summarize                   # Generate and write descriptions
+      mx summarize --limit 5         # Process only 5 entries
+      mx summarize --json            # Output as JSON
+    """
+    from .core import generate_descriptions
+
+    results = run_async(generate_descriptions(dry_run=dry_run, limit=limit))
+
+    if as_json:
+        output(results, as_json=True)
+    else:
+        if not results:
+            click.echo("All entries already have descriptions.")
+            return
+
+        updated = [r for r in results if r["status"] == "updated"]
+        previewed = [r for r in results if r["status"] == "preview"]
+        skipped = [r for r in results if r["status"] == "skipped"]
+        errors = [r for r in results if r["status"] == "error"]
+
+        if dry_run:
+            click.echo("Preview of descriptions to generate:")
+            click.echo("=" * 50)
+            for r in previewed:
+                click.echo(f"\n{r['path']}")
+                click.echo(f"  Title: {r['title']}")
+                click.echo(f"  Description: {r['description']}")
+            click.echo(f"\n{len(previewed)} entries would be updated.")
+        else:
+            if updated:
+                click.echo(f"✓ Generated descriptions for {len(updated)} entries:")
+                for r in updated[:10]:
+                    click.echo(f"  - {r['path']}")
+                if len(updated) > 10:
+                    click.echo(f"  ... and {len(updated) - 10} more")
+
+        if skipped:
+            click.echo(f"\n⚠ Skipped {len(skipped)} entries (no content to summarize)")
+
+        if errors:
+            click.echo(f"\n✗ {len(errors)} errors:")
+            for r in errors[:5]:
+                click.echo(f"  - {r['path']}: {r.get('reason', 'Unknown error')}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

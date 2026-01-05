@@ -487,3 +487,161 @@ class TestParseErrorsFunction:
         # Should suggest the similar target
         assert "suggestion" in broken
         assert broken["suggestion"] == "dev/guidelines"
+
+
+class TestDescriptionMetadata:
+    """Test description field in health cache."""
+
+    def _create_entry_with_description(
+        self,
+        path: Path,
+        title: str,
+        tags: list[str],
+        description: str | None = None,
+        content: str = "",
+    ) -> None:
+        """Create a test entry file with optional description."""
+        path.parent.mkdir(parents=True, exist_ok=True)
+        created_date = date.today().isoformat()
+        tags_yaml = "tags:\n" + "\n".join(f"  - {tag}" for tag in tags)
+        desc_line = f"description: {description}\n" if description else ""
+
+        full_content = f"""---
+title: {title}
+{desc_line}{tags_yaml}
+created: {created_date}
+---
+
+{content}
+"""
+        path.write_text(full_content)
+
+    def test_parse_entry_with_description(self, tmp_path):
+        """Parse entry that has a description field."""
+        entry_path = tmp_path / "test.md"
+        self._create_entry_with_description(
+            entry_path,
+            title="Test Entry",
+            tags=["test"],
+            description="A short summary of the entry.",
+            content="Full content here.",
+        )
+
+        result, error = _parse_file_metadata(entry_path)
+
+        assert error is None
+        assert result is not None
+        assert result["title"] == "Test Entry"
+        assert result["description"] == "A short summary of the entry."
+
+    def test_parse_entry_without_description(self, tmp_path):
+        """Parse entry that has no description field."""
+        entry_path = tmp_path / "test.md"
+        _create_entry(
+            entry_path,
+            title="Test Entry",
+            tags=["test"],
+            content="Content without description.",
+        )
+
+        result, error = _parse_file_metadata(entry_path)
+
+        assert error is None
+        assert result is not None
+        assert result["description"] is None
+
+    def test_get_entry_metadata_includes_description(self, tmp_path):
+        """get_entry_metadata returns description field."""
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        self._create_entry_with_description(
+            kb_root / "with_desc.md",
+            title="With Description",
+            tags=["test"],
+            description="Has a description",
+        )
+        _create_entry(
+            kb_root / "no_desc.md",
+            title="No Description",
+            tags=["test"],
+        )
+
+        # Build cache and get metadata
+        rebuild_health_cache(kb_root, index_root)
+        metadata = get_entry_metadata(kb_root, index_root)
+
+        assert "with_desc" in metadata
+        assert metadata["with_desc"]["description"] == "Has a description"
+
+        assert "no_desc" in metadata
+        assert metadata["no_desc"]["description"] is None
+
+    @pytest.mark.asyncio
+    async def test_health_reports_missing_descriptions(self, tmp_path, monkeypatch):
+        """Health check reports entries missing descriptions."""
+        from memex import core
+
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        monkeypatch.setattr(core, "get_kb_root", lambda: kb_root)
+        monkeypatch.setenv("MEMEX_INDEX_ROOT", str(index_root))
+
+        # Create entry with description
+        self._create_entry_with_description(
+            kb_root / "with_desc.md",
+            title="With Description",
+            tags=["test"],
+            description="Has a description",
+        )
+
+        # Create entry without description
+        _create_entry(
+            kb_root / "no_desc.md",
+            title="No Description",
+            tags=["test"],
+        )
+
+        result = await core.health()
+
+        # Should report the missing description
+        assert "missing_descriptions" in result
+        assert len(result["missing_descriptions"]) == 1
+        assert result["missing_descriptions"][0]["path"] == "no_desc.md"
+        assert result["missing_descriptions"][0]["title"] == "No Description"
+
+        # Summary should include count
+        assert result["summary"]["missing_descriptions_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_health_no_missing_descriptions_when_all_have_them(
+        self, tmp_path, monkeypatch
+    ):
+        """Health check reports no issues when all entries have descriptions."""
+        from memex import core
+
+        kb_root = tmp_path / "kb"
+        index_root = tmp_path / "index"
+
+        monkeypatch.setattr(core, "get_kb_root", lambda: kb_root)
+        monkeypatch.setenv("MEMEX_INDEX_ROOT", str(index_root))
+
+        # Create entries all with descriptions
+        self._create_entry_with_description(
+            kb_root / "entry1.md",
+            title="Entry 1",
+            tags=["test"],
+            description="Description 1",
+        )
+        self._create_entry_with_description(
+            kb_root / "entry2.md",
+            title="Entry 2",
+            tags=["test"],
+            description="Description 2",
+        )
+
+        result = await core.health()
+
+        assert result["missing_descriptions"] == []
+        assert result["summary"]["missing_descriptions_count"] == 0
