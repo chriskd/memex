@@ -1866,6 +1866,22 @@ def health(as_json: bool):
         click.echo(f"Health Score: {summary.get('health_score', 0)}/100")
         click.echo(f"Total Entries: {summary.get('total_entries', 0)}")
 
+        # Parse errors (most critical - entries not indexed)
+        parse_errors = result.get("parse_errors", [])
+        if parse_errors:
+            click.echo(f"\n✗ Parse errors ({len(parse_errors)}):")
+            for pe in parse_errors[:10]:
+                click.echo(f"  - {pe['path']}")
+                # Show truncated error message
+                error_msg = pe.get("error", "Unknown error")
+                if len(error_msg) > 80:
+                    error_msg = error_msg[:77] + "..."
+                click.echo(f"    {error_msg}")
+            if len(parse_errors) > 10:
+                click.echo(f"  ... and {len(parse_errors) - 10} more")
+        else:
+            click.echo("\n✓ No parse errors")
+
         # Orphans
         orphans = result.get("orphans", [])
         if orphans:
@@ -1881,6 +1897,10 @@ def health(as_json: bool):
             click.echo(f"\n⚠ Broken links ({len(broken_links)}):")
             for bl in broken_links[:10]:
                 click.echo(f"  - {bl['source']} -> {bl['broken_link']}")
+                if "suggestion" in bl:
+                    click.echo(f"    → Did you mean: [[{bl['suggestion']}]]?")
+            if len(broken_links) > 10:
+                click.echo(f"  ... and {len(broken_links) - 10} more")
         else:
             click.echo("\n✓ No broken links")
 
@@ -1899,8 +1919,26 @@ def health(as_json: bool):
             click.echo(f"\n⚠ Empty directories ({len(empty_dirs)}):")
             for d in empty_dirs[:10]:
                 click.echo(f"  - {d}")
+            if len(empty_dirs) > 10:
+                click.echo(f"  ... and {len(empty_dirs) - 10} more")
         else:
             click.echo("\n✓ No empty directories")
+
+        # Show fix guidance if there are issues
+        total_issues = summary.get("total_issues", 0)
+        if total_issues > 0:
+            click.echo("\n" + "-" * 40)
+            click.echo("Fix Guidance:")
+            if parse_errors:
+                click.echo("  • Parse errors: Fix frontmatter syntax in listed files")
+            if broken_links:
+                click.echo("  • Broken links: Update [[link]] targets or remove dead links")
+            if orphans:
+                click.echo("  • Orphans: Add [[links]] to these entries from other files")
+            if stale:
+                click.echo("  • Stale: Review and update entries, or mark them as archived")
+            if empty_dirs:
+                click.echo("  • Empty dirs: Add entries or remove with 'rmdir'")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -32,7 +32,7 @@ from .config import (
 from .context import KBContext, get_kb_context
 from .evaluation import run_quality_checks
 from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
-from .health_cache import get_entry_metadata
+from .health_cache import get_entry_metadata, get_parse_errors
 from .indexer import HybridSearcher
 from .models import (
     AddEntryPreview,
@@ -2226,6 +2226,86 @@ async def tags(
     return results
 
 
+def _similarity_score(s1: str, s2: str) -> float:
+    """Calculate similarity between two strings using character overlap.
+
+    Returns a score from 0.0 (no similarity) to 1.0 (identical).
+    Uses bigram-based Dice coefficient for fuzzy matching.
+    """
+    if not s1 or not s2:
+        return 0.0
+    if s1 == s2:
+        return 1.0
+
+    # Generate bigrams (pairs of consecutive chars)
+    def bigrams(s: str) -> set[str]:
+        return {s[i : i + 2] for i in range(len(s) - 1)} if len(s) > 1 else {s}
+
+    bg1 = bigrams(s1)
+    bg2 = bigrams(s2)
+
+    # Dice coefficient
+    intersection = len(bg1 & bg2)
+    if intersection == 0:
+        return 0.0
+    return 2.0 * intersection / (len(bg1) + len(bg2))
+
+
+def _find_similar_target(
+    broken_link: str, all_entries: dict[str, dict]
+) -> str | None:
+    """Find a similar valid target for a broken link.
+
+    Uses fuzzy matching heuristics:
+    1. Check if the basename matches any entry basename
+    2. Check for similar basenames using bigram similarity
+    3. Check for title matches
+
+    Args:
+        broken_link: The broken link target (normalized, without .md)
+        all_entries: Dict of all valid entries from health cache
+
+    Returns:
+        Suggested replacement path, or None if no good match found
+    """
+    if not broken_link or not all_entries:
+        return None
+
+    broken_basename = broken_link.rsplit("/", 1)[-1].lower()
+    broken_dir = broken_link.rsplit("/", 1)[0] if "/" in broken_link else ""
+
+    best_match: str | None = None
+    best_score = 0.0
+
+    for path_key, entry in all_entries.items():
+        entry_basename = path_key.rsplit("/", 1)[-1].lower()
+        entry_dir = path_key.rsplit("/", 1)[0] if "/" in path_key else ""
+
+        # Exact basename match (highest priority)
+        if broken_basename == entry_basename:
+            return path_key
+
+        # Calculate basename similarity
+        basename_score = _similarity_score(broken_basename, entry_basename)
+
+        # Boost score if directories match
+        if broken_dir and entry_dir and broken_dir.lower() == entry_dir.lower():
+            basename_score *= 1.2
+
+        # Title match
+        title_lower = entry.get("title", "").lower()
+        title_normalized = title_lower.replace(" ", "-")
+        title_score = _similarity_score(broken_basename, title_normalized)
+
+        score = max(basename_score, title_score)
+        if score > best_score:
+            best_score = score
+            best_match = path_key
+
+    # Only return if score is reasonably good (>0.7 similarity)
+    return best_match if best_score > 0.7 else None
+
+
 async def health(
     stale_days: int = 90,
     check_orphans: bool = True,
@@ -2261,11 +2341,15 @@ async def health(
         "broken_links": [],
         "stale": [],
         "empty_dirs": [],
+        "parse_errors": [],
     }
 
     # Use cached metadata instead of parsing every file
     # This is O(n) on changed files only, not O(n) full parses
     all_entries = get_entry_metadata(kb_root)
+
+    # Get parse errors from health cache
+    results["parse_errors"] = get_parse_errors()
     cutoff_date = date.today() - timedelta(days=stale_days)
 
     # Get backlink index
@@ -2300,10 +2384,15 @@ async def health(
                     and link_normalized not in valid_targets
                     and link not in title_to_path
                 ):
-                    results["broken_links"].append({
+                    broken_info: dict = {
                         "source": entry["path"],
                         "broken_link": link,
-                    })
+                    }
+                    # Try to find a similar target for suggestion
+                    suggestion = _find_similar_target(link_normalized, all_entries)
+                    if suggestion:
+                        broken_info["suggestion"] = suggestion
+                    results["broken_links"].append(broken_info)
 
     # Check for stale entries
     if check_stale:
@@ -2353,7 +2442,9 @@ async def health(
     # Calculate health score (0-100)
     # Deduct points for issues, weighted by severity
     score = 100.0
-    if total_entries > 0:
+    if total_entries > 0 or len(results["parse_errors"]) > 0:
+        # Parse errors are critical (10 points each, max 40 deduction) - entries not indexed!
+        parse_penalty = min(40, len(results["parse_errors"]) * 10)
         # Broken internal links are serious (5 points each, max 30 deduction)
         broken_penalty = min(30, len(results["broken_links"]) * 5)
         # Orphans are moderate (2 points each, max 25 deduction)
@@ -2363,12 +2454,15 @@ async def health(
         # Empty dirs are trivial (1 point each, max 10 deduction)
         empty_penalty = min(10, len(results["empty_dirs"]) * 1)
 
-        total_penalty = broken_penalty + orphan_penalty + stale_penalty + empty_penalty
+        total_penalty = (
+            parse_penalty + broken_penalty + orphan_penalty + stale_penalty + empty_penalty
+        )
         score = max(0, 100 - total_penalty)
 
     results["summary"] = {
         "health_score": round(score),
         "total_issues": total_issues,
+        "parse_errors_count": len(results["parse_errors"]),
         "orphans_count": len(results["orphans"]),
         "broken_links_count": len(results["broken_links"]),
         "stale_count": len(results["stale"]),

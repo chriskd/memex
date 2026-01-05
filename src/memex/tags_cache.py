@@ -7,11 +7,14 @@ when computing tag taxonomy for suggestions and tag listing.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from .config import get_index_root
 from .parser import ParseError, parse_entry
+
+log = logging.getLogger(__name__)
 
 CACHE_FILENAME = "tags_cache.json"
 
@@ -90,7 +93,8 @@ def rebuild_tags_cache(kb_root: Path, index_root: Path | None = None) -> dict[st
         try:
             metadata, _, _ = parse_entry(md_file)
             tags = list(metadata.tags)
-        except ParseError:
+        except ParseError as e:
+            log.warning("Parse error in %s: %s", md_file, e.message)
             continue
 
         files_cache[rel_path] = {
@@ -149,7 +153,8 @@ def _incremental_update(
             try:
                 metadata, _, _ = parse_entry(md_file)
                 tags = list(metadata.tags)
-            except ParseError:
+            except ParseError as e:
+                log.warning("Parse error in %s: %s", md_file, e.message)
                 continue
 
             updated_files[rel_path] = {
