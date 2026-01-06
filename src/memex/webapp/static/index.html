@@ -2093,6 +2093,13 @@
             try {
                 const tree = await api.getTree();
                 renderTree(tree, $('#tree'));
+
+                // Update sidebar header based on whether KB has folders
+                const hasDirectories = tree.some(node => node.type === 'directory');
+                const header = document.querySelector('#tree-section .sidebar-header');
+                if (header) {
+                    header.textContent = hasDirectories ? 'Categories' : 'Entries';
+                }
             } catch (e) {
                 console.error('Failed to load tree:', e);
             }
