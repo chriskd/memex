@@ -60,6 +60,9 @@ class KBContext:
     project_kb: str | None = None
     """Path to project-local KB for publishing (relative to .kbcontext location)."""
 
+    publish_base_url: str | None = None
+    """Base URL for publishing (e.g., '/memex' for GitHub Pages subdirectory)."""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], source_file: Path | None = None) -> "KBContext":
         """Create KBContext from parsed YAML dict."""
@@ -71,6 +74,7 @@ class KBContext:
             source_file=source_file,
             session_entry=data.get("session_entry"),
             project_kb=data.get("project_kb"),
+            publish_base_url=data.get("publish_base_url"),
         )
 
     def get_project_name(self) -> str | None:

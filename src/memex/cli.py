@@ -3736,6 +3736,9 @@ def publish(
     from .context import get_kb_context
     from .core import publish as core_publish
 
+    # Get context early - used for multiple settings
+    context = get_kb_context()
+
     # Resolve KB source with safety guardrails
     resolved_kb: Path | None = None
     source_description = ""
@@ -3744,14 +3747,12 @@ def publish(
         # Explicit --kb-root flag takes priority
         resolved_kb = Path(kb_root).resolve()
         source_description = "--kb-root flag"
-    else:
+    elif context and context.project_kb and context.source_file:
         # Try .kbcontext project_kb
-        context = get_kb_context()
-        if context and context.project_kb and context.source_file:
-            project_kb_path = (context.source_file.parent / context.project_kb).resolve()
-            if project_kb_path.exists():
-                resolved_kb = project_kb_path
-                source_description = ".kbcontext project_kb"
+        project_kb_path = (context.source_file.parent / context.project_kb).resolve()
+        if project_kb_path.exists():
+            resolved_kb = project_kb_path
+            source_description = ".kbcontext project_kb"
 
     # No local KB found - require --global flag for safety
     if not resolved_kb:
@@ -3767,13 +3768,20 @@ def publish(
         resolved_kb = get_kb_root()
         source_description = "MEMEX_KB_ROOT (--global)"
 
+    # Resolve base_url from context if not specified via CLI
+    resolved_base_url = base_url
+    if not resolved_base_url and context and context.publish_base_url:
+        resolved_base_url = context.publish_base_url
+
     # Show confirmation message
     click.echo(f"Publishing from: {resolved_kb} (via {source_description})")
+    if resolved_base_url:
+        click.echo(f"Base URL: {resolved_base_url}")
 
     try:
         result = run_async(core_publish(
             output_dir=output_dir,
-            base_url=base_url,
+            base_url=resolved_base_url,
             site_title=title,
             index_entry=index_entry,
             include_drafts=include_drafts,
