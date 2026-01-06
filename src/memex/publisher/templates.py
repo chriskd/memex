@@ -171,6 +171,7 @@ def _base_layout(
     main_html: str,
     panel_html: str,
     current_view: str = "reader",
+    site_title: str = "Memex",
 ) -> str:
     """Generate complete HTML page with 3-column layout.
 
@@ -181,6 +182,7 @@ def _base_layout(
         main_html: HTML for main content area
         panel_html: HTML for right panel content
         current_view: Current view for nav highlighting ("reader" or "graph")
+        site_title: Site title for header and <title> tag
     """
     reader_active = ' active' if current_view == 'reader' else ''
     graph_active = ' active' if current_view == 'graph' else ''
@@ -190,7 +192,7 @@ def _base_layout(
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{_escape_html(title)} - Memex</title>
+    <title>{_escape_html(title)} - {_escape_html(site_title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
@@ -206,7 +208,7 @@ def _base_layout(
         <header class="header">
             <a href="{base_url}/" class="logo">
                 <div class="logo-mark"></div>
-                <div class="logo-text">Memex<span> / knowledge</span></div>
+                <div class="logo-text">{_escape_html(site_title)}<span> / knowledge</span></div>
             </a>
 
             <div class="search-container">
@@ -228,6 +230,9 @@ def _base_layout(
         <aside class="sidebar">
             <div class="sidebar-header">Categories</div>
             {sidebar_html}
+            <div class="sidebar-footer">
+                <a href="https://github.com/aaronsb/memex" target="_blank" rel="noopener">Powered by memex</a>
+            </div>
         </aside>
 
         <!-- Main content -->
@@ -337,6 +342,7 @@ def _get_env() -> Environment:
 def render_entry_page(
     entry: "EntryData",
     base_url: str,
+    site_title: str = "Memex",
     all_entries: list["EntryData"] | None = None,
     entries_dict: dict[str, "EntryData"] | None = None,
 ) -> str:
@@ -345,6 +351,7 @@ def render_entry_page(
     Args:
         entry: Entry data including content and metadata
         base_url: Base URL for links
+        site_title: Site title for header and <title> tag
         all_entries: All entries for sidebar navigation
         entries_dict: Dict mapping path to EntryData for title lookup
 
@@ -381,6 +388,7 @@ def render_entry_page(
         main_html=main_html,
         panel_html=panel_html,
         current_view="reader",
+        site_title=site_title,
     )
 
 
@@ -388,6 +396,7 @@ def render_index_page(
     entries: list["EntryData"],
     tags_index: dict[str, list[str]],
     base_url: str,
+    site_title: str = "Memex",
 ) -> str:
     """Render the main index page with full 3-column layout.
 
@@ -395,6 +404,7 @@ def render_index_page(
         entries: All entry data
         tags_index: Dict mapping tag -> list of entry paths
         base_url: Base URL for links
+        site_title: Site title for header and <title> tag
 
     Returns:
         Complete HTML page string
@@ -439,6 +449,7 @@ def render_index_page(
         main_html=main_html,
         panel_html=panel_html,
         current_view="reader",
+        site_title=site_title,
     )
 
 
@@ -446,6 +457,7 @@ def render_tag_page(
     tag: str,
     entries: list["EntryData"],
     base_url: str,
+    site_title: str = "Memex",
     all_entries: list["EntryData"] | None = None,
 ) -> str:
     """Render a tag listing page with full 3-column layout.
@@ -454,6 +466,7 @@ def render_tag_page(
         tag: The tag name
         entries: Entries with this tag
         base_url: Base URL for links
+        site_title: Site title for header and <title> tag
         all_entries: All entries for sidebar navigation
 
     Returns:
@@ -490,14 +503,20 @@ def render_tag_page(
         main_html=main_html,
         panel_html=panel_html,
         current_view="reader",
+        site_title=site_title,
     )
 
 
-def render_graph_page(base_url: str, all_entries: list["EntryData"] | None = None) -> str:
+def render_graph_page(
+    base_url: str,
+    site_title: str = "Memex",
+    all_entries: list["EntryData"] | None = None,
+) -> str:
     """Render the graph visualization page with full 3-column layout.
 
     Args:
         base_url: Base URL for links
+        site_title: Site title for header and <title> tag
         all_entries: All entries for sidebar navigation
 
     Returns:
@@ -656,4 +675,5 @@ def render_graph_page(base_url: str, all_entries: list["EntryData"] | None = Non
         main_html=main_html,
         panel_html=panel_html,
         current_view="graph",
+        site_title=site_title,
     )

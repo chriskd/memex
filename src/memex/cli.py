@@ -3662,6 +3662,11 @@ def beads_projects(as_json: bool):
     help="Base URL for links (e.g., /my-kb for subdirectory hosting)",
 )
 @click.option(
+    "--title", "-t",
+    default="Memex",
+    help="Site title for header and page titles (default: Memex)",
+)
+@click.option(
     "--include-drafts",
     is_flag=True,
     help="Include draft entries in output",
@@ -3680,6 +3685,7 @@ def beads_projects(as_json: bool):
 def publish(
     output_dir: str,
     base_url: str,
+    title: str,
     include_drafts: bool,
     include_archived: bool,
     no_clean: bool,
@@ -3698,6 +3704,7 @@ def publish(
       mx publish                           # Build to _site/
       mx publish -o docs                   # Build to docs/ for GitHub Pages
       mx publish --base-url /my-kb         # Set base URL for subdirectory hosting
+      mx publish --title "My Docs"         # Custom site title
       mx publish --include-drafts          # Include draft entries
     """
     from .core import publish as core_publish
@@ -3706,6 +3713,7 @@ def publish(
         result = run_async(core_publish(
             output_dir=output_dir,
             base_url=base_url,
+            site_title=title,
             include_drafts=include_drafts,
             include_archived=include_archived,
             clean=not no_clean,

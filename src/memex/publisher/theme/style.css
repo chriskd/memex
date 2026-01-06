@@ -325,6 +325,8 @@ body::before {
     border-right: 1px solid var(--border-void);
     overflow-y: auto;
     padding: 20px 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .sidebar-header {
@@ -340,6 +342,8 @@ body::before {
 /* Tree navigation */
 .tree {
     padding: 0 8px;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .tree-item {
@@ -395,6 +399,27 @@ body::before {
     margin-left: 14px;
     padding-left: 10px;
     border-left: 1px solid var(--border-void);
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    padding: 16px 20px;
+    border-top: 1px solid var(--border-void);
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    text-align: center;
+}
+
+.sidebar-footer a {
+    color: var(--text-muted);
+    text-decoration: none;
+    opacity: 0.6;
+    transition: opacity var(--duration-fast) ease;
+}
+
+.sidebar-footer a:hover {
+    opacity: 1;
+    color: var(--cyan-glow);
 }
 
 .tree-folder-header {
