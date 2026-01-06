@@ -42,6 +42,3 @@ coverage.xml
 
 # Empty scripts directory
 scripts/
-
-# Generated docs (will be regenerated with memex-only content)
-docs/
