@@ -292,22 +292,55 @@ mx context validate         # Validate context paths
 </code></pre>
 <h2>Publishing</h2>
 <h3>mx publish</h3>
-<p>Generate static HTML site.</p>
-<pre><code class="language-bash">mx publish                           # Build to _site/
-mx publish -o docs                   # Build to docs/
-mx publish --base-url /my-kb         # For subdirectory hosting
-mx publish --include-drafts          # Include draft entries
+<p>Generate static HTML site for GitHub Pages or other static hosting.</p>
+<p><strong>KB Source Resolution:</strong></p>
+<p>The publish command resolves which KB to publish in this order:</p>
+<ol>
+<li><code>--kb-root ./path</code> - explicit CLI override</li>
+<li><code>project_kb</code> in <code>.kbcontext</code> - project-local KB</li>
+<li>Requires <code>--global</code> flag to use <code>MEMEX_KB_ROOT</code></li>
+</ol>
+<p>This prevents accidentally publishing your organizational KB when you meant to publish project docs.</p>
+<pre><code class="language-bash"># Using .kbcontext (recommended)
+mx publish -o docs                   # Uses project_kb from .kbcontext
+
+# Explicit KB source
+mx publish --kb-root ./kb -o docs    # Specify KB directory
+mx publish --global -o docs          # Use global MEMEX_KB_ROOT
+
+# Base URL for subdirectory hosting
+mx publish -o docs --base-url /repo-name   # For username.github.io/repo-name
 </code></pre>
+<p><strong>When to use --base-url:</strong></p>
+<p>If your site is hosted at a subdirectory (e.g., <code>username.github.io/my-repo</code>), you need <code>--base-url /my-repo</code> so all links work correctly. Without it, links will point to the root domain and 404.</p>
+<p><strong>Recommended: Configure in .kbcontext:</strong></p>
+<pre><code class="language-yaml"># .kbcontext
+project_kb: ./kb              # Project's documentation folder
+publish_base_url: /my-repo    # Auto-applied to mx publish
+</code></pre>
+<p>Then just run <code>mx publish -o docs</code> - both settings are applied automatically.</p>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--kb-root, -k</code>: KB source directory</li>
+<li><code>--global</code>: Use global MEMEX_KB_ROOT</li>
+<li><code>--output, -o</code>: Output directory (default: _site)</li>
+<li><code>--base-url, -b</code>: URL prefix for links</li>
+<li><code>--title, -t</code>: Site title</li>
+<li><code>--index, -i</code>: Entry to use as landing page</li>
+<li><code>--include-drafts</code>: Include draft entries</li>
+<li><code>--include-archived</code>: Include archived entries</li>
+</ul>
 <h2>Maintenance</h2>
 <h3>mx reindex</h3>
 <p>Rebuild search indices.</p>
 <pre><code class="language-bash">mx reindex
 </code></pre>
 <h3>mx prime</h3>
-<p>Output agent workflow context (for hooks).</p>
+<p>Output agent workflow context (for Claude Code hooks).</p>
 <pre><code class="language-bash">mx prime                    # Auto-detect mode
 mx prime --full             # Force full output
-mx prime --mcp              # Force minimal output
+mx prime --compact          # Force minimal output (for PreCompact hooks)
+mx prime --project=myapp    # Include recent entries for project
 </code></pre>
 <h2>Global Options</h2>
 <p>All commands support:</p>
