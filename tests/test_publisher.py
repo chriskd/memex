@@ -289,6 +289,28 @@ class TestTemplates:
         assert 'data-tab="tree"' in html
         assert 'data-tab="recent"' in html
 
+    def test_sidebar_heading_with_folders(self, mock_entry):
+        """Sidebar shows 'Categories' when KB has subfolders."""
+        # mock_entry has path "test/entry" (has folder)
+        html = render_entry_page(mock_entry, base_url="", all_entries=[mock_entry])
+        assert '>Categories</div>' in html
+
+    def test_sidebar_heading_flat_structure(self):
+        """Sidebar shows 'Entries' when KB has no subfolders."""
+        flat_entry = MagicMock()
+        flat_entry.title = "Flat Entry"
+        flat_entry.path = "flat-entry"  # No slash = no folder
+        flat_entry.tags = ["test"]
+        flat_entry.html_content = "<p>Content</p>"
+        flat_entry.backlinks = []
+        flat_entry.outlinks = []
+        flat_entry.metadata = MagicMock()
+        flat_entry.metadata.created = date(2024, 1, 15)
+
+        html = render_entry_page(flat_entry, base_url="", all_entries=[flat_entry])
+        assert '>Entries</div>' in html
+        assert '>Categories</div>' not in html
+
     def test_sidebar_js_included(self, mock_entry):
         """Sidebar JavaScript is included in pages."""
         html = render_entry_page(mock_entry, base_url="")

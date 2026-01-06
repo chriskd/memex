@@ -141,6 +141,10 @@ def _build_tabbed_sidebar(entries: list["EntryData"], current_path: str = "", ba
     tree_html = _build_file_tree(entries, current_path, base_url)
     recent_html = _build_recent_list(entries, current_path, base_url)
 
+    # Use "Categories" if KB has subfolders, "Entries" if flat structure
+    has_folders = any("/" in e.path for e in entries)
+    browse_heading = "Categories" if has_folders else "Entries"
+
     return f'''
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="tree">Browse</button>
@@ -148,7 +152,7 @@ def _build_tabbed_sidebar(entries: list["EntryData"], current_path: str = "", ba
             </div>
 
             <div class="sidebar-section" id="tree-section">
-                <div class="sidebar-header">Categories</div>
+                <div class="sidebar-header">{browse_heading}</div>
                 {tree_html}
             </div>
 
