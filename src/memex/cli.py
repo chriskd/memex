@@ -3651,6 +3651,16 @@ def beads_projects(as_json: bool):
 
 @cli.command()
 @click.option(
+    "--kb-root", "-k",
+    type=click.Path(exists=True),
+    help="KB source directory (overrides .kbcontext and MEMEX_KB_ROOT)",
+)
+@click.option(
+    "--global", "use_global",
+    is_flag=True,
+    help="Use global MEMEX_KB_ROOT (required when no --kb-root or project_kb)",
+)
+@click.option(
     "--output", "-o", "output_dir",
     type=click.Path(),
     default="_site",
@@ -3688,6 +3698,8 @@ def beads_projects(as_json: bool):
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def publish(
+    kb_root: str | None,
+    use_global: bool,
     output_dir: str,
     base_url: str,
     title: str,
@@ -3706,15 +3718,57 @@ def publish(
     - Minimal responsive theme with dark mode
 
     \b
+    KB source resolution (in order):
+      1. --kb-root flag (explicit path)
+      2. project_kb in .kbcontext (relative to context file)
+      3. --global flag required to use MEMEX_KB_ROOT
+
+    \b
     Examples:
-      mx publish                           # Build to _site/
-      mx publish -o docs                   # Build to docs/ for GitHub Pages
+      mx publish --kb-root ./kb -o docs    # Publish from local kb/
+      mx publish -o docs                   # Uses .kbcontext project_kb
+      mx publish --global -o docs          # Explicitly use MEMEX_KB_ROOT
       mx publish --base-url /my-kb         # Set base URL for subdirectory hosting
       mx publish --title "My Docs"         # Custom site title
       mx publish --index guides/welcome    # Use entry as landing page
-      mx publish --include-drafts          # Include draft entries
     """
+    from .config import get_kb_root
+    from .context import get_kb_context
     from .core import publish as core_publish
+
+    # Resolve KB source with safety guardrails
+    resolved_kb: Path | None = None
+    source_description = ""
+
+    if kb_root:
+        # Explicit --kb-root flag takes priority
+        resolved_kb = Path(kb_root).resolve()
+        source_description = "--kb-root flag"
+    else:
+        # Try .kbcontext project_kb
+        context = get_kb_context()
+        if context and context.project_kb and context.source_file:
+            project_kb_path = (context.source_file.parent / context.project_kb).resolve()
+            if project_kb_path.exists():
+                resolved_kb = project_kb_path
+                source_description = ".kbcontext project_kb"
+
+    # No local KB found - require --global flag for safety
+    if not resolved_kb:
+        if not use_global:
+            click.echo("Error: No project KB found.", err=True)
+            click.echo("", err=True)
+            click.echo("Options:", err=True)
+            click.echo("  1. Add 'project_kb: ./kb' to .kbcontext", err=True)
+            click.echo("  2. Use --kb-root ./path/to/kb", err=True)
+            click.echo("  3. Use --global to publish from MEMEX_KB_ROOT", err=True)
+            sys.exit(1)
+
+        resolved_kb = get_kb_root()
+        source_description = "MEMEX_KB_ROOT (--global)"
+
+    # Show confirmation message
+    click.echo(f"Publishing from: {resolved_kb} (via {source_description})")
 
     try:
         result = run_async(core_publish(
@@ -3725,6 +3779,7 @@ def publish(
             include_drafts=include_drafts,
             include_archived=include_archived,
             clean=not no_clean,
+            kb_root=resolved_kb,
         ))
     except Exception as e:
         click.echo(f"Error: {_normalize_error_message(str(e))}", err=True)

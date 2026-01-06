@@ -4,12 +4,13 @@ This module provides context-aware behavior when working within a project direct
 A .kbcontext file tells the KB which paths are most relevant for that project.
 
 Example .kbcontext file:
-    primary: projects/memex    # Default write directory
-    paths:                           # Boost these in search (supports globs)
+    project_kb: ./kb             # Project-local KB for publishing (optional)
+    primary: projects/memex      # Default write directory in org KB
+    paths:                       # Boost these in search (supports globs)
       - projects/memex
       - tooling/beads
       - infrastructure/*
-    default_tags:                    # Suggested for new entries
+    default_tags:                # Suggested for new entries
       - memex
 """
 
@@ -56,6 +57,9 @@ class KBContext:
     session_entry: str | None = None
     """Path to session log entry (e.g., 'projects/myapp/sessions.md')."""
 
+    project_kb: str | None = None
+    """Path to project-local KB for publishing (relative to .kbcontext location)."""
+
     @classmethod
     def from_dict(cls, data: dict[str, Any], source_file: Path | None = None) -> "KBContext":
         """Create KBContext from parsed YAML dict."""
@@ -66,6 +70,7 @@ class KBContext:
             project=data.get("project"),
             source_file=source_file,
             session_entry=data.get("session_entry"),
+            project_kb=data.get("project_kb"),
         )
 
     def get_project_name(self) -> str | None:
@@ -296,7 +301,11 @@ def create_default_context(project_name: str, kb_directory: str | None = None) -
     return f"""# .kbcontext - Project knowledge base context
 # This file tells memex which KB entries are relevant to this project.
 
-# Default directory for new entries created from this project
+# Project-local KB for publishing (relative to this file)
+# Uncomment if this project has its own kb/ folder for documentation
+# project_kb: ./kb
+
+# Default directory for new entries created from this project (in org KB)
 primary: {directory}
 
 # Boost these paths in search results (supports * and ** globs)
