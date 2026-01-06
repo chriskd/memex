@@ -143,6 +143,137 @@ mx session-log --message="Fixed auth bug, added tests"
 mx session clear
 ```
 
+## Agent Workflow Examples
+
+### Session Logging Pattern
+
+Maintain a continuous log of work for context recovery and progress tracking:
+
+```bash
+# At session start - create/append to session log
+mx session-log -m 'Started work on feature X' --entry=projects/myapp/sessions.md
+
+# During work - log progress with links to related entries
+mx session-log -m 'Implemented auth module' --tags=auth,progress --links='patterns/oauth2.md'
+
+# At session end - summarize completed and remaining work
+mx session-log -m 'Completed: auth module. TODO: tests' --links='tooling/testing.md'
+```
+
+The session log creates a persistent record that:
+- Helps agents recover context after interruptions
+- Documents decisions and progress for future sessions
+- Links to related KB entries for context
+
+### Incremental Knowledge Capture
+
+Build knowledge entries incrementally as you discover information:
+
+```bash
+# First encounter - create entry with initial knowledge
+mx upsert 'Redis Troubleshooting' \
+  --content='## Connection Timeouts
+
+When Redis connections timeout, check:
+1. Connection pool exhaustion
+2. Network latency
+3. Server load' \
+  --tags=redis,ops,troubleshooting
+
+# Later - add more to same entry (appends by default)
+mx upsert 'Redis Troubleshooting' \
+  --content='## Memory Issues
+
+Redis memory issues typically stem from:
+1. Large key accumulation
+2. Missing TTLs on temporary data
+3. Fragmentation'
+
+# Replace content instead of appending
+mx upsert 'Redis Troubleshooting' \
+  --content='Complete updated guide...' \
+  --replace
+```
+
+Benefits for agents:
+- No need to read-modify-write for simple additions
+- Automatic deduplication prevents duplicate entries
+- `--replace` mode for complete rewrites
+
+### Surgical Content Updates
+
+Make precise edits to existing entries without full rewrites:
+
+```bash
+# Preview before patching (safe mode)
+mx patch guides/deployment.md \
+  --old 'status: draft' \
+  --new 'status: published' \
+  --dry-run
+
+# Apply the change
+mx patch guides/deployment.md \
+  --old 'status: draft' \
+  --new 'status: published'
+
+# Replace all occurrences (e.g., rename a term)
+mx patch reference/api.md \
+  --old 'getUserData' \
+  --new 'fetchUserProfile' \
+  --replace-all
+
+# Create backup before modifying
+mx patch critical-doc.md \
+  --old 'old value' \
+  --new 'new value' \
+  --backup
+```
+
+Use patch when:
+- Making targeted changes to large entries
+- Updating status fields or metadata
+- Renaming terms across a document
+- Fixing typos or updating outdated info
+
+### Context-Aware Operations
+
+Leverage `.kbcontext` for project-scoped operations:
+
+```bash
+# Initialize project context (run once per project)
+mx context init  # Creates .kbcontext in current directory
+
+# With .kbcontext present, entries auto-route to project category
+mx add --title="API Endpoints" --tags=api --content="..."
+# → Creates at projects/myapp/api-endpoints.md
+
+# Search with project boosting
+mx search "authentication"
+# → Project entries rank higher in results
+
+# View project-specific recent changes
+mx whats-new --project=myapp --days=7
+```
+
+### Batch Operations
+
+Process multiple operations efficiently:
+
+```bash
+# Add multiple entries from a directory
+for f in discovered-patterns/*.md; do
+  mx add --title="$(basename $f .md)" --tags=patterns --file="$f"
+done
+
+# Batch tag updates
+mx search "kubernetes" --json | \
+  jq -r '.[].path' | \
+  xargs -I {} mx update {} --tags=k8s,infrastructure
+
+# Export entries matching a query
+mx search "deployment" --full-text | mx export --format=json
+```
+
 ## Best Practices
 
 1. **Search before creating** - Avoid duplicate entries
