@@ -4,6 +4,9 @@
 # This is the documentation that gets published to GitHub Pages
 project_kb: ./kb
 
+# Base URL for GitHub Pages (repo is at chriskd.github.io/memex)
+publish_base_url: /memex
+
 # Where to write new entries in the org KB
 primary: development/memex
 
