@@ -26,6 +26,7 @@ class PublishConfig:
     include_drafts: bool = False
     include_archived: bool = False
     clean: bool = True  # Remove output dir before build
+    site_title: str = "Memex"  # Configurable site title for header and <title>
 
 
 @dataclass
@@ -236,6 +237,7 @@ class SiteGenerator:
             html = render_entry_page(
                 entry=entry,
                 base_url=self.config.base_url,
+                site_title=self.config.site_title,
                 all_entries=all_entries,
                 entries_dict=self.entries,
             )
@@ -246,6 +248,7 @@ class SiteGenerator:
             entries=all_entries,
             tags_index=self.tags_index,
             base_url=self.config.base_url,
+            site_title=self.config.site_title,
         )
         (self.config.output_dir / "index.html").write_text(index_html, encoding="utf-8")
 
@@ -259,6 +262,7 @@ class SiteGenerator:
                 tag=tag,
                 entries=tag_entries,
                 base_url=self.config.base_url,
+                site_title=self.config.site_title,
                 all_entries=all_entries,
             )
             (tags_dir / f"{tag}.html").write_text(tag_html, encoding="utf-8")
@@ -319,6 +323,7 @@ class SiteGenerator:
         # Write graph.html
         graph_html = render_graph_page(
             base_url=self.config.base_url,
+            site_title=self.config.site_title,
             all_entries=list(self.entries.values()),
         )
         (self.config.output_dir / "graph.html").write_text(graph_html, encoding="utf-8")

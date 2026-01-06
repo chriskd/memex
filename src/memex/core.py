@@ -3199,6 +3199,7 @@ async def log_session(
 async def publish(
     output_dir: Path | str | None = None,
     base_url: str = "",
+    site_title: str = "Memex",
     include_drafts: bool = False,
     include_archived: bool = False,
     clean: bool = True,
@@ -3211,6 +3212,7 @@ async def publish(
     Args:
         output_dir: Output directory (default: _site)
         base_url: Base URL prefix for links (e.g., "/my-kb" for subdirectory hosting)
+        site_title: Site title for header and page titles (default: "Memex")
         include_drafts: Include entries with status="draft"
         include_archived: Include entries with status="archived"
         clean: Remove output directory before build (default True)
@@ -3229,6 +3231,7 @@ async def publish(
     config = PublishConfig(
         output_dir=Path(output_dir) if output_dir else Path("_site"),
         base_url=base_url,
+        site_title=site_title,
         include_drafts=include_drafts,
         include_archived=include_archived,
         clean=clean,

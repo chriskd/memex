@@ -226,6 +226,45 @@ class TestTemplates:
         assert "Tag: test" in html
         assert "Test Entry" in html
 
+    def test_render_entry_page_custom_site_title(self, mock_entry):
+        """Custom site title appears in page title and header."""
+        html = render_entry_page(mock_entry, base_url="", site_title="Focusgroup Docs")
+        assert "<title>Test Entry - Focusgroup Docs</title>" in html
+        assert "Focusgroup Docs" in html
+        # Should NOT contain default "Memex" title
+        assert ">Memex<" not in html
+
+    def test_render_index_page_custom_site_title(self, mock_entry):
+        """Index page uses custom site title."""
+        html = render_index_page(
+            [mock_entry],
+            {"test": ["test/entry"]},
+            base_url="",
+            site_title="My KB",
+        )
+        assert "<title>Home - My KB</title>" in html
+        assert ">My KB<" in html
+
+    def test_render_tag_page_custom_site_title(self, mock_entry):
+        """Tag page uses custom site title."""
+        html = render_tag_page("test", [mock_entry], base_url="", site_title="Custom Docs")
+        assert "<title>Tag: test - Custom Docs</title>" in html
+
+    def test_powered_by_footer_present(self, mock_entry):
+        """Powered by memex footer appears in sidebar."""
+        html = render_entry_page(mock_entry, base_url="")
+        assert "Powered by memex" in html
+        assert "github.com/aaronsb/memex" in html
+
+    def test_powered_by_footer_in_index(self, mock_entry):
+        """Powered by footer appears on index page."""
+        html = render_index_page(
+            [mock_entry],
+            {"test": ["test/entry"]},
+            base_url="",
+        )
+        assert "Powered by memex" in html
+
 
 class TestSiteGeneratorIntegration:
     """Integration tests for full site generation."""
@@ -343,3 +382,50 @@ This is a draft.
 
         assert result.entries_published == 1
         assert (output_dir / "draft.html").exists()
+
+    @pytest.mark.asyncio
+    async def test_custom_site_title_in_generated_pages(self, temp_kb, tmp_path):
+        """Custom site_title is used in all generated pages."""
+        from memex.publisher import PublishConfig, SiteGenerator
+
+        output_dir = tmp_path / "site"
+        config = PublishConfig(
+            output_dir=output_dir,
+            base_url="",
+            site_title="My Custom KB",
+        )
+        generator = SiteGenerator(config, temp_kb)
+
+        await generator.generate()
+
+        # Check index page
+        index_html = (output_dir / "index.html").read_text()
+        assert "<title>Home - My Custom KB</title>" in index_html
+        assert ">My Custom KB<" in index_html
+
+        # Check entry page
+        entry_html = (output_dir / "test.html").read_text()
+        assert "- My Custom KB</title>" in entry_html
+
+        # Check graph page
+        graph_html = (output_dir / "graph.html").read_text()
+        assert "<title>Graph - My Custom KB</title>" in graph_html
+
+    @pytest.mark.asyncio
+    async def test_powered_by_footer_in_generated_pages(self, temp_kb, tmp_path):
+        """Powered by memex footer appears in generated pages."""
+        from memex.publisher import PublishConfig, SiteGenerator
+
+        output_dir = tmp_path / "site"
+        config = PublishConfig(output_dir=output_dir, base_url="")
+        generator = SiteGenerator(config, temp_kb)
+
+        await generator.generate()
+
+        # Check index page
+        index_html = (output_dir / "index.html").read_text()
+        assert "Powered by memex" in index_html
+
+        # Check entry page
+        entry_html = (output_dir / "test.html").read_text()
+        assert "Powered by memex" in entry_html
