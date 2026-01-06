@@ -77,6 +77,83 @@ def output(data, as_json: bool = False):
         click.echo(data)
 
 
+def _handle_error(
+    ctx: click.Context,
+    error: Exception,
+    fallback_message: str | None = None,
+) -> None:
+    """Handle an error with optional JSON output.
+
+    If --json-errors is enabled, outputs structured JSON error.
+    Otherwise, outputs human-readable error message.
+
+    Args:
+        ctx: Click context (must have obj["json_errors"] set).
+        error: The exception that occurred.
+        fallback_message: Optional message to use for non-MemexError exceptions.
+    """
+    from .errors import ErrorCode, MemexError, format_error_json
+
+    json_errors = ctx.obj.get("json_errors", False) if ctx.obj else False
+
+    if isinstance(error, MemexError):
+        if json_errors:
+            click.echo(error.to_json(), err=True)
+        else:
+            click.echo(f"Error: {_normalize_error_message(error.message)}", err=True)
+    else:
+        message = fallback_message or str(error)
+        if json_errors:
+            # Map common exceptions to error codes
+            code = _infer_error_code(error, message)
+            click.echo(format_error_json(code, _normalize_error_message(message)), err=True)
+        else:
+            click.echo(f"Error: {_normalize_error_message(message)}", err=True)
+
+    sys.exit(1)
+
+
+def _infer_error_code(error: Exception, message: str) -> "ErrorCode":
+    """Infer an error code from exception type and message.
+
+    Used for backwards compatibility when non-MemexError exceptions are raised.
+    """
+    from .errors import ErrorCode
+
+    message_lower = message.lower()
+
+    # Check exception types first
+    if isinstance(error, FileNotFoundError):
+        return ErrorCode.ENTRY_NOT_FOUND
+    if isinstance(error, PermissionError):
+        return ErrorCode.PERMISSION_DENIED
+
+    # Check message patterns
+    if "not found" in message_lower:
+        return ErrorCode.ENTRY_NOT_FOUND
+    if "already exists" in message_lower:
+        return ErrorCode.ENTRY_EXISTS
+    if "duplicate" in message_lower:
+        return ErrorCode.DUPLICATE_DETECTED
+    if "invalid path" in message_lower or "path escapes" in message_lower:
+        return ErrorCode.INVALID_PATH
+    if "ambiguous" in message_lower:
+        return ErrorCode.AMBIGUOUS_MATCH
+    if "category" in message_lower and ("required" in message_lower or "not found" in message_lower):
+        return ErrorCode.INVALID_CATEGORY
+    if "tag" in message_lower and "required" in message_lower:
+        return ErrorCode.INVALID_TAGS
+    if "index" in message_lower and "unavailable" in message_lower:
+        return ErrorCode.INDEX_UNAVAILABLE
+    if "semantic" in message_lower and ("unavailable" in message_lower or "not available" in message_lower):
+        return ErrorCode.SEMANTIC_SEARCH_UNAVAILABLE
+    if "parse" in message_lower or "frontmatter" in message_lower:
+        return ErrorCode.PARSE_ERROR
+
+    # Default to a generic file error
+    return ErrorCode.FILE_READ_ERROR
+
+
 def _normalize_error_message(message: str) -> str:
     """Normalize core error messages to CLI-friendly guidance."""
     normalized = message.replace("force=True", "--force")
@@ -115,6 +192,45 @@ def _format_missing_category_error(tags: list[str], message: str) -> str:
         "Example: mx add --title=\"...\" --tags=\"...\" --category=... --content=\"...\""
     )
     return "\n".join(lines)
+
+
+def _handle_add_error(ctx: click.Context, error: Exception, tags: list[str]) -> None:
+    """Handle errors from add/quick-add with special category error formatting.
+
+    Supports --json-errors output while preserving the category error guidance
+    for human-readable output.
+    """
+    from .errors import ErrorCode, MemexError
+
+    message = str(error)
+    json_errors = ctx.obj.get("json_errors", False) if ctx.obj else False
+
+    # Special handling for category errors
+    if "Either 'category' or 'directory' must be provided" in message:
+        if json_errors:
+            from . import core
+
+            valid_categories = core.get_valid_categories()
+            tag_set = {tag.strip().lower() for tag in tags if tag.strip()}
+            matches = [cat for cat in valid_categories if cat.lower() in tag_set]
+
+            error = MemexError(
+                ErrorCode.INVALID_CATEGORY,
+                "--category is required",
+                {
+                    "suggestion": "Provide --category or run 'mx context init'",
+                    "available_categories": valid_categories,
+                    "matching_tags": matches if matches else None,
+                    "your_tags": tags,
+                },
+            )
+            click.echo(error.to_json(), err=True)
+        else:
+            click.echo(_format_missing_category_error(tags, message), err=True)
+        sys.exit(1)
+
+    # Use standard error handler for other errors
+    _handle_error(ctx, error)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -295,8 +411,14 @@ def _output_status(
 
 @click.group(invoke_without_command=True)
 @click.version_option(version="0.1.0", prog_name="mx")
+@click.option(
+    "--json-errors",
+    is_flag=True,
+    envvar="MX_JSON_ERRORS",
+    help="Output errors as JSON for programmatic handling",
+)
 @click.pass_context
-def cli(ctx: click.Context):
+def cli(ctx: click.Context, json_errors: bool):
     """mx: Token-efficient CLI for memex knowledge base.
 
     Search, browse, and manage KB entries without MCP context overhead.
@@ -308,7 +430,13 @@ def cli(ctx: click.Context):
       mx info                    # Show KB configuration
       mx tree                    # Browse structure
       mx health                  # Check KB health
+
+    \b
+    For programmatic error handling:
+      mx --json-errors add ...   # Errors output as JSON with error codes
     """
+    ctx.ensure_object(dict)
+    ctx.obj["json_errors"] = json_errors
     if ctx.invoked_subcommand is None:
         _show_status()
 
@@ -793,7 +921,9 @@ def init_kb(
 @click.option("--strict", is_flag=True, help="Return empty results instead of semantic fallbacks")
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--compact", is_flag=True, help="Output minimal JSON (short keys: p, t, s)")
+@click.pass_context
 def search(
+    ctx: click.Context,
     query: str, tags: str | None, mode: str, limit: int,
     content: bool, no_history: bool, as_json: bool, strict: bool,
     terse: bool, compact: bool,
@@ -810,15 +940,12 @@ def search(
       mx search "api" --compact            # Minimal JSON
     """
     from .core import search as core_search
+    from .errors import MemexError
     from .indexer.chroma_index import semantic_deps_available
 
     # Fail early if semantic search requested but deps not installed
     if mode == "semantic" and not semantic_deps_available():
-        raise click.ClickException(
-            "Semantic search requires additional dependencies.\n"
-            "Install with: uv pip install -e '.[semantic]'\n"
-            "Or use --mode=keyword for keyword-only search."
-        )
+        _handle_error(ctx, MemexError.semantic_search_unavailable())
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
@@ -886,7 +1013,8 @@ def search(
 @click.argument("path")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
-def get(path: str, as_json: bool, metadata: bool):
+@click.pass_context
+def get(ctx: click.Context, path: str, as_json: bool, metadata: bool):
     """Read a knowledge base entry.
 
     \b
@@ -900,8 +1028,7 @@ def get(path: str, as_json: bool, metadata: bool):
     try:
         entry = run_async(get_entry(path=path))
     except Exception as e:
-        click.echo(f"Error: {_normalize_error_message(str(e))}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, e)
 
     if as_json:
         output(entry.model_dump(), as_json=True)
@@ -943,7 +1070,9 @@ def get(path: str, as_json: bool, metadata: bool):
 @click.option("--force", is_flag=True, help="Create even if duplicates detected")
 @click.option("--dry-run", is_flag=True, help="Preview path/frontmatter/content without creating")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
 def add(
+    ctx: click.Context,
     title: str,
     tags: str,
     category: str,
@@ -978,14 +1107,22 @@ def add(
     """
     from .core import add_entry, preview_add_entry
 
+    from .errors import ErrorCode, MemexError
+
     # Resolve content source
     if stdin:
         content = sys.stdin.read()
     elif file_path:
         content = Path(file_path).read_text()
     elif not content:
-        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
-        sys.exit(1)
+        _handle_error(
+            ctx,
+            MemexError(
+                ErrorCode.MISSING_REQUIRED_FIELD,
+                "Must provide --content, --file, or --stdin",
+                {"suggestion": "Use --content='...' or --file=path or --stdin"},
+            ),
+        )
 
     tag_list = [t.strip() for t in tags.split(",")]
 
@@ -999,12 +1136,7 @@ def add(
                 force=force,
             ))
         except Exception as e:
-            message = str(e)
-            if "Either 'category' or 'directory' must be provided" in message:
-                click.echo(_format_missing_category_error(tag_list, message), err=True)
-            else:
-                click.echo(f"Error: {_normalize_error_message(message)}", err=True)
-            sys.exit(1)
+            _handle_add_error(ctx, e, tag_list)
 
         if as_json:
             data = preview.model_dump() if hasattr(preview, 'model_dump') else preview
@@ -1068,12 +1200,7 @@ def add(
             force=force,
         ))
     except Exception as e:
-        message = str(e)
-        if "Either 'category' or 'directory' must be provided" in message:
-            click.echo(_format_missing_category_error(tag_list, message), err=True)
-        else:
-            click.echo(f"Error: {_normalize_error_message(message)}", err=True)
-        sys.exit(1)
+        _handle_add_error(ctx, e, tag_list)
 
     if as_json:
         output(result.model_dump() if hasattr(result, 'model_dump') else result, as_json=True)
@@ -1093,8 +1220,7 @@ def add(
                         force=True,
                     ))
                 except Exception as e:
-                    click.echo(f"Error: {_normalize_error_message(str(e))}", err=True)
-                    sys.exit(1)
+                    _handle_add_error(ctx, e, tag_list)
                 if hasattr(result, 'created') and not result.created:
                     _print_duplicates(result)
                 else:
@@ -1341,7 +1467,9 @@ def quick_add(
 @click.option("--append", is_flag=True, help="Append to end instead of replacing")
 @click.option("--timestamp", is_flag=True, help="Add '## YYYY-MM-DD HH:MM UTC' header")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
 def update(
+    ctx: click.Context,
     path: str, tags: str | None, content: str | None,
     file_path: str | None, stdin: bool, append: bool, timestamp: bool, as_json: bool,
 ):
@@ -1359,19 +1487,27 @@ def update(
     """
     from datetime import datetime, timezone
     from .core import update_entry
+    from .errors import ErrorCode, MemexError
 
     # Validate flag combinations
     if timestamp and not append:
-        click.echo("Error: --timestamp requires --append", err=True)
-        sys.exit(1)
+        _handle_error(ctx, MemexError(
+            ErrorCode.INVALID_CONTENT,
+            "--timestamp requires --append",
+            {"suggestion": "Use --append with --timestamp"},
+        ))
 
     if stdin and file_path:
-        click.echo("Error: --stdin and --file are mutually exclusive", err=True)
-        sys.exit(1)
+        _handle_error(ctx, MemexError(
+            ErrorCode.INVALID_CONTENT,
+            "--stdin and --file are mutually exclusive",
+        ))
 
     if stdin and content:
-        click.echo("Error: --stdin and --content are mutually exclusive", err=True)
-        sys.exit(1)
+        _handle_error(ctx, MemexError(
+            ErrorCode.INVALID_CONTENT,
+            "--stdin and --content are mutually exclusive",
+        ))
 
     # Resolve content source
     if stdin:
@@ -1389,8 +1525,7 @@ def update(
     try:
         result = run_async(update_entry(path=path, content=content, tags=tag_list, append=append))
     except Exception as e:
-        click.echo(f"Error: {_normalize_error_message(str(e))}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, e)
 
     if as_json:
         output(result, as_json=True)
