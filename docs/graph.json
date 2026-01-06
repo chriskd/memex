@@ -96,11 +96,11 @@
     },
     {
       "source": "guides/mcp-setup",
-      "target": "guides/installation"
+      "target": "reference/cli"
     },
     {
       "source": "guides/mcp-setup",
-      "target": "reference/cli"
+      "target": "guides/installation"
     },
     {
       "source": "guides/installation",

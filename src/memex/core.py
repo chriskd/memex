@@ -3204,6 +3204,7 @@ async def publish(
     include_drafts: bool = False,
     include_archived: bool = False,
     clean: bool = True,
+    kb_root: Path | str | None = None,
 ) -> dict:
     """Generate static HTML site from knowledge base.
 
@@ -3218,6 +3219,7 @@ async def publish(
         include_drafts: Include entries with status="draft"
         include_archived: Include entries with status="archived"
         clean: Remove output directory before build (default True)
+        kb_root: KB source directory (overrides MEMEX_KB_ROOT if provided)
 
     Returns:
         Dict with:
@@ -3228,7 +3230,7 @@ async def publish(
     """
     from .publisher import PublishConfig, SiteGenerator
 
-    kb_root = get_kb_root()
+    resolved_kb_root = Path(kb_root) if kb_root else get_kb_root()
 
     config = PublishConfig(
         output_dir=Path(output_dir) if output_dir else Path("_site"),
@@ -3240,7 +3242,7 @@ async def publish(
         clean=clean,
     )
 
-    generator = SiteGenerator(config, kb_root)
+    generator = SiteGenerator(config, resolved_kb_root)
     result = await generator.generate()
 
     return {
