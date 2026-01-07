@@ -44,6 +44,25 @@
       "url": "guides/installation.html"
     },
     {
+      "id": "reference/beads",
+      "title": "Beads Integration",
+      "tags": [
+        "reference",
+        "beads",
+        "issue-tracking"
+      ],
+      "url": "reference/beads.html"
+    },
+    {
+      "id": "reference/templates",
+      "title": "Templates Reference",
+      "tags": [
+        "reference",
+        "templates"
+      ],
+      "url": "reference/templates.html"
+    },
+    {
       "id": "reference/entry-format",
       "title": "Entry Format Reference",
       "tags": [
@@ -72,14 +91,10 @@
     },
     {
       "source": "guides/quick-start",
-      "target": "reference/cli"
-    },
-    {
-      "source": "guides/quick-start",
       "target": "reference/entry-format"
     },
     {
-      "source": "guides/ai-integration",
+      "source": "guides/quick-start",
       "target": "reference/cli"
     },
     {
@@ -91,7 +106,7 @@
       "target": "reference/entry-format"
     },
     {
-      "source": "guides/mcp-setup",
+      "source": "guides/ai-integration",
       "target": "reference/cli"
     },
     {
@@ -103,6 +118,14 @@
       "target": "guides/installation"
     },
     {
+      "source": "guides/mcp-setup",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/installation",
+      "target": "guides/mcp-setup"
+    },
+    {
       "source": "guides/installation",
       "target": "guides/quick-start"
     },
@@ -111,8 +134,20 @@
       "target": "reference/cli"
     },
     {
-      "source": "guides/installation",
-      "target": "guides/mcp-setup"
+      "source": "reference/beads",
+      "target": "reference/entry-format"
+    },
+    {
+      "source": "reference/beads",
+      "target": "reference/cli"
+    },
+    {
+      "source": "reference/templates",
+      "target": "reference/entry-format"
+    },
+    {
+      "source": "reference/templates",
+      "target": "reference/cli"
     },
     {
       "source": "reference/entry-format",
