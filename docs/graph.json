@@ -87,11 +87,11 @@
   "edges": [
     {
       "source": "guides/quick-start",
-      "target": "guides/ai-integration"
+      "target": "reference/entry-format"
     },
     {
       "source": "guides/quick-start",
-      "target": "reference/entry-format"
+      "target": "guides/ai-integration"
     },
     {
       "source": "guides/quick-start",
@@ -127,11 +127,11 @@
     },
     {
       "source": "guides/installation",
-      "target": "guides/quick-start"
+      "target": "reference/cli"
     },
     {
       "source": "guides/installation",
-      "target": "reference/cli"
+      "target": "guides/quick-start"
     },
     {
       "source": "reference/beads",
@@ -147,15 +147,15 @@
     },
     {
       "source": "reference/templates",
+      "target": "reference/cli"
+    },
+    {
+      "source": "reference/entry-format",
       "target": "reference/cli"
     },
     {
       "source": "reference/entry-format",
       "target": "guides/quick-start"
-    },
-    {
-      "source": "reference/entry-format",
-      "target": "reference/cli"
     },
     {
       "source": "reference/cli",
