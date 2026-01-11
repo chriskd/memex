@@ -305,14 +305,10 @@ class TestAddValidation:
             # If validation is added, this is the expected path
             assert "tags" in result.output.lower() or "empty" in result.output.lower()
 
-    def test_add_content_and_file_precedence(self, kb_root, index_root, tmp_path):
-        """When both --content and --file provided, --file takes precedence.
-
-        Note: The CLI checks stdin first, then file, then content.
-        So precedence is: --stdin > --file > --content.
-        """
+    def test_add_content_and_file_mutual_exclusivity(self, kb_root, index_root, tmp_path):
+        """--content and --file are mutually exclusive."""
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content wins")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -322,24 +318,16 @@ class TestAddValidation:
                 "--title=Test",
                 "--tags=test",
                 "--category=development",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 f"--file={content_file}",
             ],
         )
 
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-        # Verify --file wins over --content
-        entry_path = kb_root / "development" / "test.md"
-        content = entry_path.read_text()
-        assert "File content wins" in content
-        assert "Inline content ignored" not in content
-
-    def test_add_content_and_stdin_precedence(self, kb_root, index_root):
-        """When both --content and --stdin provided, --stdin takes precedence.
-
-        Note: The CLI checks stdin first, so it wins over --content.
-        """
+    def test_add_content_and_stdin_mutual_exclusivity(self, kb_root, index_root):
+        """--content and --stdin are mutually exclusive."""
         runner = CliRunner()
         result = runner.invoke(
             cli,
@@ -348,27 +336,19 @@ class TestAddValidation:
                 "--title=Test2",
                 "--tags=test",
                 "--category=development",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-        # Verify --stdin wins over --content
-        entry_path = kb_root / "development" / "test2.md"
-        content = entry_path.read_text()
-        assert "Stdin content wins" in content
-        assert "Inline content ignored" not in content
-
-    def test_add_file_and_stdin_precedence(self, kb_root, index_root, tmp_path):
-        """When both --file and --stdin provided, --stdin takes precedence.
-
-        Note: The CLI checks stdin first, so it wins over --file.
-        """
+    def test_add_file_and_stdin_mutual_exclusivity(self, kb_root, index_root, tmp_path):
+        """--file and --stdin are mutually exclusive."""
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content ignored")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -381,24 +361,16 @@ class TestAddValidation:
                 f"--file={content_file}",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-        # Verify --stdin wins over --file
-        entry_path = kb_root / "development" / "test3.md"
-        content = entry_path.read_text()
-        assert "Stdin content wins" in content
-        assert "File content ignored" not in content
-
-    def test_add_all_three_content_sources_precedence(self, kb_root, index_root, tmp_path):
-        """When all three content sources provided, --stdin takes precedence.
-
-        Note: Precedence is --stdin > --file > --content.
-        """
+    def test_add_all_three_content_sources_fails(self, kb_root, index_root, tmp_path):
+        """Providing --content, --file, and --stdin all together fails."""
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content ignored")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -408,21 +380,15 @@ class TestAddValidation:
                 "--title=Test4",
                 "--tags=test",
                 "--category=development",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 f"--file={content_file}",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
-
-        # Verify --stdin wins over both
-        entry_path = kb_root / "development" / "test4.md"
-        content = entry_path.read_text()
-        assert "Stdin content wins" in content
-        assert "File content ignored" not in content
-        assert "Inline content ignored" not in content
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
 
 class TestAddJsonOutput:

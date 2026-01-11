@@ -424,19 +424,15 @@ More content here."""
 
 
 class TestAppendMutualExclusivity:
-    """Tests for content source precedence.
+    """Tests for content source mutual exclusivity."""
 
-    Note: The CLI accepts multiple content sources with precedence order:
-    --stdin > --file > --content. These tests document this actual behavior.
-    """
-
-    def test_append_content_and_file_precedence(self, kb_root, index_root, tmp_path):
-        """When both --content and --file provided, --file takes precedence."""
+    def test_append_content_and_file_mutual_exclusivity(self, kb_root, index_root, tmp_path):
+        """--content and --file are mutually exclusive."""
         entry_path = kb_root / "development" / "my-entry.md"
         _create_entry(entry_path, "My Entry", ["python"], "Original.")
 
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content wins")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -444,18 +440,16 @@ class TestAppendMutualExclusivity:
             [
                 "append",
                 "My Entry",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 f"--file={content_file}",
             ],
         )
 
-        assert result.exit_code == 0
-        updated = entry_path.read_text()
-        assert "File content wins" in updated
-        assert "Inline content ignored" not in updated
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-    def test_append_content_and_stdin_precedence(self, kb_root, index_root):
-        """When both --content and --stdin provided, --stdin takes precedence."""
+    def test_append_content_and_stdin_mutual_exclusivity(self, kb_root, index_root):
+        """--content and --stdin are mutually exclusive."""
         entry_path = kb_root / "development" / "my-entry.md"
         _create_entry(entry_path, "My Entry", ["python"], "Original.")
 
@@ -465,24 +459,22 @@ class TestAppendMutualExclusivity:
             [
                 "append",
                 "My Entry",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
-        updated = entry_path.read_text()
-        assert "Stdin content wins" in updated
-        assert "Inline content ignored" not in updated
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-    def test_append_file_and_stdin_precedence(self, kb_root, index_root, tmp_path):
-        """When both --file and --stdin provided, --stdin takes precedence."""
+    def test_append_file_and_stdin_mutual_exclusivity(self, kb_root, index_root, tmp_path):
+        """--file and --stdin are mutually exclusive."""
         entry_path = kb_root / "development" / "my-entry.md"
         _create_entry(entry_path, "My Entry", ["python"], "Original.")
 
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content ignored")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -493,21 +485,19 @@ class TestAppendMutualExclusivity:
                 f"--file={content_file}",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
-        updated = entry_path.read_text()
-        assert "Stdin content wins" in updated
-        assert "File content ignored" not in updated
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
-    def test_append_all_three_content_sources_precedence(self, kb_root, index_root, tmp_path):
-        """When all three content sources provided, --stdin takes precedence."""
+    def test_append_all_three_content_sources_fails(self, kb_root, index_root, tmp_path):
+        """Providing --content, --file, and --stdin all together fails."""
         entry_path = kb_root / "development" / "my-entry.md"
         _create_entry(entry_path, "My Entry", ["python"], "Original.")
 
         content_file = tmp_path / "content.md"
-        content_file.write_text("File content ignored")
+        content_file.write_text("File content")
 
         runner = CliRunner()
         result = runner.invoke(
@@ -515,18 +505,15 @@ class TestAppendMutualExclusivity:
             [
                 "append",
                 "My Entry",
-                "--content=Inline content ignored",
+                "--content=Inline content",
                 f"--file={content_file}",
                 "--stdin",
             ],
-            input="Stdin content wins",
+            input="Stdin content",
         )
 
-        assert result.exit_code == 0
-        updated = entry_path.read_text()
-        assert "Stdin content wins" in updated
-        assert "File content ignored" not in updated
-        assert "Inline content ignored" not in updated
+        assert result.exit_code == 1
+        assert "only one of" in result.output.lower()
 
 
 class TestAppendEdgeCases:

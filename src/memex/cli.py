@@ -704,14 +704,20 @@ def add(
     """
     from .core import add_entry
 
+    # Validate mutual exclusivity of content sources
+    sources = sum([bool(content), bool(file_path), stdin])
+    if sources > 1:
+        click.echo("Error: Only one of --content, --file, or --stdin can be used", err=True)
+        sys.exit(1)
+    if sources == 0:
+        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
+        sys.exit(1)
+
     # Resolve content source
     if stdin:
         content = sys.stdin.read()
     elif file_path:
         content = Path(file_path).read_text()
-    elif not content:
-        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
-        sys.exit(1)
 
     tag_list = [t.strip() for t in tags.split(",")]
 
@@ -781,14 +787,20 @@ def append(
     """
     from .core import append_entry
 
+    # Validate mutual exclusivity of content sources
+    sources = sum([bool(content), bool(file_path), stdin])
+    if sources > 1:
+        click.echo("Error: Only one of --content, --file, or --stdin can be used", err=True)
+        sys.exit(1)
+    if sources == 0:
+        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
+        sys.exit(1)
+
     # Resolve content source
     if stdin:
         content = sys.stdin.read()
     elif file_path:
         content = Path(file_path).read_text()
-    elif not content:
-        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
-        sys.exit(1)
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
