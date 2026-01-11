@@ -1,5 +1,5 @@
 [project]
-name = "memex"
+name = "memex-kb"
 version = "0.1.0"
 description = "Personal knowledge base with semantic search"
 readme = "README.md"

@@ -6,16 +6,16 @@ This tutorial walks you through a realistic workflow to get productive with Meme
 
 ```bash
 # Recommended: minimal install with keyword search
-uv tool install memex
+uv tool install memex-kb
 
 # Or with pip
-pip install memex
+pip install memex-kb
 
 # Verify installation
 mx --version
 ```
 
-> **Want semantic search?** Install with `uv tool install "memex[semantic]"` instead. This adds ~500MB of ML dependencies but enables meaning-based search.
+> **Want semantic search?** Install with `uv tool install "memex-kb[semantic]"` instead. This adds ~500MB of ML dependencies but enables meaning-based search.
 
 ## 2. Create Your Knowledge Base
 

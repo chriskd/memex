@@ -44,7 +44,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install memex
-        run: pip install memex
+        run: pip install memex-kb
 
       - name: Build static site
         env:
