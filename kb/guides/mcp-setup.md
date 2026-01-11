@@ -338,7 +338,7 @@ MCP tools return structured errors:
 
 | Problem | Diagnosis | Solution |
 |---------|-----------|----------|
-| Server won't start | `memex --version` fails | Reinstall: `uv tool install memex` |
+| Server won't start | `memex --version` fails | Reinstall: `uv tool install memex-kb` |
 | "KB root not found" | `$MEMEX_KB_ROOT` invalid | Check path: `ls $MEMEX_KB_ROOT` |
 | Slow first search | Embedding model loading | Use `MEMEX_PRELOAD=true` |
 

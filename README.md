@@ -27,8 +27,8 @@ With memex:
 
 ```bash
 # Install
-uv tool install memex     # Keyword search only (~100MB)
-uv tool install "memex[semantic]"  # + Semantic search (~600MB)
+uv tool install memex-kb     # Keyword search only (~100MB)
+uv tool install "memex-kb[semantic]"  # + Semantic search (~600MB)
 
 # Initialize
 mkdir -p kb && export MEMEX_KB_ROOT=$(pwd)/kb
@@ -164,14 +164,14 @@ See [MCP Setup Guide](kb/guides/mcp-setup.md) for configuration details and tool
 ### Minimal (Keyword Search)
 
 ```bash
-uv tool install memex    # or: pip install memex
+uv tool install memex-kb    # or: pip install memex-kb
 mx --version
 ```
 
 ### Full (Semantic Search)
 
 ```bash
-uv tool install "memex[semantic]"
+uv tool install "memex-kb[semantic]"
 ```
 
 Adds ~500MB (ChromaDB, sentence-transformers). First search downloads embedding model (~100MB).
