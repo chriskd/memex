@@ -116,19 +116,20 @@ mx update path/entry.md --file=new-content.md
 Surgical find-replace edits.
 
 ```bash
-mx patch path/entry.md --old="old text" --new="new text"
-mx patch path/entry.md --old="TODO" --new="DONE" --replace-all
-mx patch path/entry.md --old="..." --new="..." --dry-run
+mx patch path/entry.md --find="old text" --replace="new text"
+mx patch path/entry.md --find="TODO" --replace="DONE" --replace-all
+mx patch path/entry.md --find="..." --replace="..." --dry-run
 ```
 
-### mx upsert
+### mx append
 
-Create or append to entry by title.
+Append content to existing entry by title, or create new if not found.
 
 ```bash
-mx upsert "Daily Log" --content="Session summary"
-mx upsert "API Docs" --file=api.md --tags="api,docs"
-mx upsert "Debug Log" --content="..." --no-create  # Error if not found
+mx append "Daily Log" --content="Session summary"
+mx append "API Docs" --file=api.md --tags="api,docs"
+mx append "Debug Log" --content="..." --no-create  # Error if not found
+cat notes.md | mx append "Meeting Notes" --stdin --tags="meetings"
 ```
 
 ### mx delete

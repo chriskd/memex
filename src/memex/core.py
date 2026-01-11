@@ -807,6 +807,148 @@ async def add_entry(
     return {"path": rel_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
 
 
+async def append_entry(
+    title: str,
+    content: str,
+    tags: list[str] | None = None,
+    category: str = "",
+    directory: str | None = None,
+    no_create: bool = False,
+    kb_context: KBContext | None = None,
+) -> dict:
+    """Append content to an existing entry by title, or create new if not found.
+
+    This is the 'append' operation - a user-friendly way to add content to an
+    existing entry without knowing its exact path.
+
+    Args:
+        title: Entry title to search for.
+        content: Content to append (or use as initial content for new entries).
+        tags: Tags for new entries (required if creating new entry).
+        category: Category for new entries (e.g., "development").
+        directory: Directory for new entries (takes precedence over category).
+        no_create: If True, error if entry not found instead of creating.
+        kb_context: Optional project context. If not provided, auto-discovered.
+
+    Returns:
+        Dict with 'path', 'action' ('appended' or 'created'), and suggestions.
+
+    Raises:
+        ValueError: If entry not found with no_create=True, or missing required
+                    fields for creating new entry.
+    """
+    kb_root = get_kb_root()
+
+    # Auto-discover KB context if not provided
+    if kb_context is None:
+        kb_context = get_kb_context()
+
+    # Search for existing entry by title
+    existing_entry: Path | None = None
+    existing_path: str | None = None
+
+    for md_file in kb_root.rglob("*.md"):
+        if md_file.name.startswith("_"):
+            continue
+        try:
+            metadata, _, _ = parse_entry(md_file)
+            if metadata.title.lower() == title.lower():
+                existing_entry = md_file
+                existing_path = str(md_file.relative_to(kb_root))
+                break
+        except ParseError:
+            continue
+
+    if existing_entry is None:
+        # Entry not found
+        if no_create:
+            raise ValueError(f"Entry not found with title: {title}")
+
+        # Create new entry - tags are required
+        if not tags:
+            raise ValueError("Tags are required when creating a new entry")
+
+        result = await add_entry(
+            title=title,
+            content=content,
+            tags=tags,
+            category=category,
+            directory=directory,
+            kb_context=kb_context,
+        )
+        result["action"] = "created"
+        return result
+
+    # Entry exists - append content
+    try:
+        metadata, existing_content, _ = parse_entry(existing_entry)
+    except ParseError as e:
+        raise ValueError(f"Failed to parse existing entry: {e}") from e
+
+    # Append content with separator
+    new_content = existing_content.rstrip() + "\n\n" + content
+
+    # Update metadata (preserve tags unless new ones provided)
+    new_tags = tags if tags is not None else list(metadata.tags)
+    if not new_tags:
+        raise ValueError("At least one tag is required")
+
+    updated_metadata = update_metadata_for_edit(
+        metadata,
+        new_tags=new_tags,
+        new_contributor=get_current_contributor(),
+        edit_source=get_current_project(),
+        model=get_llm_model(),
+        git_branch=get_git_branch(),
+        actor=get_actor_identity(),
+    )
+    frontmatter = build_frontmatter(updated_metadata)
+
+    # Write updated file
+    existing_entry.write_text(frontmatter + new_content, encoding="utf-8")
+    rebuild_backlink_cache(kb_root)
+
+    # Reindex
+    searcher = get_searcher()
+    try:
+        searcher.delete_document(existing_path)
+        _, _, chunks = parse_entry(existing_entry)
+        if chunks:
+            normalized_chunks = normalize_chunks(chunks, existing_path)
+            searcher.index_chunks(normalized_chunks)
+    except ParseError as e:
+        log.warning("Appended to entry but failed to re-index %s: %s", existing_path, e)
+    except Exception as e:
+        log.error("Unexpected error re-indexing %s: %s", existing_path, e)
+
+    # Compute suggestions
+    existing_links = set(extract_links(new_content))
+    suggested_links = compute_link_suggestions(
+        title=metadata.title,
+        content=new_content,
+        tags=new_tags,
+        self_path=existing_path,
+        existing_links=existing_links,
+        limit=3,
+        min_score=0.5,
+    )
+
+    suggested_tags = compute_tag_suggestions(
+        title=metadata.title,
+        content=new_content,
+        existing_tags=new_tags,
+        limit=5,
+        min_score=0.3,
+    )
+
+    return {
+        "path": existing_path,
+        "action": "appended",
+        "suggested_links": suggested_links,
+        "suggested_tags": suggested_tags,
+    }
+
+
 async def update_entry(
     path: str,
     content: str | None = None,
@@ -1962,3 +2104,147 @@ async def suggest_links(
         limit=limit,
         min_score=min_score,
     )
+
+
+async def patch_entry(
+    path: str,
+    find_string: str,
+    replace_string: str,
+    replace_all: bool = False,
+    dry_run: bool = False,
+    backup: bool = False,
+) -> dict:
+    """Apply surgical find-replace patch to a KB entry.
+
+    Operates on body content only; frontmatter is preserved unchanged.
+    After successful patch, triggers re-indexing for semantic search.
+
+    Args:
+        path: Path to entry relative to KB root (e.g., "tooling/notes.md").
+        find_string: Exact text to find and replace.
+        replace_string: Replacement text.
+        replace_all: If True, replace all occurrences.
+        dry_run: If True, preview changes without writing.
+        backup: If True, create .bak backup before patching.
+
+    Returns:
+        Dict with:
+            - success: bool
+            - exit_code: int (0=success, 1=not found, 2=ambiguous, 3=file error)
+            - message: str
+            - replacements: int (number of replacements made)
+            - diff: str | None (unified diff if dry_run=True)
+            - match_contexts: list | None (for ambiguous errors)
+            - path: str (relative path, on success)
+    """
+    from .patch import (
+        PatchExitCode,
+        apply_patch,
+        generate_diff,
+        read_file_safely,
+        write_file_atomically,
+    )
+
+    kb_root = get_kb_root()
+    file_path = kb_root / path
+
+    if not file_path.exists():
+        return {
+            "success": False,
+            "exit_code": int(PatchExitCode.FILE_ERROR),
+            "message": f"Entry not found: {path}",
+        }
+
+    if not file_path.is_file():
+        return {
+            "success": False,
+            "exit_code": int(PatchExitCode.FILE_ERROR),
+            "message": f"Path is not a file: {path}",
+        }
+
+    # Read file, separating frontmatter from body
+    frontmatter, body, read_error = read_file_safely(file_path)
+    if read_error:
+        return read_error.to_dict()
+
+    # Apply patch to body only
+    result = apply_patch(
+        content=body,
+        find_string=find_string,
+        replace_string=replace_string,
+        replace_all=replace_all,
+    )
+
+    if not result.success:
+        return result.to_dict()
+
+    # Handle dry-run: return diff without writing
+    if dry_run:
+        diff = generate_diff(body, result.new_content, filename=path)
+        return {
+            "success": True,
+            "exit_code": 0,
+            "message": "Dry run - no changes made",
+            "replacements": result.replacements_made,
+            "diff": diff,
+            "path": path,
+        }
+
+    # Parse existing metadata for update
+    try:
+        metadata, _, _ = parse_entry(file_path)
+    except ParseError as e:
+        return {
+            "success": False,
+            "exit_code": int(PatchExitCode.FILE_ERROR),
+            "message": f"Failed to parse entry metadata: {e}",
+        }
+
+    # Update metadata (updated date, contributor info)
+    updated_metadata = update_metadata_for_edit(
+        metadata,
+        new_tags=list(metadata.tags),  # Preserve tags
+        new_contributor=get_current_contributor(),
+        edit_source=get_current_project(),
+        model=get_llm_model(),
+        git_branch=get_git_branch(),
+        actor=get_actor_identity(),
+    )
+    new_frontmatter = build_frontmatter(updated_metadata)
+
+    # Write atomically
+    write_error = write_file_atomically(
+        path=file_path,
+        frontmatter=new_frontmatter,
+        content=result.new_content,
+        backup=backup,
+    )
+    if write_error:
+        return write_error.to_dict()
+
+    # Rebuild caches
+    rebuild_backlink_cache(kb_root)
+
+    # Reindex for semantic search
+    relative_path = relative_kb_path(kb_root, file_path)
+    searcher = get_searcher()
+    try:
+        # Remove old index entries
+        searcher.delete_document(relative_path)
+        # Parse and index new content
+        _, _, chunks = parse_entry(file_path)
+        if chunks:
+            normalized_chunks = normalize_chunks(chunks, relative_path)
+            searcher.index_chunks(normalized_chunks)
+    except ParseError as e:
+        log.warning("Patched entry but failed to re-index %s: %s", relative_path, e)
+    except Exception as e:
+        log.error("Unexpected error re-indexing %s: %s", relative_path, e)
+
+    return {
+        "success": True,
+        "exit_code": 0,
+        "message": f"Patched {path} ({result.replacements_made} replacement(s))",
+        "replacements": result.replacements_made,
+        "path": relative_path,
+    }
