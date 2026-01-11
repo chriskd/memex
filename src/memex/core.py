@@ -599,6 +599,7 @@ async def search(
     tags: list[str] | None = None,
     include_content: bool = False,
     kb_context: KBContext | None = None,
+    strict: bool = False,
 ) -> SearchResponse:
     """Search the knowledge base.
 
@@ -611,6 +612,9 @@ async def search(
                          Default False (snippet only). Limited to MAX_CONTENT_RESULTS.
         kb_context: Optional project context for path-based boosting.
                     If not provided, auto-discovered from cwd.
+        strict: If True, use a higher similarity threshold to filter out
+                low-confidence semantic matches. Prevents misleading scores
+                for gibberish or unrelated queries.
 
     Returns:
         SearchResponse with results and optional warnings.
@@ -622,7 +626,7 @@ async def search(
     if kb_context is None:
         kb_context = get_kb_context()
     results = searcher.search(
-        query, limit=limit, mode=mode, project_context=project_context, kb_context=kb_context
+        query, limit=limit, mode=mode, project_context=project_context, kb_context=kb_context, strict=strict
     )
     warnings: list[str] = []
 

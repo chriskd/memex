@@ -103,6 +103,23 @@ KB_PATH_CONTEXT_BOOST = 0.12
 
 
 # =============================================================================
+# Semantic Search Thresholds
+# =============================================================================
+
+# Minimum raw semantic similarity score for search results.
+# Results below this threshold are filtered out to prevent misleading high scores
+# for gibberish or unrelated queries. Cosine similarity ranges from -1 to 1,
+# but for normalized embeddings, practical range is 0 to 1.
+# 0.3 filters very weak matches while allowing exploratory searches.
+SEMANTIC_MIN_SIMILARITY = 0.3
+
+# Higher threshold for --strict mode.
+# 0.5 requires moderate similarity, filtering out most speculative matches.
+# Use this when precision matters more than recall.
+SEMANTIC_STRICT_SIMILARITY = 0.5
+
+
+# =============================================================================
 # Link and Tag Suggestions
 # =============================================================================
 

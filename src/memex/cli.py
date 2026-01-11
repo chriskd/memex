@@ -300,6 +300,31 @@ def prime(full: bool, mcp: bool, as_json: bool):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Score Confidence Helpers
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _score_confidence(score: float) -> str:
+    """Return confidence level for a score (for JSON output)."""
+    if score >= 0.7:
+        return "high"
+    elif score >= 0.4:
+        return "moderate"
+    else:
+        return "weak"
+
+
+def _score_confidence_short(score: float) -> str:
+    """Return short confidence label for table output."""
+    if score >= 0.7:
+        return "high"
+    elif score >= 0.4:
+        return "mod"
+    else:
+        return "weak"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Search Command
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -309,18 +334,47 @@ def prime(full: bool, mcp: bool, as_json: bool):
 @click.option("--tags", "-t", help="Filter by tags (comma-separated)")
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
+@click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
+              help="Minimum score threshold (0.0-1.0). Scores: >=0.7 high, 0.4-0.7 moderate, <0.4 weak")
 @click.option("--content", "-c", is_flag=True, help="Include full content in results")
+@click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
+@click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def search(query: str, tags: Optional[str], mode: str, limit: int, content: bool, as_json: bool):
+def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float], content: bool, strict: bool, terse: bool, as_json: bool):
     """Search the knowledge base.
+
+    Scores are normalized to 0.0-1.0 (higher = better match):
+
+    \b
+      >= 0.7  High confidence - strong keyword/semantic match
+      0.4-0.7 Moderate - partial match, worth reviewing
+      < 0.4   Weak - tangential relevance only
+
+    \b
+    Score composition varies by mode:
+      hybrid:   Reciprocal Rank Fusion of keyword + semantic
+      keyword:  BM25 text matching (exact terms matter)
+      semantic: Cosine similarity of embeddings (meaning matters)
+
+    Context boosts (+0.05-0.15) are applied for tag matches and project context.
+
+    The --strict flag prevents semantic search from returning low-confidence results
+    for unrelated queries (e.g., gibberish). Useful when you need precise matches.
 
     \b
     Examples:
       mx search "deployment"
       mx search "docker" --tags=infrastructure
       mx search "api" --mode=semantic --limit=5
+      mx search "config" --min-score=0.5          # Only confident results
+      mx search "query" --strict                  # No semantic fallback
+      mx search "query" --terse                   # Paths only
     """
     from .core import search as core_search
+
+    # Validate query is not empty
+    if not query or not query.strip():
+        raise UsageError("Query cannot be empty.")
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
@@ -330,20 +384,32 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, content: bool
         mode=mode,
         tags=tag_list,
         include_content=content,
+        strict=strict,
     ))
 
+    # Apply min_score filter if specified
+    filtered_results = result.results
+    if min_score is not None:
+        filtered_results = [r for r in result.results if r.score >= min_score]
+
     if as_json:
-        output([{"path": r.path, "title": r.title, "score": r.score, "snippet": r.snippet} for r in result.results], as_json=True)
+        output([{"path": r.path, "title": r.title, "score": r.score, "snippet": r.snippet, "confidence": _score_confidence(r.score)} for r in filtered_results], as_json=True)
+    elif terse:
+        for r in filtered_results:
+            click.echo(r.path)
     else:
-        if not result.results:
-            click.echo("No results found.")
+        if not filtered_results:
+            if min_score is not None and result.results:
+                click.echo(f"No results above score threshold {min_score:.2f}. ({len(result.results)} results filtered out)")
+            else:
+                click.echo("No results found.")
             return
 
         rows = [
-            {"path": r.path, "title": r.title, "score": f"{r.score:.2f}"}
-            for r in result.results
+            {"path": r.path, "title": r.title, "score": f"{r.score:.2f}", "conf": _score_confidence_short(r.score)}
+            for r in filtered_results
         ]
-        click.echo(format_table(rows, ["path", "title", "score"], {"path": 40, "title": 35}))
+        click.echo(format_table(rows, ["path", "title", "score", "conf"], {"path": 40, "title": 30}))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

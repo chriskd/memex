@@ -21,6 +21,7 @@ mx search "docker" --tags=infra      # Filter by tag
 mx search "api" --mode=semantic      # Semantic only
 mx search "api" --mode=keyword       # Keyword only
 mx search "query" --limit=20         # More results
+mx search "query" --min-score=0.5    # Only confident results
 mx search "query" --content          # Include full content
 mx search "query" --strict           # No semantic fallback
 mx search "query" --terse            # Paths only
@@ -31,10 +32,52 @@ mx search "query" --json             # JSON output
 - `--tags, -t`: Filter by tags (comma-separated)
 - `--mode`: Search mode (hybrid, keyword, semantic)
 - `--limit, -n`: Maximum results (default: 10)
+- `--min-score`: Minimum score threshold (0.0-1.0)
 - `--content, -c`: Include full content in results
 - `--strict`: Disable semantic fallback
 - `--terse`: Output paths only
 - `--json`: JSON output
+
+**Notes:**
+- Query cannot be empty. An error is returned for empty or whitespace-only queries.
+
+#### Understanding Search Scores
+
+All search scores are normalized to **0.0-1.0** (higher = better match).
+
+| Score Range | Confidence | Interpretation |
+|-------------|------------|----------------|
+| >= 0.7 | High | Strong keyword or semantic match. Trust this result. |
+| 0.4 - 0.7 | Moderate | Partial match. Worth reviewing but may be tangential. |
+| < 0.4 | Weak | Tangential relevance only. May be noise. |
+
+**How scores are calculated:**
+
+- **Hybrid mode** (default): Combines keyword and semantic search using Reciprocal Rank Fusion (RRF). Results appearing in both rankings score higher.
+- **Keyword mode**: BM25 text matching. Exact term matches matter most.
+- **Semantic mode**: Cosine similarity of embeddings. Conceptual meaning matters more than exact words.
+
+**Score adjustments:**
+
+After initial ranking, scores receive context-aware boosts:
+- **Tag match**: +0.05 per matching tag (e.g., searching "python" boosts entries tagged "python")
+- **Project context**: +0.15 if entry's source_project matches your current project
+- **KB path context**: +0.12 if entry matches patterns in your `.kbcontext` file
+
+Scores are re-normalized to 0-1 after boosts, so the top result is always 1.0.
+
+**Recommended thresholds:**
+
+```bash
+# High-confidence results only (for automated workflows)
+mx search "deployment" --min-score=0.7
+
+# Moderate confidence (good default for exploration)
+mx search "deployment" --min-score=0.4
+
+# All results (when you want broad coverage)
+mx search "deployment"
+```
 
 ### mx history
 

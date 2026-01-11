@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from ..config import EMBEDDING_MODEL, get_index_root
+from ..config import EMBEDDING_MODEL, SEMANTIC_MIN_SIMILARITY, get_index_root
 from ..models import DocumentChunk, SearchResult
 
 log = logging.getLogger(__name__)
@@ -164,15 +164,24 @@ class ChromaIndex:
             metadatas=metadatas,
         )
 
-    def search(self, query: str, limit: int = 10) -> list[SearchResult]:
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        min_similarity: float | None = None,
+    ) -> list[SearchResult]:
         """Search the index semantically.
 
         Args:
             query: Search query string.
             limit: Maximum number of results.
+            min_similarity: Minimum similarity threshold (0-1). Results below this
+                are filtered out. Defaults to SEMANTIC_MIN_SIMILARITY from config.
+                Pass 0.0 to disable filtering.
 
         Returns:
-            List of search results with normalized scores.
+            List of search results with raw similarity scores (not normalized).
+            Scores reflect actual cosine similarity, not relative ranking.
         """
         collection = self._get_collection()
 
@@ -180,13 +189,20 @@ class ChromaIndex:
         if collection.count() == 0:
             return []
 
+        # Use config default if not specified
+        if min_similarity is None:
+            min_similarity = SEMANTIC_MIN_SIMILARITY
+
         # Generate query embedding
         query_embedding = self._embed([query])[0]
+
+        # Fetch extra results to allow for threshold filtering
+        fetch_limit = min(limit * 2, collection.count())
 
         # Search
         results = collection.query(
             query_embeddings=[query_embedding],
-            n_results=min(limit, collection.count()),
+            n_results=fetch_limit,
             include=["documents", "metadatas", "distances"],
         )
 
@@ -207,6 +223,10 @@ class ChromaIndex:
             # Convert cosine distance to similarity score (0-1)
             # Cosine distance is 1 - cosine_similarity, so similarity = 1 - distance
             score = max(0.0, min(1.0, 1.0 - distance))
+
+            # Filter out results below minimum similarity threshold
+            if score < min_similarity:
+                continue
 
             # Create snippet, stripping markdown syntax
             from . import strip_markdown_for_snippet
@@ -236,6 +256,10 @@ class ChromaIndex:
                     source_project=meta.get("source_project") or None,
                 )
             )
+
+            # Stop once we have enough results
+            if len(search_results) >= limit:
+                break
 
         return search_results
 

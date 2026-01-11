@@ -14,6 +14,8 @@ from ..config import (
     KB_PATH_CONTEXT_BOOST,
     PROJECT_CONTEXT_BOOST,
     RRF_K,
+    SEMANTIC_MIN_SIMILARITY,
+    SEMANTIC_STRICT_SIMILARITY,
     TAG_MATCH_BOOST,
     get_kb_root,
 )
@@ -54,6 +56,7 @@ class HybridSearcher:
         mode: SearchMode = "hybrid",
         project_context: str | None = None,
         kb_context: KBContext | None = None,
+        strict: bool = False,
     ) -> list[SearchResult]:
         """Search the knowledge base.
 
@@ -63,6 +66,8 @@ class HybridSearcher:
             mode: Search mode - "hybrid", "keyword", or "semantic".
             project_context: Current project name for context boosting.
             kb_context: Project context for path-based boosting.
+            strict: If True, use higher similarity threshold for semantic search
+                to filter out low-confidence matches.
 
         Returns:
             List of search results, deduplicated by document path.
@@ -70,14 +75,17 @@ class HybridSearcher:
         # Fetch more results to allow for deduplication
         fetch_limit = limit * 3
 
+        # Determine semantic similarity threshold based on strict mode
+        min_similarity = SEMANTIC_STRICT_SIMILARITY if strict else SEMANTIC_MIN_SIMILARITY
+
         if mode == "keyword":
             results = self._whoosh.search(query, limit=fetch_limit)
             results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         elif mode == "semantic":
-            results = self._chroma.search(query, limit=fetch_limit)
+            results = self._chroma.search(query, limit=fetch_limit, min_similarity=min_similarity)
             results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         else:
-            results = self._hybrid_search(query, limit=fetch_limit, project_context=project_context, kb_context=kb_context)
+            results = self._hybrid_search(query, limit=fetch_limit, project_context=project_context, kb_context=kb_context, min_similarity=min_similarity)
 
         # Deduplicate by path, keeping highest-scoring chunk per document
         return self._deduplicate_by_path(results, limit)
@@ -88,6 +96,7 @@ class HybridSearcher:
         limit: int,
         project_context: str | None = None,
         kb_context: KBContext | None = None,
+        min_similarity: float = SEMANTIC_MIN_SIMILARITY,
     ) -> list[SearchResult]:
         """Perform hybrid search using Reciprocal Rank Fusion.
 
@@ -96,6 +105,7 @@ class HybridSearcher:
             limit: Maximum number of results.
             project_context: Current project name for context boosting.
             kb_context: Project context for path-based boosting.
+            min_similarity: Minimum similarity threshold for semantic results.
 
         Returns:
             List of merged search results.
@@ -103,7 +113,7 @@ class HybridSearcher:
         # Get results from both indices (fetch more to have good RRF merge)
         fetch_limit = limit * 3
         whoosh_results = self._whoosh.search(query, limit=fetch_limit)
-        chroma_results = self._chroma.search(query, limit=fetch_limit)
+        chroma_results = self._chroma.search(query, limit=fetch_limit, min_similarity=min_similarity)
 
         # If one index is empty, return the other
         if not whoosh_results and not chroma_results:
