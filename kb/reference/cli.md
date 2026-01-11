@@ -107,10 +107,22 @@ mx history --clear          # Clear history
 Read a knowledge base entry.
 
 ```bash
-mx get tooling/my-entry.md            # Full entry
+mx get tooling/my-entry.md            # Full entry by path
 mx get tooling/my-entry.md --metadata # Metadata only
 mx get tooling/my-entry.md --json     # JSON output
+mx get --title="Docker Guide"         # Get by title
+mx get -t "Python Tooling"            # Short form
 ```
+
+**Options:**
+- `--title, -t`: Get entry by title instead of path (case-insensitive)
+- `--metadata, -m`: Show only metadata
+- `--json`: JSON output
+
+**Title Lookup Behavior:**
+- If one match found: returns that entry
+- If multiple matches: shows error with candidate paths
+- If no match: shows error with similar title suggestions
 
 ### mx list
 
@@ -173,6 +185,18 @@ Surgical find-replace edits.
 mx patch path/entry.md --find="old text" --replace="new text"
 mx patch path/entry.md --find="TODO" --replace="DONE" --replace-all
 mx patch path/entry.md --find="..." --replace="..." --dry-run
+```
+
+**Intent Detection:** If you use flags that suggest a different command (e.g., `--content` without `--find`), the CLI will suggest the correct command:
+
+```bash
+$ mx patch entry.md --content='new stuff'
+Error: --find is required for find-replace operations.
+
+Did you mean:
+  - To append content:  mx append 'Title' --content='...'
+  - To replace text:    mx patch entry.md --find 'x' --replace 'y'
+  - To overwrite entry: mx update entry.md --content='...'
 ```
 
 ### mx append
@@ -270,7 +294,9 @@ Manage project-specific KB context.
 ```bash
 mx context                  # Show current context
 mx context init             # Create .kbcontext file
+mx context init --json      # JSON output
 mx context validate         # Validate context paths
+mx context validate --json  # JSON output
 ```
 
 ## Publishing
@@ -294,6 +320,7 @@ Rebuild search indices.
 
 ```bash
 mx reindex
+mx reindex --json
 ```
 
 ### mx prime
@@ -304,6 +331,49 @@ Output agent workflow context (for hooks).
 mx prime                    # Auto-detect mode
 mx prime --full             # Force full output
 mx prime --mcp              # Force minimal output
+```
+
+### mx schema
+
+Output CLI schema with agent-friendly metadata for introspection.
+
+```bash
+mx schema                    # Full schema (JSON)
+mx schema --command=patch    # Schema for specific command only
+mx schema -c search          # Short form
+mx schema --compact          # Minimal output (commands and options only)
+```
+
+**Schema includes:**
+- All commands with their arguments and options
+- Related commands (cross-references)
+- Common mistakes and how to avoid them
+- Example invocations
+- Recommended workflows
+
+**Use cases:**
+- Agent introspection to understand available commands
+- Proactive error avoidance via common_mistakes field
+- Discovering related commands for a task
+- Understanding option types and defaults
+
+**Example output structure:**
+```json
+{
+  "version": "0.1.0",
+  "commands": {
+    "patch": {
+      "description": "Apply surgical find-replace edits",
+      "options": [...],
+      "related": ["update", "append"],
+      "common_mistakes": {
+        "--find without --replace": "Both are required"
+      },
+      "examples": ["mx patch path.md --find \"old\" --replace \"new\""]
+    }
+  },
+  "workflows": {...}
+}
 ```
 
 ## Global Options

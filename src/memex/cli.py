@@ -399,6 +399,11 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
       mx search "config" --min-score=0.5          # Only confident results
       mx search "query" --strict                  # No semantic fallback
       mx search "query" --terse                   # Paths only
+
+    \b
+    See also:
+      mx get  - Read a specific entry by path
+      mx list - List entries with optional filters
     """
     from .core import search as core_search
 
@@ -474,10 +479,11 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
 
 
 @cli.command()
-@click.argument("path")
+@click.argument("path", required=False)
+@click.option("--title", "-t", "by_title", help="Get entry by title instead of path")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
-def get(path: str, as_json: bool, metadata: bool):
+def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: bool):
     """Read a knowledge base entry.
 
     \b
@@ -485,8 +491,48 @@ def get(path: str, as_json: bool, metadata: bool):
       mx get tooling/beads-issue-tracker.md
       mx get tooling/beads-issue-tracker.md --json
       mx get tooling/beads-issue-tracker.md --metadata
+      mx get --title="Docker Guide"
+      mx get -t "Python Tooling"
+
+    \b
+    See also:
+      mx search - Search entries by query
+      mx list   - List entries with optional filters
     """
-    from .core import get_entry
+    from .core import find_entries_by_title, get_entry, get_similar_titles
+
+    # Validate that exactly one of path or --title is provided
+    if path and by_title:
+        click.echo("Error: Cannot specify both PATH and --title", err=True)
+        sys.exit(1)
+    if not path and not by_title:
+        click.echo("Error: Must specify either PATH or --title", err=True)
+        sys.exit(1)
+
+    # If --title is used, find the entry by title
+    if by_title:
+        matches = run_async(find_entries_by_title(by_title))
+
+        if len(matches) == 0:
+            # No exact match - show suggestions
+            suggestions = run_async(get_similar_titles(by_title))
+            click.echo(f"Error: No entry found with title '{by_title}'", err=True)
+            if suggestions:
+                click.echo("\nDid you mean:", err=True)
+                for suggestion in suggestions:
+                    click.echo(f"  - {suggestion}", err=True)
+            sys.exit(1)
+
+        if len(matches) > 1:
+            # Multiple matches - show candidates
+            click.echo(f"Error: Multiple entries found with title '{by_title}':", err=True)
+            for match in matches:
+                click.echo(f"  - {match['path']}", err=True)
+            click.echo("\nUse the full path to specify which entry.", err=True)
+            sys.exit(1)
+
+        # Single match - use its path
+        path = matches[0]["path"]
 
     try:
         entry = run_async(get_entry(path=path))
@@ -540,6 +586,10 @@ def add(
       mx add --title="My Entry" --tags="foo,bar" --content="# Content here"
       mx add --title="My Entry" --tags="foo,bar" --file=content.md
       cat content.md | mx add --title="My Entry" --tags="foo,bar" --stdin
+
+    \b
+    See also:
+      mx append - Append content to existing entry (or create new)
     """
     from .core import add_entry
 
@@ -611,6 +661,12 @@ def append(
       mx append "API Docs" --file=api.md --tags="api,docs"
       mx append "Debug Log" --content="..." --no-create  # Error if not found
       cat notes.md | mx append "Meeting Notes" --stdin --tags="meetings"
+
+    \b
+    See also:
+      mx patch  - Apply surgical find-replace edits to an entry
+      mx update - Update entry metadata or replace content entirely
+      mx add    - Create a new entry (never appends)
     """
     from .core import append_entry
 
@@ -667,16 +723,42 @@ def append(
 @click.option("--tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
+@click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def update(path: str, tags: Optional[str], content: Optional[str], file_path: Optional[str], as_json: bool):
+def update(
+    path: str,
+    tags: Optional[str],
+    content: Optional[str],
+    file_path: Optional[str],
+    find_flag: Optional[str],
+    replace_flag: Optional[str],
+    as_json: bool,
+):
     """Update an existing knowledge base entry.
 
     \b
     Examples:
       mx update path/entry.md --tags="new,tags"
       mx update path/entry.md --file=updated-content.md
+
+    \b
+    See also:
+      mx patch  - Apply surgical find-replace edits to an entry
+      mx append - Append content to existing entry (or create new)
     """
+    from .cli_intent import detect_update_intent_mismatch
     from .core import update_entry
+
+    # Check for intent mismatch (wrong command based on flags)
+    mismatch = detect_update_intent_mismatch(
+        path=path,
+        find_text=find_flag,
+        replace_text=replace_flag,
+    )
+    if mismatch:
+        click.echo(mismatch.format_error(), err=True)
+        sys.exit(1)
 
     if file_path:
         content = Path(file_path).read_text()
@@ -1014,7 +1096,8 @@ def suggest_links(path: str, limit: int, as_json: bool):
 
 
 @cli.command()
-def reindex():
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def reindex(as_json: bool):
     """Rebuild search indices from all markdown files.
 
     Use this after bulk imports or if search results seem stale.
@@ -1022,12 +1105,23 @@ def reindex():
     \b
     Examples:
       mx reindex
+      mx reindex --json
     """
     from .core import reindex as core_reindex
 
-    click.echo("Reindexing knowledge base...")
+    if not as_json:
+        click.echo("Reindexing knowledge base...")
+
     result = run_async(core_reindex())
-    click.echo(f"✓ Indexed {result.kb_files} entries, {result.whoosh_docs} keyword docs, {result.chroma_docs} semantic docs")
+
+    if as_json:
+        output({
+            "kb_files": result.kb_files,
+            "whoosh_docs": result.whoosh_docs,
+            "chroma_docs": result.chroma_docs,
+        }, as_json=True)
+    else:
+        click.echo(f"✓ Indexed {result.kb_files} entries, {result.whoosh_docs} keyword docs, {result.chroma_docs} semantic docs")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1110,7 +1204,8 @@ def context_status(ctx):
 @click.option("--project", "-p", help="Project name (auto-detected from directory if not provided)")
 @click.option("--directory", "-d", help="KB directory (defaults to projects/<project>)")
 @click.option("--force", "-f", is_flag=True, help="Overwrite existing .kbcontext file")
-def context_init(project: Optional[str], directory: Optional[str], force: bool):
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def context_init(project: Optional[str], directory: Optional[str], force: bool, as_json: bool):
     """Create a new .kbcontext file in the current directory.
 
     \b
@@ -1118,13 +1213,17 @@ def context_init(project: Optional[str], directory: Optional[str], force: bool):
       mx context init
       mx context init --project myapp
       mx context init --project myapp --directory projects/myapp/docs
+      mx context init --json
     """
     from .context import CONTEXT_FILENAME, create_default_context
 
     context_path = Path.cwd() / CONTEXT_FILENAME
 
     if context_path.exists() and not force:
-        click.echo(f"Error: {CONTEXT_FILENAME} already exists. Use --force to overwrite.", err=True)
+        if as_json:
+            output({"error": f"{CONTEXT_FILENAME} already exists. Use --force to overwrite."}, as_json=True)
+        else:
+            click.echo(f"Error: {CONTEXT_FILENAME} already exists. Use --force to overwrite.", err=True)
         sys.exit(1)
 
     # Auto-detect project name from directory
@@ -1134,10 +1233,19 @@ def context_init(project: Optional[str], directory: Optional[str], force: bool):
     content = create_default_context(project, directory)
     context_path.write_text(content, encoding="utf-8")
 
-    click.echo(f"Created {CONTEXT_FILENAME}")
-    click.echo(f"  Primary directory: {directory or f'projects/{project}'}")
-    click.echo(f"  Default tags: {project}")
-    click.echo("\nEdit the file to customize paths and tags.")
+    primary_dir = directory or f"projects/{project}"
+
+    if as_json:
+        output({
+            "created": str(context_path),
+            "primary": primary_dir,
+            "default_tags": [project],
+        }, as_json=True)
+    else:
+        click.echo(f"Created {CONTEXT_FILENAME}")
+        click.echo(f"  Primary directory: {primary_dir}")
+        click.echo(f"  Default tags: {project}")
+        click.echo("\nEdit the file to customize paths and tags.")
 
 
 @context.command("validate")
@@ -1241,6 +1349,8 @@ def delete(path: str, force: bool, as_json: bool):
 @click.option("--replace-all", is_flag=True, help="Replace all occurrences")
 @click.option("--dry-run", is_flag=True, help="Preview changes without writing")
 @click.option("--backup", is_flag=True, help="Create .bak backup before patching")
+@click.option("--content", "content_flag", hidden=True, help="(Intent detection)")
+@click.option("--append", "append_flag", hidden=True, help="(Intent detection)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def patch(
     path: str,
@@ -1251,6 +1361,8 @@ def patch(
     replace_all: bool,
     dry_run: bool,
     backup: bool,
+    content_flag: str | None,
+    append_flag: str | None,
     as_json: bool,
 ):
     """Apply surgical find-replace edits to a KB entry.
@@ -1275,8 +1387,26 @@ def patch(
       mx patch tooling/notes.md --find "TODO" --replace "DONE" --replace-all
       mx patch tooling/notes.md --find-file old.txt --replace-file new.txt
       mx patch tooling/notes.md --find "..." --replace "..." --dry-run
+
+    \b
+    See also:
+      mx append  - Append content to existing entry (or create new)
+      mx update  - Update entry metadata or replace content entirely
     """
+    from .cli_intent import detect_patch_intent_mismatch
     from .core import patch_entry
+
+    # Check for intent mismatch (wrong command based on flags)
+    mismatch = detect_patch_intent_mismatch(
+        path=path,
+        find_text=find_text if not find_file else "provided",
+        replace_text=replace_text,
+        content=content_flag,
+        append=append_flag,
+    )
+    if mismatch:
+        click.echo(mismatch.format_error(), err=True)
+        sys.exit(3)
 
     # Resolve --find input source
     if find_file and find_text:
@@ -1337,6 +1467,453 @@ def patch(
                     click.echo(f"  {ctx['preview']}", err=True)
 
     sys.exit(exit_code)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Schema Command (Agent Introspection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _build_schema() -> dict:
+    """Build the complete CLI schema with agent-friendly metadata.
+
+    Returns a dict containing all commands, their options, related commands,
+    and common mistakes for agent introspection.
+    """
+    schema = {
+        "version": "0.1.0",
+        "description": "Token-efficient CLI for memex knowledge base",
+        "commands": {
+            "search": {
+                "description": "Search the knowledge base with hybrid keyword + semantic search",
+                "aliases": [],
+                "arguments": [
+                    {"name": "query", "required": True, "description": "Search query text"}
+                ],
+                "options": [
+                    {"name": "--tags", "short": "-t", "type": "string", "description": "Filter by tags (comma-separated)"},
+                    {"name": "--mode", "type": "choice", "choices": ["hybrid", "keyword", "semantic"], "default": "hybrid", "description": "Search mode"},
+                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
+                    {"name": "--min-score", "type": "float", "description": "Minimum score threshold (0.0-1.0)"},
+                    {"name": "--content", "short": "-c", "type": "flag", "description": "Include full content in results"},
+                    {"name": "--strict", "type": "flag", "description": "Disable semantic fallback for keyword mode"},
+                    {"name": "--terse", "type": "flag", "description": "Output paths only (one per line)"},
+                    {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["get", "list"],
+                "common_mistakes": {
+                    "empty query": "Query cannot be empty. Provide a non-whitespace search term.",
+                    "--tags without value": "Tags must be comma-separated, e.g., --tags=infra,docker",
+                },
+                "examples": [
+                    "mx search \"deployment\"",
+                    "mx search \"docker\" --tags=infrastructure",
+                    "mx search \"api\" --mode=semantic --limit=5",
+                ],
+            },
+            "get": {
+                "description": "Read a knowledge base entry by path",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                ],
+                "options": [
+                    {"name": "--json", "type": "flag", "description": "Output as JSON with metadata"},
+                    {"name": "--metadata", "short": "-m", "type": "flag", "description": "Show only metadata"},
+                ],
+                "related": ["search", "list"],
+                "common_mistakes": {
+                    "absolute path": "Use relative path from KB root, not absolute filesystem path",
+                    "missing .md extension": "Include the .md extension: 'tooling/entry.md' not 'tooling/entry'",
+                },
+                "examples": [
+                    "mx get tooling/beads-issue-tracker.md",
+                    "mx get tooling/beads-issue-tracker.md --metadata",
+                ],
+            },
+            "add": {
+                "description": "Create a new knowledge base entry",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--title", "short": "-t", "type": "string", "required": True, "description": "Entry title"},
+                    {"name": "--tags", "type": "string", "required": True, "description": "Tags (comma-separated)"},
+                    {"name": "--category", "short": "-c", "type": "string", "description": "Category/directory"},
+                    {"name": "--content", "type": "string", "description": "Content (or use --file/--stdin)"},
+                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["append", "update"],
+                "common_mistakes": {
+                    "missing content source": "Must provide --content, --file, or --stdin",
+                    "tags without value": "Tags are required: --tags=\"tag1,tag2\"",
+                },
+                "examples": [
+                    "mx add --title=\"My Entry\" --tags=\"foo,bar\" --content=\"# Content\"",
+                    "mx add --title=\"My Entry\" --tags=\"foo,bar\" --file=content.md",
+                ],
+            },
+            "append": {
+                "description": "Append content to existing entry by title, or create new if not found",
+                "aliases": [],
+                "arguments": [
+                    {"name": "title", "required": True, "description": "Title of entry to append to (case-insensitive)"}
+                ],
+                "options": [
+                    {"name": "--content", "short": "-c", "type": "string", "description": "Content to append"},
+                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
+                    {"name": "--tags", "short": "-t", "type": "string", "description": "Tags (required for new entries)"},
+                    {"name": "--category", "type": "string", "description": "Category for new entries"},
+                    {"name": "--directory", "short": "-d", "type": "string", "description": "Directory for new entries"},
+                    {"name": "--no-create", "type": "flag", "description": "Error if entry not found"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["add", "update", "patch"],
+                "common_mistakes": {
+                    "using path instead of title": "append takes title, not path. Use 'mx append \"Entry Title\"' not 'mx append path/entry.md'",
+                    "missing content": "Must provide --content, --file, or --stdin",
+                },
+                "examples": [
+                    "mx append \"Daily Log\" --content=\"Session summary\"",
+                    "mx append \"API Docs\" --file=api.md --tags=\"api,docs\"",
+                ],
+            },
+            "update": {
+                "description": "Update metadata or replace content of an existing entry",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                ],
+                "options": [
+                    {"name": "--tags", "type": "string", "description": "New tags (comma-separated)"},
+                    {"name": "--content", "type": "string", "description": "New content (replaces existing)"},
+                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["patch", "append"],
+                "common_mistakes": {
+                    "confusing with append": "update replaces content. Use 'mx append' to add to existing content.",
+                    "confusing with patch": "update replaces entire content. Use 'mx patch' for surgical find-replace.",
+                },
+                "examples": [
+                    "mx update path/entry.md --tags=\"new,tags\"",
+                    "mx update path/entry.md --file=updated-content.md",
+                ],
+            },
+            "patch": {
+                "description": "Apply surgical find-replace edits to a KB entry",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                ],
+                "options": [
+                    {"name": "--find", "type": "string", "description": "Exact text to find and replace"},
+                    {"name": "--replace", "type": "string", "description": "Replacement text"},
+                    {"name": "--find-file", "type": "path", "description": "Read --find text from file"},
+                    {"name": "--replace-file", "type": "path", "description": "Read --replace text from file"},
+                    {"name": "--replace-all", "type": "flag", "description": "Replace all occurrences"},
+                    {"name": "--dry-run", "type": "flag", "description": "Preview changes without writing"},
+                    {"name": "--backup", "type": "flag", "description": "Create .bak backup before patching"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["update", "append"],
+                "common_mistakes": {
+                    "--find without --replace": "Both --find and --replace are required",
+                    "multiple matches without --replace-all": "If text matches multiple times, use --replace-all or provide more context in --find",
+                    "using for append": "patch is for replacement. Use 'mx append' to add content to an entry.",
+                },
+                "exit_codes": {
+                    "0": "Success",
+                    "1": "Text not found",
+                    "2": "Multiple matches (ambiguous, use --replace-all)",
+                    "3": "File error (not found, permission, encoding)",
+                },
+                "examples": [
+                    "mx patch tooling/notes.md --find \"old text\" --replace \"new text\"",
+                    "mx patch tooling/notes.md --find \"TODO\" --replace \"DONE\" --replace-all",
+                ],
+            },
+            "delete": {
+                "description": "Delete a knowledge base entry",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                ],
+                "options": [
+                    {"name": "--force", "short": "-f", "type": "flag", "description": "Delete even if has backlinks"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": [],
+                "common_mistakes": {
+                    "deleting with backlinks": "Entries with backlinks require --force. Check backlinks first with 'mx get path.md --metadata'",
+                },
+                "examples": [
+                    "mx delete path/to/entry.md",
+                    "mx delete path/to/entry.md --force",
+                ],
+            },
+            "list": {
+                "description": "List knowledge base entries with optional filters",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--tag", "short": "-t", "type": "string", "description": "Filter by tag"},
+                    {"name": "--category", "short": "-c", "type": "string", "description": "Filter by category"},
+                    {"name": "--limit", "short": "-n", "type": "integer", "default": 20, "description": "Max results"},
+                    {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["search", "tree", "tags"],
+                "common_mistakes": {
+                    "invalid category": "Category must exist in KB. Use 'mx tree' to see valid categories.",
+                },
+                "examples": [
+                    "mx list",
+                    "mx list --tag=infrastructure",
+                    "mx list --category=tooling --limit=10",
+                ],
+            },
+            "tree": {
+                "description": "Display knowledge base directory structure",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": False, "default": "", "description": "Starting path (default: root)"}
+                ],
+                "options": [
+                    {"name": "--depth", "short": "-d", "type": "integer", "default": 3, "description": "Max depth"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["list"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx tree",
+                    "mx tree tooling --depth=2",
+                ],
+            },
+            "tags": {
+                "description": "List all tags with usage counts",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--min-count", "type": "integer", "default": 1, "description": "Minimum usage count"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["list", "search"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx tags",
+                    "mx tags --min-count=3",
+                ],
+            },
+            "health": {
+                "description": "Audit knowledge base for problems (orphans, broken links, stale content)",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["suggest-links", "hubs"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx health",
+                    "mx health --json",
+                ],
+            },
+            "hubs": {
+                "description": "Show most connected entries (hub notes)",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["health", "suggest-links"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx hubs",
+                    "mx hubs --limit=5",
+                ],
+            },
+            "suggest-links": {
+                "description": "Suggest entries to link to based on semantic similarity",
+                "aliases": [],
+                "arguments": [
+                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                ],
+                "options": [
+                    {"name": "--limit", "short": "-n", "type": "integer", "default": 5, "description": "Max suggestions"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["health", "hubs"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx suggest-links tooling/my-entry.md",
+                ],
+            },
+            "whats-new": {
+                "description": "Show recently created or updated entries",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--days", "short": "-d", "type": "integer", "default": 30, "description": "Look back N days"},
+                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
+                    {"name": "--project", "short": "-p", "type": "string", "description": "Filter by project name"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["list", "search"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx whats-new",
+                    "mx whats-new --days=7 --limit=5",
+                    "mx whats-new --project=myapp",
+                ],
+            },
+            "prime": {
+                "description": "Output agent workflow context for session start (for hooks)",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--full", "type": "flag", "description": "Force full CLI output"},
+                    {"name": "--mcp", "type": "flag", "description": "Force MCP mode (minimal output)"},
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["schema"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx prime",
+                    "mx prime --full",
+                    "mx prime --mcp",
+                ],
+            },
+            "reindex": {
+                "description": "Rebuild search indices from all markdown files",
+                "aliases": [],
+                "arguments": [],
+                "options": [],
+                "related": ["search"],
+                "common_mistakes": {
+                    "running unnecessarily": "Only needed after bulk imports or if search seems stale. Normal operations auto-index.",
+                },
+                "examples": [
+                    "mx reindex",
+                ],
+            },
+            "context": {
+                "description": "Manage project KB context (.kbcontext file)",
+                "aliases": [],
+                "arguments": [],
+                "subcommands": ["show", "init", "validate"],
+                "options": [],
+                "related": ["add", "search"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx context",
+                    "mx context init",
+                    "mx context validate",
+                ],
+            },
+            "schema": {
+                "description": "Output CLI schema with agent-friendly metadata for introspection",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {"name": "--command", "short": "-c", "type": "string", "description": "Show schema for specific command only"},
+                    {"name": "--compact", "type": "flag", "description": "Minimal output (commands and options only)"},
+                ],
+                "related": ["prime"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx schema",
+                    "mx schema --command=patch",
+                    "mx schema --compact",
+                ],
+            },
+        },
+        "global_options": [
+            {"name": "--json-errors", "type": "flag", "description": "Output errors as JSON (for programmatic use)"},
+            {"name": "--version", "type": "flag", "description": "Show version"},
+            {"name": "--help", "type": "flag", "description": "Show help"},
+        ],
+        "workflows": {
+            "search_and_read": {
+                "description": "Find and read an entry",
+                "steps": ["mx search \"query\"", "mx get path/from/results.md"],
+            },
+            "create_entry": {
+                "description": "Create a new KB entry",
+                "steps": ["mx add --title=\"Title\" --tags=\"tag1,tag2\" --content=\"...\""],
+            },
+            "surgical_edit": {
+                "description": "Make precise edits to existing content",
+                "steps": ["mx get path.md  # Read current content", "mx patch path.md --find \"old\" --replace \"new\""],
+            },
+            "append_to_log": {
+                "description": "Add content to an ongoing log entry",
+                "steps": ["mx append \"Log Title\" --content=\"New entry...\""],
+            },
+        },
+    }
+    return schema
+
+
+@cli.command()
+@click.option("--command", "-c", "command_name", help="Show schema for specific command only")
+@click.option("--compact", is_flag=True, help="Minimal output (commands and options only)")
+def schema(command_name: Optional[str], compact: bool):
+    """Output CLI schema with agent-friendly metadata for introspection.
+
+    Provides structured JSON describing all commands, their options,
+    related commands, and common mistakes. Designed for agent tooling
+    to enable proactive error avoidance.
+
+    \b
+    Schema includes:
+    - All commands with their arguments and options
+    - Related commands (cross-references)
+    - Common mistakes and how to avoid them
+    - Example invocations
+    - Recommended workflows
+
+    \b
+    Examples:
+      mx schema                    # Full schema
+      mx schema --command=patch    # Schema for patch command only
+      mx schema --compact          # Minimal output
+    """
+    full_schema = _build_schema()
+
+    if command_name:
+        # Show specific command only
+        if command_name not in full_schema["commands"]:
+            click.echo(f"Error: Unknown command '{command_name}'", err=True)
+            available = ", ".join(sorted(full_schema["commands"].keys()))
+            click.echo(f"Available commands: {available}", err=True)
+            sys.exit(1)
+
+        result = {
+            "command": command_name,
+            **full_schema["commands"][command_name],
+        }
+        output(result, as_json=True)
+    elif compact:
+        # Minimal output - just commands and their options
+        compact_schema = {
+            "version": full_schema["version"],
+            "commands": {},
+        }
+        for cmd, data in full_schema["commands"].items():
+            compact_schema["commands"][cmd] = {
+                "description": data["description"],
+                "arguments": data.get("arguments", []),
+                "options": [opt["name"] for opt in data.get("options", [])],
+            }
+        output(compact_schema, as_json=True)
+    else:
+        # Full schema
+        output(full_schema, as_json=True)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

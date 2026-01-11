@@ -1179,6 +1179,90 @@ async def list_entries(
     return results
 
 
+async def find_entries_by_title(
+    title: str,
+    exact: bool = True,
+) -> list[dict]:
+    """Find KB entries by title.
+
+    Args:
+        title: Title to search for.
+        exact: If True (default), require exact case-insensitive match.
+               If False, include partial matches.
+
+    Returns:
+        List of {path, title, tags} dictionaries for matching entries.
+    """
+    kb_root = get_kb_root()
+
+    if not kb_root.exists():
+        return []
+
+    results = []
+    title_lower = title.lower()
+
+    for md_file in kb_root.rglob("*.md"):
+        # Skip index files
+        if md_file.name.startswith("_"):
+            continue
+
+        try:
+            metadata, _, _ = parse_entry(md_file)
+        except ParseError:
+            continue
+
+        entry_title_lower = metadata.title.lower()
+
+        if exact:
+            if entry_title_lower == title_lower:
+                rel_path = str(md_file.relative_to(kb_root))
+                results.append({
+                    "path": rel_path,
+                    "title": metadata.title,
+                    "tags": metadata.tags,
+                })
+        else:
+            if title_lower in entry_title_lower:
+                rel_path = str(md_file.relative_to(kb_root))
+                results.append({
+                    "path": rel_path,
+                    "title": metadata.title,
+                    "tags": metadata.tags,
+                })
+
+    return results
+
+
+async def get_similar_titles(title: str, limit: int = 5) -> list[str]:
+    """Get titles similar to the given title for suggestions.
+
+    Args:
+        title: Title to find similar matches for.
+        limit: Maximum number of suggestions.
+
+    Returns:
+        List of similar titles.
+    """
+    import difflib
+
+    kb_root = get_kb_root()
+
+    if not kb_root.exists():
+        return []
+
+    all_titles = []
+    for md_file in kb_root.rglob("*.md"):
+        if md_file.name.startswith("_"):
+            continue
+        try:
+            metadata, _, _ = parse_entry(md_file)
+            all_titles.append(metadata.title)
+        except ParseError:
+            continue
+
+    return difflib.get_close_matches(title, all_titles, n=limit, cutoff=0.4)
+
+
 async def whats_new(
     days: int = 30,
     limit: int = 10,
