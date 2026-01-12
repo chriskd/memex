@@ -1,7 +1,12 @@
 ---
 title: Focusgroup Agent UX Evaluation (2026-01)
-tags: [focusgroup, agent-ux, evaluation, cli]
-created: 2026-01-11
+description: Comprehensive evaluation of mx CLI agent usability using focusgroup - 5 sessions with 12 total agents (8 Claude, 4 GPT).
+tags:
+  - focusgroup
+  - agent-ux
+  - evaluation
+  - cli
+created: 2026-01-11T00:00:00
 ---
 
 # Focusgroup Agent UX Evaluation (2026-01)
