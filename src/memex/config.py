@@ -19,7 +19,7 @@ def get_kb_root() -> Path:
 
     Discovery order:
     1. MEMEX_KB_ROOT environment variable (explicit override)
-    2. Walk up from cwd looking for kb/.kbconfig (project scope)
+    2. Walk up from cwd looking for .kbconfig with kb_path field
     3. ~/.memex/kb/ if it exists with .kbconfig (user scope)
     4. Error with helpful message
 
@@ -31,10 +31,11 @@ def get_kb_root() -> Path:
     if root:
         return Path(root)
 
-    # 2. Look for project-scope KB (walk up from cwd)
-    project_kb = _discover_project_kb()
-    if project_kb:
-        return project_kb
+    # 2. Look for .kbconfig at project root with kb_path
+    project_config = _discover_project_config()
+    if project_config:
+        config_path, kb_path = project_config
+        return kb_path
 
     # 3. Check for user-scope KB
     user_kb = Path.home() / ".memex" / "kb"
@@ -50,22 +51,32 @@ def get_kb_root() -> Path:
     )
 
 
-def _discover_project_kb(start_dir: Path | None = None, max_depth: int = 10) -> Path | None:
-    """Walk up from start_dir looking for kb/.kbconfig.
+def _discover_project_config(start_dir: Path | None = None, max_depth: int = 10) -> tuple[Path, Path] | None:
+    """Walk up from start_dir looking for .kbconfig with kb_path.
 
     Args:
         start_dir: Directory to start from (defaults to cwd)
         max_depth: Maximum directories to traverse up
 
     Returns:
-        Path to KB root if found, None otherwise.
+        Tuple of (config_path, kb_path) if found, None otherwise.
     """
+    import yaml
+
     current = Path(start_dir or os.getcwd()).resolve()
 
     for _ in range(max_depth):
-        kb_dir = current / "kb"
-        if (kb_dir / ".kbconfig").exists():
-            return kb_dir
+        config_file = current / ".kbconfig"
+        if config_file.exists():
+            try:
+                content = config_file.read_text(encoding="utf-8")
+                data = yaml.safe_load(content) or {}
+                if "kb_path" in data:
+                    kb_path = (current / data["kb_path"]).resolve()
+                    if kb_path.exists() and kb_path.is_dir():
+                        return (config_file, kb_path)
+            except (OSError, yaml.YAMLError):
+                pass
 
         parent = current.parent
         if parent == current:  # Reached filesystem root

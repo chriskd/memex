@@ -820,8 +820,9 @@ This keeps project-specific knowledge close to the code.
     readme_path.write_text(readme_content, encoding="utf-8")
 
     # Create config file with scope-appropriate defaults
-    config_path = kb_path / LOCAL_KB_CONFIG_FILENAME
     if user:
+        # User scope: config lives inside the KB directory
+        config_path = kb_path / LOCAL_KB_CONFIG_FILENAME
         config_content = """# User KB Configuration
 # This file marks this directory as your personal memex knowledge base
 
@@ -834,14 +835,33 @@ This keeps project-specific knowledge close to the code.
 #   - "*.draft.md"
 """
     else:
+        # Project scope: config lives at project root with kb_path reference
+        config_path = Path.cwd() / ".kbconfig"
+        # Calculate relative path from project root to kb directory
+        try:
+            relative_kb_path = kb_path.relative_to(Path.cwd())
+        except ValueError:
+            # If kb_path is not under cwd, use absolute path
+            relative_kb_path = kb_path
         config_content = f"""# Project KB Configuration
-# This file marks this directory as a project memex knowledge base
+# This file configures the project knowledge base
+
+# Path to the KB directory (required for project-scope KBs)
+kb_path: ./{relative_kb_path}
 
 # Optional: default tags for entries created here
 # default_tags:
 #   - {Path.cwd().name}
 
-# Optional: exclude patterns (glob)
+# Optional: default write directory for new entries
+# primary: guides
+
+# Optional: boost these paths in search (glob patterns)
+# boost_paths:
+#   - guides/*
+#   - reference/*
+
+# Optional: exclude patterns from indexing (glob)
 # exclude:
 #   - "*.draft.md"
 """
@@ -849,15 +869,22 @@ This keeps project-specific knowledge close to the code.
 
     # Output
     scope_label = "user" if user else "project"
+    if user:
+        files_created = [f"kb/README.md", f"kb/{LOCAL_KB_CONFIG_FILENAME}"]
+    else:
+        files_created = [f"{kb_path.name}/README.md", ".kbconfig"]
+
     if as_json:
         output({
             "created": str(kb_path),
+            "config": str(config_path),
             "scope": scope_label,
-            "files": ["README.md", LOCAL_KB_CONFIG_FILENAME],
+            "files": files_created,
             "hint": f"Use 'mx add' to add entries to this KB"
         }, as_json=True)
     else:
         click.echo(f"✓ Initialized {scope_label} KB at {kb_path}")
+        click.echo(f"  Config: {config_path}")
         click.echo()
         click.echo("Next steps:")
         if user:

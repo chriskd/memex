@@ -23,9 +23,6 @@ from .config import MAX_CONTEXT_SEARCH_DEPTH
 
 import yaml
 
-# Context filename (for global KB routing) - DEPRECATED, use scopes instead
-CONTEXT_FILENAME = ".kbcontext"
-
 # KB config filename (marks a directory as a KB root)
 LOCAL_KB_CONFIG_FILENAME = ".kbconfig"
 
@@ -222,12 +219,12 @@ def matches_glob(path: str, pattern: str) -> bool:
 
 
 def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
-    """Walk up from start_dir to find and parse .kbcontext file.
+    """Walk up from start_dir to find and parse .kbconfig file.
 
     Discovery order:
     1. Check VL_KB_CONTEXT environment variable for explicit path
-    2. Walk up from start_dir (or cwd) looking for .kbcontext
-    3. Stop at first .kbcontext file found
+    2. Walk up from start_dir (or cwd) looking for .kbconfig
+    3. Stop at first config file found
 
     Args:
         start_dir: Directory to start searching from. Defaults to cwd.
@@ -240,20 +237,20 @@ def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
     if env_context:
         context_path = Path(env_context)
         if context_path.exists():
-            return _load_context_file(context_path)
+            return _load_kbconfig_as_context(context_path)
         # Env var set but file doesn't exist - treat as no context
         return None
 
-    # Walk up from start_dir looking for .kbcontext
+    # Walk up from start_dir looking for .kbconfig
     current = (start_dir or Path.cwd()).resolve()
-
-    # Prevent infinite loop - stop at filesystem root
     depth = 0
 
     while depth < MAX_CONTEXT_SEARCH_DEPTH:
-        context_file = current / CONTEXT_FILENAME
-        if context_file.exists():
-            return _load_context_file(context_file)
+        kbconfig_file = current / ".kbconfig"
+        if kbconfig_file.exists():
+            context = _load_kbconfig_as_context(kbconfig_file)
+            if context:
+                return context
 
         # Move up one directory
         parent = current.parent
@@ -266,23 +263,34 @@ def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
     return None
 
 
-def _load_context_file(context_path: Path) -> KBContext | None:
-    """Load and parse a .kbcontext file.
+def _load_kbconfig_as_context(config_path: Path) -> KBContext | None:
+    """Load .kbconfig and convert to KBContext.
+
+    The new .kbconfig format supports all context fields plus kb_path.
 
     Args:
-        context_path: Path to the .kbcontext file.
+        config_path: Path to the .kbconfig file.
 
     Returns:
         KBContext if valid, None if parsing fails.
     """
     try:
-        content = context_path.read_text(encoding="utf-8")
+        content = config_path.read_text(encoding="utf-8")
         data = yaml.safe_load(content)
 
         if not isinstance(data, dict):
             return None
 
-        return KBContext.from_dict(data, source_file=context_path)
+        # Map .kbconfig fields to KBContext fields
+        # boost_paths in new format -> paths in KBContext
+        context_data = {
+            "primary": data.get("primary"),
+            "paths": data.get("boost_paths", []),
+            "default_tags": data.get("default_tags", []),
+            "project": data.get("project"),
+        }
+
+        return KBContext.from_dict(context_data, source_file=config_path)
 
     except (OSError, yaml.YAMLError):
         return None
@@ -383,36 +391,3 @@ def validate_context(context: KBContext, kb_root: Path) -> list[str]:
                 )
 
     return warnings
-
-
-def create_default_context(project_name: str, kb_directory: str | None = None) -> str:
-    """Generate default .kbcontext content for a new project.
-
-    Args:
-        project_name: Name of the project.
-        kb_directory: Optional KB directory path (e.g., 'projects/myapp').
-
-    Returns:
-        YAML content for .kbcontext file.
-    """
-    directory = kb_directory or f"projects/{project_name}"
-
-    return f"""# .kbcontext - Project knowledge base context
-# This file tells memex which KB entries are relevant to this project.
-
-# Default directory for new entries created from this project
-primary: {directory}
-
-# Boost these paths in search results (supports * and ** globs)
-paths:
-  - {directory}
-  # - tooling/*
-  # - infrastructure/**
-
-# Suggested tags for new entries
-default_tags:
-  - {project_name}
-
-# Override auto-detected project name (optional)
-# project: {project_name}
-"""
