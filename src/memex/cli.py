@@ -976,7 +976,14 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
       mx get  - Read a specific entry by path
       mx list - List entries with optional filters
     """
+    from .config import ConfigurationError, get_kb_root
     from .core import search as core_search
+
+    try:
+        get_kb_root()  # Validate KB is configured
+    except ConfigurationError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     # Validate query is not empty
     if not query or not query.strip():
@@ -1555,7 +1562,14 @@ def health(as_json: bool):
       mx health
       mx health --json
     """
+    from .config import ConfigurationError, get_kb_root
     from .core import health as core_health
+
+    try:
+        get_kb_root()  # Validate KB is configured
+    except ConfigurationError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     result = run_async(core_health())
 
@@ -1739,7 +1753,14 @@ def reindex(scope: Optional[str], as_json: bool):
       mx reindex --scope=project # Index project KB only
       mx reindex --json
     """
+    from .config import ConfigurationError, get_kb_root
     from .core import reindex as core_reindex
+
+    try:
+        get_kb_root()  # Validate KB is configured
+    except ConfigurationError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     if not as_json:
         scope_msg = f"{scope} KB" if scope else "all KBs"

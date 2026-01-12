@@ -109,9 +109,11 @@ def test_version_option(runner):
 class TestSearchCommand:
     """Tests for 'mx search' command."""
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_search_returns_results(self, mock_run_async, runner):
+    def test_search_returns_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search returns results for valid query."""
+        mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
         mock_result.results = [
             MagicMock(
@@ -129,9 +131,11 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "tooling/test.md" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_search_no_results(self, mock_run_async, runner):
+    def test_search_no_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search handles no results gracefully."""
+        mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
         mock_result.results = []
         mock_run_async.return_value = mock_result
@@ -141,9 +145,11 @@ class TestSearchCommand:
         assert result.exit_code == 0
         assert "No results found" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_search_json_output(self, mock_run_async, runner):
+    def test_search_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search --json outputs valid JSON."""
+        mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
         mock_result.results = [
             MagicMock(
@@ -163,9 +169,11 @@ class TestSearchCommand:
         assert isinstance(data, list)
         assert data[0]["path"] == "test.md"
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_search_terse_output(self, mock_run_async, runner):
+    def test_search_terse_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search --terse outputs only paths."""
+        mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
         mock_result.results = [
             MagicMock(path="a.md", title="A", score=0.9, snippet="..."),
@@ -183,6 +191,22 @@ class TestSearchCommand:
         """Search fails with missing query argument."""
         result = runner.invoke(cli, ["search"])
         assert result.exit_code != 0
+
+    def test_search_no_kb_configured(self, runner):
+        """Search shows friendly error when no KB configured."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError(
+                "No knowledge base found. Options:\n"
+                "  1. Run 'mx init' to create a project KB at ./kb/\n"
+                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/"
+            )
+
+            result = runner.invoke(cli, ["search", "test"])
+
+            assert result.exit_code == 1
+            assert "No knowledge base found" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -766,9 +790,11 @@ class TestHubsCommand:
 class TestHealthCommand:
     """Tests for 'mx health' command."""
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_health_shows_status(self, mock_run_async, runner):
+    def test_health_shows_status(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health shows KB health status."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = {
             "summary": {"health_score": 95, "total_entries": 100},
             "orphans": [],
@@ -783,9 +809,11 @@ class TestHealthCommand:
         assert "Health Score: 95/100" in result.output
         assert "Total Entries: 100" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_health_with_issues(self, mock_run_async, runner):
+    def test_health_with_issues(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health reports found issues."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = {
             "summary": {"health_score": 70, "total_entries": 50},
             "orphans": [{"path": "orphan.md"}],
@@ -800,9 +828,11 @@ class TestHealthCommand:
         assert "Orphaned entries" in result.output
         assert "Broken links" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_health_json_output(self, mock_run_async, runner):
+    def test_health_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health --json outputs valid JSON."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = {
             "summary": {"health_score": 100, "total_entries": 10},
             "orphans": [],
@@ -816,6 +846,22 @@ class TestHealthCommand:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data["summary"]["health_score"] == 100
+
+    def test_health_no_kb_configured(self, runner):
+        """Health shows friendly error when no KB configured."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError(
+                "No knowledge base found. Options:\n"
+                "  1. Run 'mx init' to create a project KB at ./kb/\n"
+                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/"
+            )
+
+            result = runner.invoke(cli, ["health"])
+
+            assert result.exit_code == 1
+            assert "No knowledge base found" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -867,9 +913,11 @@ class TestInitCommand:
 class TestReindexCommand:
     """Tests for 'mx reindex' command."""
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_reindex_success(self, mock_run_async, runner):
+    def test_reindex_success(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Reindex reports indexed entries."""
+        mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
         mock_result.kb_files = 50
         mock_result.whoosh_docs = 50
@@ -880,6 +928,22 @@ class TestReindexCommand:
 
         assert result.exit_code == 0
         assert "Indexed 50 entries" in result.output
+
+    def test_reindex_no_kb_configured(self, runner):
+        """Reindex shows friendly error when no KB configured."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError(
+                "No knowledge base found. Options:\n"
+                "  1. Run 'mx init' to create a project KB at ./kb/\n"
+                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/"
+            )
+
+            result = runner.invoke(cli, ["reindex"])
+
+            assert result.exit_code == 1
+            assert "No knowledge base found" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
