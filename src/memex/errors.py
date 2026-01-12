@@ -223,7 +223,7 @@ class MemexError(Exception):
             code=ErrorCode.KB_NOT_CONFIGURED,
             message="Knowledge base not configured",
             details={
-                "suggestion": "Set MEMEX_KB_ROOT environment variable or run 'mx init'"
+                "suggestion": "Set MEMEX_USER_KB_ROOT environment variable or run 'mx init'"
             },
         )
 

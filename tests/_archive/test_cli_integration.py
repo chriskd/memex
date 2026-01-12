@@ -68,7 +68,7 @@ Content for another entry with link to [[tooling/sample.md]].
     (kb_root / "projects" / "myapp" / "readme.md").write_text(another_entry)
 
     # Set environment
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
     return kb_root
 
@@ -303,7 +303,7 @@ class TestInitCommand:
         kb_root = tmp_path / "new-kb"
 
         # Clear environment to simulate fresh setup
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root), "--no-context"])
@@ -321,7 +321,7 @@ class TestInitCommand:
         kb_root.mkdir()
         (kb_root / "projects").mkdir()  # Make it non-empty
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root), "--no-context"])
@@ -336,7 +336,7 @@ class TestInitCommand:
         kb_root.mkdir()
         (kb_root / "projects").mkdir()
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root), "--force", "--no-context"])
@@ -347,29 +347,29 @@ class TestInitCommand:
         assert (kb_root / "infrastructure").exists()
 
     def test_init_uses_env_var_when_set(self, tmp_path, runner, monkeypatch):
-        """Test init uses MEMEX_KB_ROOT when set."""
+        """Test init uses MEMEX_USER_KB_ROOT when set."""
         kb_root = tmp_path / "env-kb"
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--no-context"])
 
         assert result.exit_code == 0
         assert kb_root.exists()
-        # When MEMEX_KB_ROOT is set, no export instruction needed
-        assert 'export MEMEX_KB_ROOT' not in result.output
+        # When MEMEX_USER_KB_ROOT is set, no export instruction needed
+        assert 'export MEMEX_USER_KB_ROOT' not in result.output
 
     def test_init_shows_env_export_instructions(self, tmp_path, runner, monkeypatch):
         """Test init shows environment variable instructions when not set."""
         kb_root = tmp_path / "new-kb"
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root), "--no-context"])
 
         assert result.exit_code == 0
-        assert "export MEMEX_KB_ROOT" in result.output
+        assert "export MEMEX_USER_KB_ROOT" in result.output
         assert "shell profile" in result.output
 
     def test_init_creates_index_root(self, tmp_path, runner, monkeypatch):
@@ -377,7 +377,7 @@ class TestInitCommand:
         kb_root = tmp_path / "kb"
         index_root = tmp_path / "indices"
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(
@@ -402,7 +402,7 @@ class TestInitCommand:
         (project_dir / ".git").mkdir()
 
         monkeypatch.chdir(project_dir)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root)])
@@ -422,7 +422,7 @@ class TestInitCommand:
         (project_dir / ".git").mkdir()
 
         monkeypatch.chdir(project_dir)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         # User accepts .kbcontext creation
@@ -444,7 +444,7 @@ class TestInitCommand:
         (project_dir / ".git").mkdir()
 
         monkeypatch.chdir(project_dir)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         # User declines .kbcontext creation
@@ -470,7 +470,7 @@ class TestInitCommand:
         )
 
         monkeypatch.chdir(git_repo)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         # Accept .kbcontext creation
@@ -491,7 +491,7 @@ class TestInitCommand:
 
         # No .git or package.json - not detected as project
         monkeypatch.chdir(regular_dir)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root)])
@@ -510,7 +510,7 @@ class TestInitCommand:
         # Make parent read-only so we can't create kb_root
         readonly_parent.chmod(0o444)
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         try:
@@ -529,7 +529,7 @@ class TestInitCommand:
         # Nested path where parents don't exist
         kb_root = tmp_path / "deeply" / "nested" / "kb"
 
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         result = runner.invoke(cli, ["init", "--kb-root", str(kb_root), "--no-context"])
@@ -548,7 +548,7 @@ class TestInitCommand:
         (project_dir / "pyproject.toml").write_text('[project]\nname = "myapp"\n')
 
         monkeypatch.chdir(project_dir)
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         # Accept .kbcontext creation

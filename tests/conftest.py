@@ -74,7 +74,7 @@ def runner() -> CliRunner:
 def tmp_kb(tmp_path: Path) -> Generator[Path, None, None]:
     """Create isolated KB directory with basic structure.
 
-    Sets MEMEX_KB_ROOT to temp directory, creates required structure,
+    Sets MEMEX_USER_KB_ROOT to temp directory, creates required structure,
     yields the path, then cleans up.
 
     Usage:
@@ -100,8 +100,8 @@ tags:
     (kb_root / ".kb-indices").mkdir()
 
     # Store original and set test env
-    original_kb_root = os.environ.get("MEMEX_KB_ROOT")
-    os.environ["MEMEX_KB_ROOT"] = str(kb_root)
+    original_kb_root = os.environ.get("MEMEX_USER_KB_ROOT")
+    os.environ["MEMEX_USER_KB_ROOT"] = str(kb_root)
 
     # Clear any cached KB context
     try:
@@ -122,9 +122,9 @@ tags:
 
     # Restore
     if original_kb_root is not None:
-        os.environ["MEMEX_KB_ROOT"] = original_kb_root
+        os.environ["MEMEX_USER_KB_ROOT"] = original_kb_root
     else:
-        os.environ.pop("MEMEX_KB_ROOT", None)
+        os.environ.pop("MEMEX_USER_KB_ROOT", None)
 
     # Clear cache again
     try:
@@ -201,7 +201,7 @@ def cli_invoke(runner: CliRunner, tmp_kb: Path):
             args,
             input=input,
             catch_exceptions=catch_exceptions,
-            env={"MEMEX_KB_ROOT": str(tmp_kb)}
+            env={"MEMEX_USER_KB_ROOT": str(tmp_kb)}
         )
     return _invoke
 

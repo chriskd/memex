@@ -15,6 +15,7 @@ Usage:
 import asyncio
 import difflib
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -442,7 +443,7 @@ def _output_status(
     else:
         lines.append("KB Root: NOT CONFIGURED")
         lines.append("")
-        lines.append("Set MEMEX_KB_ROOT and MEMEX_INDEX_ROOT environment variables")
+        lines.append("Set MEMEX_USER_KB_ROOT environment variable or run 'mx init'")
         lines.append("to point to your knowledge base directory.")
 
     # Recent entries section
@@ -2381,7 +2382,6 @@ def info(as_json: bool):
     # Get all active KBs
     project_kb = get_project_kb_root()
     user_kb = get_user_kb_root()
-    all_kbs = get_kb_roots()
 
     # Count entries per KB
     def count_entries(kb_path):
@@ -3285,7 +3285,7 @@ def schema(command_name: Optional[str], compact: bool):
 @click.option(
     "--kb-root", "-k",
     type=click.Path(exists=True),
-    help="KB source directory (overrides .kbcontext and MEMEX_KB_ROOT)",
+    help="KB source directory (overrides auto-detected KB)",
 )
 @click.option(
     "--scope", "-s",

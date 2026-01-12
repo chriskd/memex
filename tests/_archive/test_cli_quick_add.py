@@ -24,7 +24,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     for category in ("development", "architecture", "devops"):
         (root / category).mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -535,8 +535,8 @@ class TestErrorCases:
     """Test error handling in quick-add."""
 
     def test_missing_kb_root_error(self, tmp_path, monkeypatch, index_root):
-        """Reports error when MEMEX_KB_ROOT not set."""
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        """Reports error when MEMEX_USER_KB_ROOT not set."""
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
 
         runner = CliRunner()
         result = runner.invoke(
@@ -551,7 +551,7 @@ class TestErrorCases:
         assert result.exit_code != 0
         # Error may be in output or in the exception
         error_text = result.output + str(result.exception or "")
-        assert "MEMEX_KB_ROOT" in error_text or "not set" in error_text.lower()
+        assert "MEMEX_USER_KB_ROOT" in error_text or "not set" in error_text.lower()
 
     def test_missing_content_source_error(self, kb_root, index_root):
         """Reports error when no content source provided."""

@@ -386,7 +386,7 @@ class TestStatusErrorHandling:
         result = runner.invoke(cli, [])
 
         assert "KB Root: NOT CONFIGURED" in result.output
-        assert "Set MEMEX_KB_ROOT and MEMEX_INDEX_ROOT" in result.output
+        assert "Set MEMEX_USER_KB_ROOT and MEMEX_INDEX_ROOT" in result.output
         assert "mx --help" in result.output
         assert result.exit_code == 0
 
@@ -527,7 +527,7 @@ class TestOutputStatus:
         result = output.getvalue()
 
         assert "KB Root: NOT CONFIGURED" in result
-        assert "Set MEMEX_KB_ROOT" in result
+        assert "Set MEMEX_USER_KB_ROOT" in result
         assert "mx --help" in result
 
     def test_output_shows_project_in_header(self, mock_kb_root, mock_recent_entries):

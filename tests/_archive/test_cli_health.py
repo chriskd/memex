@@ -26,7 +26,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     (root / "development").mkdir()
     (root / "architecture").mkdir()
     (root / "empty_category").mkdir()  # For empty dir test
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -338,7 +338,7 @@ class TestHealthEdgeCases:
         """Health command handles empty KB gracefully."""
         empty_root = tmp_path / "empty_kb"
         empty_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(empty_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(empty_root))
 
         index_root = tmp_path / ".indices"
         index_root.mkdir()

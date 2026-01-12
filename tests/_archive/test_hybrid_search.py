@@ -205,7 +205,7 @@ class TestHybridStatus:
         """Status reports zero counts for empty indices."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         status = hybrid_searcher.status()
         assert status.whoosh_docs == 0
@@ -216,7 +216,7 @@ class TestHybridStatus:
         """Status reflects document counts after indexing."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         hybrid_searcher.index_chunks(sample_chunks)
         status = hybrid_searcher.status()
@@ -551,7 +551,7 @@ class TestHybridReindex:
         """Reindex clears indices and rebuilds from KB files."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         # Create a test markdown file
         test_file = kb_root / "test.md"

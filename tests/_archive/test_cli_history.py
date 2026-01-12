@@ -26,7 +26,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     for category in ("development", "architecture", "devops"):
         (root / category).mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -530,9 +530,9 @@ class TestHistoryErrorCases:
     """Test error handling for history command."""
 
     def test_error_when_no_kb_root_configured(self, tmp_path, monkeypatch):
-        """Error when MEMEX_KB_ROOT is not configured."""
+        """Error when MEMEX_USER_KB_ROOT is not configured."""
         # Unset the environment variable
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         runner = CliRunner()

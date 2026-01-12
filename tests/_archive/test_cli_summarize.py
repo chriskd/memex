@@ -25,7 +25,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     for category in ("development", "architecture", "devops"):
         (root / category).mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -363,8 +363,8 @@ class TestErrorCases:
 
     def test_error_when_no_kb_root_configured(self, tmp_path, monkeypatch):
         """Fails gracefully when KB root is not configured."""
-        # Clear the MEMEX_KB_ROOT environment variable
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        # Clear the MEMEX_USER_KB_ROOT environment variable
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
 
         # Reset searcher state
         monkeypatch.setattr(core, "_searcher", None)
@@ -377,7 +377,7 @@ class TestErrorCases:
         assert result.exit_code != 0 or result.exception is not None
         # The error message is in the exception, not output
         if result.exception:
-            assert "MEMEX_KB_ROOT" in str(result.exception)
+            assert "MEMEX_USER_KB_ROOT" in str(result.exception)
 
     def test_handles_malformed_frontmatter(self, kb_root, index_root):
         """Handles entries with malformed frontmatter gracefully."""

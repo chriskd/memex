@@ -175,7 +175,7 @@ Original content about Python programming.
 """)
 
         # Set up environment
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         # Create watcher
         watcher = FileWatcher(hybrid_searcher, kb_root=kb_root)
@@ -237,7 +237,7 @@ created: 2024-01-01
 Content that will be deleted.
 """)
 
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
         watcher = FileWatcher(hybrid_searcher, kb_root=kb_root)
 
         # Index the file

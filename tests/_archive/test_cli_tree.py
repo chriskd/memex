@@ -30,7 +30,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     (root / "development" / "python" / "frameworks" / "deep").mkdir()
     (root / "architecture").mkdir()
     (root / "devops").mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -346,7 +346,7 @@ class TestTreeEdgeCases:
         """Tree handles completely empty KB gracefully."""
         empty_root = tmp_path / "empty_kb"
         empty_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(empty_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(empty_root))
 
         index_root = tmp_path / ".indices"
         index_root.mkdir()

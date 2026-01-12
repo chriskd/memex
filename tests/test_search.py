@@ -767,7 +767,7 @@ class TestHybridIndexOperations:
         """Status reports document counts."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         hybrid_searcher.index_chunks(sample_chunks)
         status = hybrid_searcher.status()

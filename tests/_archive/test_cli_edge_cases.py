@@ -25,7 +25,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "kb"
     root.mkdir()
     (root / "development").mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -393,19 +393,19 @@ class TestErrorMessages:
     """Tests for error message quality."""
 
     def test_missing_kb_root_error(self, tmp_path, monkeypatch):
-        """Clear error message when MEMEX_KB_ROOT is not set."""
+        """Clear error message when MEMEX_USER_KB_ROOT is not set."""
         # Unset the environment variable
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         runner = CliRunner()
         result = runner.invoke(cli, ["list"])
 
         assert result.exit_code != 0
-        # The exception message contains MEMEX_KB_ROOT info
+        # The exception message contains MEMEX_USER_KB_ROOT info
         # Check both output and exception for the error message
         error_info = str(result.exception) if result.exception else result.output
-        assert "MEMEX_KB_ROOT" in error_info or "not set" in error_info.lower()
+        assert "MEMEX_USER_KB_ROOT" in error_info or "not set" in error_info.lower()
 
     def test_invalid_json_flag_combination(self, kb_root, index_root):
         """Error for invalid flag combinations."""

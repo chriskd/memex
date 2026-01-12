@@ -328,8 +328,8 @@ class TestAddEntryWithScope:
         monkeypatch.setattr(core, "get_kb_root", lambda: project_kb)
         monkeypatch.setattr(core, "get_searcher", lambda: DummySearcher())
 
-        # Set MEMEX_KB_ROOT to avoid discovery issues
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(project_kb))
+        # Set MEMEX_USER_KB_ROOT to avoid discovery issues
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(project_kb))
 
         result = await core.add_entry(
             title="Scoped Entry",

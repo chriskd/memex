@@ -24,7 +24,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     for category in ("development", "architecture", "devops"):
         (root / category).mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -139,7 +139,7 @@ class TestListCommandCategoryValidation:
         # Create an empty KB root
         empty_root = tmp_path / "empty_kb"
         empty_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(empty_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(empty_root))
 
         # Reset searcher to pick up new root
         monkeypatch.setattr(core, "_searcher", None)

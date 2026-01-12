@@ -47,7 +47,7 @@ This is a test entry.
     (kb_root / "tooling" / "test-entry.md").write_text(sample_entry)
 
     # Set environment
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
     monkeypatch.setenv("MEMEX_INDEX_ROOT", str(tmp_path / "index"))
 
     return kb_root

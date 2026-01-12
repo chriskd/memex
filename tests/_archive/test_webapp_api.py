@@ -96,7 +96,7 @@ def client(sample_kb, mock_searcher, monkeypatch):
     api_module._searcher = mock_searcher
 
     # Mock get_kb_root to return our test KB
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(sample_kb))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(sample_kb))
 
     # Mock file watcher to avoid starting threads
     with patch.object(api_module, "_file_watcher", None):
@@ -113,7 +113,7 @@ def client_no_lifespan(sample_kb, mock_searcher, monkeypatch):
     import memex.webapp.api as api_module
     api_module._searcher = mock_searcher
 
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(sample_kb))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(sample_kb))
 
     # Skip lifespan by not using context manager
     return TestClient(app, raise_server_exceptions=False)
@@ -571,7 +571,7 @@ class TestEdgeCases:
 
         import memex.webapp.api as api_module
         api_module._searcher = mock_searcher
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(empty_kb))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(empty_kb))
 
         client = TestClient(app, raise_server_exceptions=False)
 
@@ -675,7 +675,7 @@ class TestSearcherInitialization:
 
         # Reset global searcher
         api_module._searcher = None
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(sample_kb))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(sample_kb))
 
         with patch.object(api_module, "HybridSearcher") as MockSearcher:
             mock_instance = MagicMock()

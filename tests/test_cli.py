@@ -1301,7 +1301,7 @@ class TestPublishCommand:
         result = runner.invoke(
             cli,
             ["publish"],
-            env={"MEMEX_KB_ROOT": str(tmp_path)},
+            env={"MEMEX_USER_KB_ROOT": str(tmp_path)},
         )
         assert result.exit_code == 1
         assert "No KB found to publish" in result.output or "Error:" in result.output

@@ -22,7 +22,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     """Create a temporary KB root."""
     root = tmp_path / "kb"
     root.mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 

@@ -26,7 +26,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     (root / "development").mkdir()
     (root / "projects" / "myapp").mkdir(parents=True)
     (root / "projects" / "otherapp").mkdir(parents=True)
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 

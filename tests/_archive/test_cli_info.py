@@ -24,7 +24,7 @@ def kb_root(tmp_path, monkeypatch) -> Path:
     root.mkdir()
     for category in ("development", "architecture", "devops"):
         (root / category).mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -46,7 +46,7 @@ class TestInfoBasic:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 0
-        assert "KB Root:" in result.output
+        assert "Primary KB:" in result.output
         assert str(kb_root) in result.output
 
     def test_info_shows_index_root_path(self, kb_root, index_root):
@@ -69,7 +69,7 @@ class TestInfoBasic:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 0
-        assert "Entries:" in result.output
+        assert "Total:" in result.output
         assert "3" in result.output
 
     def test_info_shows_categories_list(self, kb_root, index_root):
@@ -106,9 +106,9 @@ class TestInfoOutputFormat:
         assert result.exit_code == 0
         assert "Memex Info" in result.output
         assert "=" * 40 in result.output
-        assert "KB Root:" in result.output
+        assert "Primary KB:" in result.output
         assert "Index Root:" in result.output
-        assert "Entries:" in result.output
+        assert "Total:" in result.output
         assert "Categories:" in result.output
 
     def test_json_flag_returns_proper_json_structure(self, kb_root, index_root):
@@ -123,7 +123,7 @@ class TestInfoOutputFormat:
         assert isinstance(data, dict)
 
     def test_json_contains_all_expected_fields(self, kb_root, index_root):
-        """JSON output has kb_root, index_root, categories, entry_count."""
+        """JSON output has primary_kb, index_root, categories, total_entries."""
         # Add some entries for non-zero count
         (kb_root / "development" / "test.md").write_text("# Test\n\nContent")
 
@@ -133,21 +133,21 @@ class TestInfoOutputFormat:
         assert result.exit_code == 0
 
         data = json.loads(result.output)
-        assert "kb_root" in data
+        assert "primary_kb" in data
         assert "index_root" in data
         assert "categories" in data
-        assert "entry_count" in data
+        assert "total_entries" in data
 
         # Verify types
-        assert isinstance(data["kb_root"], str)
+        assert isinstance(data["primary_kb"], str)
         assert isinstance(data["index_root"], str)
         assert isinstance(data["categories"], list)
-        assert isinstance(data["entry_count"], int)
+        assert isinstance(data["total_entries"], int)
 
         # Verify values
-        assert data["kb_root"] == str(kb_root)
+        assert data["primary_kb"] == str(kb_root)
         assert data["index_root"] == str(index_root)
-        assert data["entry_count"] == 1
+        assert data["total_entries"] == 1
         assert "development" in data["categories"]
 
 
@@ -160,7 +160,7 @@ class TestInfoEdgeCases:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 0
-        assert "Entries:    0" in result.output
+        assert "Total:      0 entries" in result.output
 
     def test_with_empty_kb_json(self, kb_root, index_root):
         """JSON entry_count is 0 when KB has no entries."""
@@ -170,14 +170,14 @@ class TestInfoEdgeCases:
         assert result.exit_code == 0
 
         data = json.loads(result.output)
-        assert data["entry_count"] == 0
+        assert data["total_entries"] == 0
 
     def test_with_no_categories(self, tmp_path, monkeypatch):
         """Output shows (none) when KB has no category directories."""
         # Create empty KB root with no subdirectories
         kb_root = tmp_path / "empty_kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         index_root = tmp_path / ".indices"
         index_root.mkdir()
@@ -191,13 +191,14 @@ class TestInfoEdgeCases:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 0
-        assert "Categories: (none)" in result.output
+        # No categories means the line is omitted
+        assert "Categories:" not in result.output
 
     def test_with_no_categories_json(self, tmp_path, monkeypatch):
         """JSON categories is empty list when KB has no directories."""
         kb_root = tmp_path / "empty_kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
         index_root = tmp_path / ".indices"
         index_root.mkdir()
@@ -223,7 +224,7 @@ class TestInfoEdgeCases:
         index_root = tmp_path / "separate_indices"
         index_root.mkdir()
 
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
         monkeypatch.setenv("MEMEX_INDEX_ROOT", str(index_root))
         monkeypatch.setattr(core, "_searcher", None)
         monkeypatch.setattr(core, "_searcher_ready", False)
@@ -234,9 +235,9 @@ class TestInfoEdgeCases:
         assert result.exit_code == 0
 
         data = json.loads(result.output)
-        assert data["kb_root"] == str(kb_root)
+        assert data["primary_kb"] == str(kb_root)
         assert data["index_root"] == str(index_root)
-        assert data["kb_root"] != data["index_root"]
+        assert data["primary_kb"] != data["index_root"]
 
     def test_excludes_hidden_and_special_files(self, kb_root, index_root):
         """Entry count excludes hidden (.) and special (_) files."""
@@ -256,16 +257,16 @@ class TestInfoEdgeCases:
 
         data = json.loads(result.output)
         # Only the regular entry should be counted
-        assert data["entry_count"] == 1
+        assert data["total_entries"] == 1
 
 
 class TestInfoErrors:
     """Test mx info error cases."""
 
     def test_error_when_no_kb_root_configured(self, tmp_path, monkeypatch):
-        """Exit code 1 with error when MEMEX_KB_ROOT not set."""
-        # Unset MEMEX_KB_ROOT
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        """Exit code 1 with error when MEMEX_USER_KB_ROOT not set."""
+        # Unset MEMEX_USER_KB_ROOT
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
 
         # Set index root to avoid that error
         index_root = tmp_path / ".indices"
@@ -279,16 +280,16 @@ class TestInfoErrors:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 1
-        assert "MEMEX_KB_ROOT" in result.output or "Error" in result.output
+        assert "MEMEX_USER_KB_ROOT" in result.output or "Error" in result.output
 
-    def test_error_when_no_index_root_configured(self, tmp_path, monkeypatch):
-        """Exit code 1 with error when MEMEX_INDEX_ROOT not set."""
+    def test_success_when_no_index_root_configured(self, tmp_path, monkeypatch):
+        """Uses {kb_root}/.indices as fallback when MEMEX_INDEX_ROOT not set."""
         # Set KB root
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        monkeypatch.setenv("MEMEX_KB_ROOT", str(kb_root))
+        monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(kb_root))
 
-        # Unset MEMEX_INDEX_ROOT
+        # Unset MEMEX_INDEX_ROOT - should fallback to {kb_root}/.indices
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         monkeypatch.setattr(core, "_searcher", None)
@@ -297,8 +298,8 @@ class TestInfoErrors:
         runner = CliRunner()
         result = runner.invoke(cli, ["info"])
 
-        assert result.exit_code == 1
-        assert "MEMEX_INDEX_ROOT" in result.output or "Error" in result.output
+        assert result.exit_code == 0
+        assert str(kb_root / ".indices") in result.output
 
 
 class TestConfigAlias:
@@ -317,7 +318,7 @@ class TestConfigAlias:
 
     def test_config_error_handling_matches_info(self, tmp_path, monkeypatch):
         """mx config handles errors same way as mx info."""
-        monkeypatch.delenv("MEMEX_KB_ROOT", raising=False)
+        monkeypatch.delenv("MEMEX_USER_KB_ROOT", raising=False)
         monkeypatch.delenv("MEMEX_INDEX_ROOT", raising=False)
 
         monkeypatch.setattr(core, "_searcher", None)

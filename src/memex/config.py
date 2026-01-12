@@ -30,9 +30,20 @@ def get_project_kb_root() -> Path | None:
 def get_user_kb_root() -> Path | None:
     """Get the user-scope KB root directory.
 
+    Checks MEMEX_USER_KB_ROOT env var first, falls back to ~/.memex/kb.
+
     Returns:
         Path to user KB if it exists, None otherwise.
     """
+    # Check for explicit env var override
+    env_root = os.environ.get("MEMEX_USER_KB_ROOT")
+    if env_root:
+        user_kb = Path(env_root)
+        if user_kb.exists():
+            return user_kb
+        return None
+
+    # Default location
     user_kb = Path.home() / ".memex" / "kb"
     if (user_kb / ".kbconfig").exists():
         return user_kb
@@ -51,11 +62,6 @@ def get_kb_roots(scope: str | None = None) -> list[Path]:
         List of KB paths. Project KB comes first if present.
         Empty list if no KBs found.
     """
-    # Check for explicit env var override (single KB mode)
-    root = os.environ.get("MEMEX_KB_ROOT")
-    if root:
-        return [Path(root)]
-
     project_kb = get_project_kb_root()
     user_kb = get_user_kb_root()
 
@@ -111,35 +117,29 @@ def get_kb_root() -> Path:
     For read operations that should span multiple KBs, use get_kb_roots().
 
     Discovery order:
-    1. MEMEX_KB_ROOT environment variable (explicit override)
-    2. Walk up from cwd looking for .kbconfig with kb_path field
-    3. ~/.memex/kb/ if it exists with .kbconfig (user scope)
-    4. Error with helpful message
+    1. Project KB: Walk up from cwd looking for .kbconfig with kb_path field
+    2. User KB: ~/.memex/kb/ or MEMEX_USER_KB_ROOT if set
+    3. Error with helpful message
 
     Raises:
         ConfigurationError: If no KB can be found.
     """
-    # 1. Explicit env var takes precedence
-    root = os.environ.get("MEMEX_KB_ROOT")
-    if root:
-        return Path(root)
-
-    # 2. Look for .kbconfig at project root with kb_path
+    # 1. Look for .kbconfig at project root with kb_path
     project_kb = get_project_kb_root()
     if project_kb:
         return project_kb
 
-    # 3. Check for user-scope KB
+    # 2. Check for user-scope KB
     user_kb = get_user_kb_root()
     if user_kb:
         return user_kb
 
-    # 4. No KB found
+    # 3. No KB found
     raise ConfigurationError(
         "No knowledge base found. Options:\n"
         "  1. Run 'mx init' to create a project KB at ./kb/\n"
         "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/\n"
-        "  3. Set MEMEX_KB_ROOT to an existing KB directory"
+        "  3. Set MEMEX_USER_KB_ROOT to an existing KB directory"
     )
 
 
@@ -208,11 +208,6 @@ def get_kb_roots_for_indexing(scope: str | None = None) -> list[tuple[str | None
     Returns:
         List of (scope, path) tuples for use with HybridSearcher.reindex().
     """
-    # Check for explicit env var override first (single KB mode, used in tests)
-    root = os.environ.get("MEMEX_KB_ROOT")
-    if root:
-        return [(None, Path(root))]
-
     project_kb = get_project_kb_root()
     user_kb = get_user_kb_root()
 

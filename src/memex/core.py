@@ -2691,7 +2691,7 @@ async def publish(
         include_drafts: Include entries with status="draft"
         include_archived: Include entries with status="archived"
         clean: Remove output directory before build (default True)
-        kb_root: KB source directory (overrides MEMEX_KB_ROOT if provided)
+        kb_root: KB source directory (overrides auto-detected KB if provided)
 
     Returns:
         Dict with:

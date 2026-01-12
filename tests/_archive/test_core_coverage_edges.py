@@ -19,7 +19,7 @@ from memex.models import ViewStats
 def kb_root(tmp_path, monkeypatch) -> Path:
     root = tmp_path / "kb"
     root.mkdir()
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(root))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(root))
     return root
 
 
@@ -279,7 +279,7 @@ async def test_popular_filters_and_skips(kb_root, index_root, monkeypatch):
 @pytest.mark.asyncio
 async def test_popular_missing_root_returns_empty(monkeypatch, tmp_path):
     missing = tmp_path / "missing"
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(missing))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(missing))
 
     results = await core.popular()
 
@@ -327,7 +327,7 @@ async def test_hubs_and_dead_ends(kb_root, index_root, monkeypatch):
 @pytest.mark.asyncio
 async def test_hubs_missing_root_returns_empty(monkeypatch, tmp_path):
     missing = tmp_path / "missing"
-    monkeypatch.setenv("MEMEX_KB_ROOT", str(missing))
+    monkeypatch.setenv("MEMEX_USER_KB_ROOT", str(missing))
 
     assert await core.hubs() == []
     assert await core.dead_ends() == []

@@ -195,7 +195,7 @@ class TestMemexErrorFactoryMethods:
         """kb_not_configured() should create KB_NOT_CONFIGURED error."""
         error = MemexError.kb_not_configured()
         assert error.code == ErrorCode.KB_NOT_CONFIGURED
-        assert "MEMEX_KB_ROOT" in error.details["suggestion"]
+        assert "MEMEX_USER_KB_ROOT" in error.details["suggestion"]
 
     def test_missing_required_field(self):
         """missing_required_field() should create MISSING_REQUIRED_FIELD error."""
