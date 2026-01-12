@@ -941,7 +941,8 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float], content: bool, strict: bool, terse: bool, full_titles: bool, scope: Optional[str], as_json: bool):
+@click.pass_context
+def search(ctx: click.Context, query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float], content: bool, strict: bool, terse: bool, full_titles: bool, scope: Optional[str], as_json: bool):
     """Search the knowledge base.
 
     Scores are normalized to 0.0-1.0 (higher = better match):
@@ -982,8 +983,7 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     # Validate query is not empty
     if not query or not query.strip():
@@ -1561,7 +1561,8 @@ def whats_new(days: int, limit: int, scope: Optional[str], as_json: bool):
 
 @cli.command()
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def health(as_json: bool):
+@click.pass_context
+def health(ctx: click.Context, as_json: bool):
     """Audit knowledge base for problems.
 
     Checks for orphaned entries, broken links, stale content, empty directories.
@@ -1577,8 +1578,7 @@ def health(as_json: bool):
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     result = run_async(core_health())
 
@@ -1636,7 +1636,8 @@ def health(as_json: bool):
 @cli.command()
 @click.option("--min-count", default=1, help="Minimum usage count")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def tags(min_count: int, as_json: bool):
+@click.pass_context
+def tags(ctx: click.Context, min_count: int, as_json: bool):
     """List all tags with usage counts.
 
     \b
@@ -1650,8 +1651,7 @@ def tags(min_count: int, as_json: bool):
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     result = run_async(core_tags(min_count=min_count))
 
@@ -1674,7 +1674,8 @@ def tags(min_count: int, as_json: bool):
 @cli.command()
 @click.option("--limit", "-n", default=10, help="Max results")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def hubs(limit: int, as_json: bool):
+@click.pass_context
+def hubs(ctx: click.Context, limit: int, as_json: bool):
     """Show most connected entries (hub notes).
 
     These are key concepts that many other entries link to.
@@ -1690,8 +1691,7 @@ def hubs(limit: int, as_json: bool):
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     result = run_async(core_hubs(limit=limit))
 
@@ -1751,7 +1751,8 @@ def suggest_links(path: str, limit: int, as_json: bool):
 @cli.command()
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def reindex(scope: Optional[str], as_json: bool):
+@click.pass_context
+def reindex(ctx: click.Context, scope: Optional[str], as_json: bool):
     """Rebuild search indices from all markdown files.
 
     By default, indexes entries from both project and user KBs.
@@ -1768,8 +1769,7 @@ def reindex(scope: Optional[str], as_json: bool):
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     if not as_json:
         scope_msg = f"{scope} KB" if scope else "all KBs"
@@ -2396,7 +2396,8 @@ def templates(action: str, name: Optional[str], as_json: bool):
 
 @cli.command()
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def info(as_json: bool):
+@click.pass_context
+def info(ctx: click.Context, as_json: bool):
     """Show knowledge base configuration and stats.
 
     Shows all active KBs (project + user) with entry counts.
@@ -2420,8 +2421,7 @@ def info(as_json: bool):
         primary_kb = get_kb_root()
         index_root = get_index_root()
     except ConfigurationError as exc:
-        click.echo(f"Error: {exc}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, exc)
 
     # Get all active KBs
     project_kb = get_project_kb_root()

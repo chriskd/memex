@@ -1333,6 +1333,73 @@ class TestJsonErrorMode:
             data = json.loads(error_output)
             assert "error" in data
 
+    def test_json_errors_on_configuration_error_search(self, runner):
+        """--json-errors outputs JSON for ConfigurationError in search command."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError("No knowledge base found.")
+
+            result = runner.invoke(cli, ["--json-errors", "search", "test"])
+
+            assert result.exit_code != 0
+            # Should output JSON to stderr
+            if result.stderr_bytes:
+                error_output = result.stderr_bytes.decode()
+                data = json.loads(error_output)
+                assert "error" in data or "code" in data
+                assert "No knowledge base found" in error_output
+
+    def test_json_errors_on_configuration_error_health(self, runner):
+        """--json-errors outputs JSON for ConfigurationError in health command."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError("No knowledge base found.")
+
+            result = runner.invoke(cli, ["--json-errors", "health"])
+
+            assert result.exit_code != 0
+            if result.stderr_bytes:
+                error_output = result.stderr_bytes.decode()
+                data = json.loads(error_output)
+                assert "error" in data or "code" in data
+
+    def test_json_errors_on_configuration_error_tags(self, runner):
+        """--json-errors outputs JSON for ConfigurationError in tags command."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError("No knowledge base found.")
+
+            result = runner.invoke(cli, ["--json-errors", "tags"])
+
+            assert result.exit_code != 0
+            if result.stderr_bytes:
+                error_output = result.stderr_bytes.decode()
+                data = json.loads(error_output)
+                assert "error" in data or "code" in data
+
+    def test_plain_text_error_without_json_errors_flag(self, runner):
+        """Without --json-errors, ConfigurationError outputs plain text."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError("No knowledge base found.")
+
+            result = runner.invoke(cli, ["search", "test"])
+
+            assert result.exit_code != 0
+            # Should NOT be valid JSON (plain text error)
+            output = result.output
+            assert "Error:" in output or "No knowledge base found" in output
+            # Verify it's not JSON
+            try:
+                json.loads(output)
+                pytest.fail("Output should not be valid JSON without --json-errors")
+            except json.JSONDecodeError:
+                pass  # Expected - plain text is not JSON
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Typo Suggestion Tests
