@@ -1621,7 +1621,14 @@ def tags(min_count: int, as_json: bool):
       mx tags
       mx tags --min-count=3
     """
+    from .config import ConfigurationError, get_kb_root
     from .core import tags as core_tags
+
+    try:
+        get_kb_root()  # Validate KB is configured
+    except ConfigurationError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     result = run_async(core_tags(min_count=min_count))
 
@@ -1654,7 +1661,14 @@ def hubs(limit: int, as_json: bool):
       mx hubs
       mx hubs --limit=5
     """
+    from .config import ConfigurationError, get_kb_root
     from .core import hubs as core_hubs
+
+    try:
+        get_kb_root()  # Validate KB is configured
+    except ConfigurationError as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
 
     result = run_async(core_hubs(limit=limit))
 

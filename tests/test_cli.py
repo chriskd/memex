@@ -649,9 +649,11 @@ class TestTreeCommand:
 class TestTagsCommand:
     """Tests for 'mx tags' command."""
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_tags_shows_tag_counts(self, mock_run_async, runner):
+    def test_tags_shows_tag_counts(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags lists tags with counts."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = [
             {"tag": "python", "count": 10},
             {"tag": "testing", "count": 5},
@@ -663,9 +665,11 @@ class TestTagsCommand:
         assert "python" in result.output
         assert "10" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_tags_no_tags(self, mock_run_async, runner):
+    def test_tags_no_tags(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags handles empty results."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = []
 
         result = runner.invoke(cli, ["tags"])
@@ -673,9 +677,11 @@ class TestTagsCommand:
         assert result.exit_code == 0
         assert "No tags found" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_tags_json_output(self, mock_run_async, runner):
+    def test_tags_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags --json outputs valid JSON."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = [{"tag": "test", "count": 5}]
 
         result = runner.invoke(cli, ["tags", "--json"])
@@ -683,6 +689,22 @@ class TestTagsCommand:
         assert result.exit_code == 0
         data = json.loads(result.output)
         assert data[0]["tag"] == "test"
+
+    def test_tags_no_kb_configured(self, runner):
+        """Tags shows friendly error when no KB configured."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError(
+                "No knowledge base found. Options:\n"
+                "  1. Run 'mx init' to create a project KB at ./kb/\n"
+                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/"
+            )
+
+            result = runner.invoke(cli, ["tags"])
+
+            assert result.exit_code == 1
+            assert "No knowledge base found" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -693,9 +715,11 @@ class TestTagsCommand:
 class TestHubsCommand:
     """Tests for 'mx hubs' command."""
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_hubs_shows_hub_entries(self, mock_run_async, runner):
+    def test_hubs_shows_hub_entries(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Hubs lists highly connected entries."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = [
             {"path": "hub.md", "incoming": 10, "outgoing": 5, "total": 15},
         ]
@@ -705,15 +729,33 @@ class TestHubsCommand:
         assert result.exit_code == 0
         assert "hub.md" in result.output
 
+    @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
-    def test_hubs_no_results(self, mock_run_async, runner):
+    def test_hubs_no_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Hubs handles empty results."""
+        mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = []
 
         result = runner.invoke(cli, ["hubs"])
 
         assert result.exit_code == 0
         assert "No hub entries found" in result.output
+
+    def test_hubs_no_kb_configured(self, runner):
+        """Hubs shows friendly error when no KB configured."""
+        from memex.config import ConfigurationError
+
+        with patch("memex.config.get_kb_root") as mock_get_kb_root:
+            mock_get_kb_root.side_effect = ConfigurationError(
+                "No knowledge base found. Options:\n"
+                "  1. Run 'mx init' to create a project KB at ./kb/\n"
+                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/"
+            )
+
+            result = runner.invoke(cli, ["hubs"])
+
+            assert result.exit_code == 1
+            assert "No knowledge base found" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
