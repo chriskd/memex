@@ -1262,8 +1262,8 @@ async def update_entry(
     if not file_path.is_file():
         raise ValueError(f"Path is not a file: {path}")
 
-    if content is None and not section_updates:
-        raise ValueError("Provide new content or section_updates")
+    if content is None and not section_updates and tags is None:
+        raise ValueError("Provide new content, section_updates, or tags")
 
     # Parse existing entry to get metadata
     try:

@@ -469,6 +469,30 @@ class TestUpdateEntry:
         assert "old-tag" not in entry.metadata.tags
 
     @pytest.mark.asyncio
+    async def test_update_entry_tags_only_preserves_content(self, tmp_kb, monkeypatch):
+        """update_entry with only tags preserves existing content."""
+        monkeypatch.setattr(core, "get_searcher", lambda: DummySearcher())
+
+        original_content = "This is the original content that should be preserved."
+        _create_entry(
+            tmp_kb / "general" / "tags-only.md",
+            "Tags Only Test",
+            original_content,
+            tags=["old-tag"],
+        )
+
+        await core.update_entry(
+            path="general/tags-only.md",
+            tags=["new-tag", "updated-tag"],
+        )
+
+        entry = await core.get_entry("general/tags-only.md")
+        assert "new-tag" in entry.metadata.tags
+        assert "updated-tag" in entry.metadata.tags
+        assert "old-tag" not in entry.metadata.tags
+        assert original_content in entry.content
+
+    @pytest.mark.asyncio
     async def test_update_entry_not_found_raises_error(self, tmp_kb):
         """update_entry raises ValueError for non-existent entry."""
         with pytest.raises(ValueError, match="Entry not found"):
@@ -478,15 +502,15 @@ class TestUpdateEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_update_entry_requires_content_or_sections(self, tmp_kb):
-        """update_entry requires either content or section_updates."""
+    async def test_update_entry_requires_content_sections_or_tags(self, tmp_kb):
+        """update_entry requires either content, section_updates, or tags."""
         _create_entry(
             tmp_kb / "general" / "test.md",
             "Test",
             "Content",
         )
 
-        with pytest.raises(ValueError, match="content or section_updates"):
+        with pytest.raises(ValueError, match="content, section_updates, or tags"):
             await core.update_entry(path="general/test.md")
 
     @pytest.mark.asyncio
