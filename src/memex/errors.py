@@ -212,7 +212,7 @@ class MemexError(Exception):
             message="Semantic search is not available",
             details={
                 "reason": "ChromaDB or sentence-transformers not installed",
-                "suggestion": "Install with: pip install 'memex[semantic]'",
+                "suggestion": "Install with: pip install 'memex-kb[semantic]'",
             },
         )
 

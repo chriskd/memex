@@ -14,7 +14,7 @@ Personal knowledge base with hybrid search (keyword + semantic).
 
 ```bash
 # Install with uv
-uv tool install memex
+uv tool install memex-kb
 
 # Or install from source
 git clone https://github.com/chriskd/memex.git

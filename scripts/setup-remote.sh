@@ -14,7 +14,7 @@ echo "Setting up remote environment..."
 
 # Install memex CLI via pip
 echo "Installing memex (mx)..."
-pip install --quiet memex
+pip install --quiet memex-kb
 
 # Install beads CLI via npm
 echo "Installing beads (bd)..."
