@@ -1221,3 +1221,101 @@ class TestTypoSuggestions:
         assert result.exit_code != 0
         # Should suggest 'search'
         assert "search" in result.output.lower() or "No such command" in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KBContext Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestKBContext:
+    """Tests for KBContext dataclass and loading."""
+
+    def test_kbcontext_has_project_kb_attribute(self):
+        """KBContext has project_kb attribute."""
+        from memex.context import KBContext
+
+        ctx = KBContext()
+        assert hasattr(ctx, "project_kb")
+        assert ctx.project_kb is None
+
+    def test_kbcontext_has_publish_base_url_attribute(self):
+        """KBContext has publish_base_url attribute."""
+        from memex.context import KBContext
+
+        ctx = KBContext()
+        assert hasattr(ctx, "publish_base_url")
+        assert ctx.publish_base_url is None
+
+    def test_kbcontext_from_dict_loads_project_kb(self):
+        """KBContext.from_dict loads project_kb field."""
+        from memex.context import KBContext
+
+        data = {"project_kb": "./kb"}
+        ctx = KBContext.from_dict(data)
+        assert ctx.project_kb == "./kb"
+
+    def test_kbcontext_from_dict_loads_publish_base_url(self):
+        """KBContext.from_dict loads publish_base_url field."""
+        from memex.context import KBContext
+
+        data = {"publish_base_url": "/my-repo"}
+        ctx = KBContext.from_dict(data)
+        assert ctx.publish_base_url == "/my-repo"
+
+    def test_load_kbconfig_as_context_loads_publish_fields(self, tmp_path):
+        """_load_kbconfig_as_context loads project_kb and publish_base_url."""
+        from memex.context import _load_kbconfig_as_context
+
+        config_file = tmp_path / ".kbconfig"
+        config_file.write_text("""
+project_kb: ./kb
+publish_base_url: /my-project
+primary: docs
+""")
+
+        ctx = _load_kbconfig_as_context(config_file)
+        assert ctx is not None
+        assert ctx.project_kb == "./kb"
+        assert ctx.publish_base_url == "/my-project"
+        assert ctx.primary == "docs"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Publish Command Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestPublishCommand:
+    """Tests for mx publish command."""
+
+    def test_publish_help_works(self, runner):
+        """publish --help shows usage."""
+        result = runner.invoke(cli, ["publish", "--help"])
+        assert result.exit_code == 0
+        assert "Usage:" in result.output
+
+    def test_publish_no_kb_shows_options(self, runner, tmp_path):
+        """publish with no KB shows helpful error with options."""
+        # Run from a directory with no KB
+        result = runner.invoke(
+            cli,
+            ["publish"],
+            env={"MEMEX_KB_ROOT": str(tmp_path)},
+        )
+        assert result.exit_code == 1
+        assert "No KB found to publish" in result.output or "Error:" in result.output
+
+    def test_publish_with_kb_root_works(self, tmp_kb_with_entries, runner):
+        """publish --kb-root successfully publishes entries."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as output_dir:
+            result = runner.invoke(
+                cli,
+                ["publish", "--kb-root", str(tmp_kb_with_entries), "-o", output_dir],
+            )
+            assert result.exit_code == 0
+            assert "Published" in result.output
+            # Check output was created
+            assert (Path(output_dir) / "index.html").exists()

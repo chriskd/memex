@@ -135,6 +135,12 @@ class KBContext:
     project: str | None = None
     """Override for project name (auto-detected from directory if not set)."""
 
+    project_kb: str | None = None
+    """Relative path to KB directory for this project (e.g., './kb')."""
+
+    publish_base_url: str | None = None
+    """Base URL for published site (e.g., '/repo-name' for GitHub Pages subdirectory)."""
+
     source_file: Path | None = None
     """Path to the .kbcontext file that was loaded."""
 
@@ -146,6 +152,8 @@ class KBContext:
             paths=data.get("paths", []),
             default_tags=data.get("default_tags", []),
             project=data.get("project"),
+            project_kb=data.get("project_kb"),
+            publish_base_url=data.get("publish_base_url"),
             source_file=source_file,
         )
 
@@ -288,6 +296,8 @@ def _load_kbconfig_as_context(config_path: Path) -> KBContext | None:
             "paths": data.get("boost_paths", []),
             "default_tags": data.get("default_tags", []),
             "project": data.get("project"),
+            "project_kb": data.get("project_kb"),
+            "publish_base_url": data.get("publish_base_url"),
         }
 
         return KBContext.from_dict(context_data, source_file=config_path)
