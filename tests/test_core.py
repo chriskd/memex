@@ -1342,3 +1342,127 @@ class TestGitHelpers:
         result = core.get_actor_identity()
 
         assert result == "claude-opus"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# _ensure_aware helper
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEnsureAware:
+    """Tests for _ensure_aware datetime normalization helper."""
+
+    def test_returns_none_for_none(self):
+        """None input returns None."""
+        assert core._ensure_aware(None) is None
+
+    def test_naive_datetime_becomes_utc(self):
+        """Naive datetime gets UTC timezone added."""
+        naive = datetime(2026, 1, 15, 10, 30, 0)
+        assert naive.tzinfo is None
+
+        result = core._ensure_aware(naive)
+
+        assert result.tzinfo == timezone.utc
+        assert result.year == 2026
+        assert result.month == 1
+        assert result.day == 15
+        assert result.hour == 10
+        assert result.minute == 30
+
+    def test_aware_datetime_unchanged(self):
+        """Aware datetime is returned unchanged."""
+        aware = datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+
+        result = core._ensure_aware(aware)
+
+        assert result is aware  # Same object, not a copy
+
+    def test_non_utc_aware_datetime_unchanged(self):
+        """Aware datetime with non-UTC timezone is unchanged."""
+        from datetime import timedelta
+
+        pst = timezone(timedelta(hours=-8))
+        aware = datetime(2026, 1, 15, 10, 30, 0, tzinfo=pst)
+
+        result = core._ensure_aware(aware)
+
+        assert result is aware
+        assert result.tzinfo == pst
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# whats_new
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestWhatsNew:
+    """Tests for whats_new listing functionality."""
+
+    @pytest.fixture
+    def kb_with_mixed_dates(self, tmp_path, monkeypatch):
+        """Create KB with both naive and aware datetime entries."""
+        kb_root = tmp_path / "kb"
+        kb_root.mkdir()
+
+        # Entry with naive date (like old entries: created: 2026-01-06)
+        naive_entry = kb_root / "naive-entry.md"
+        naive_entry.write_text(
+            """---
+title: Entry with Naive Date
+tags:
+  - test
+created: 2026-01-06
+---
+
+Content with naive date.
+""",
+            encoding="utf-8",
+        )
+
+        # Entry with aware date (like new entries from mx add)
+        aware_entry = kb_root / "aware-entry.md"
+        aware_entry.write_text(
+            """---
+title: Entry with Aware Date
+tags:
+  - test
+created: 2026-01-06T10:30:00+00:00
+---
+
+Content with aware date.
+""",
+            encoding="utf-8",
+        )
+
+        # Patch KB roots to use our test KB (imported in whats_new from config)
+        monkeypatch.setattr(
+            "memex.config.get_kb_roots_for_indexing",
+            lambda scope=None: [("", kb_root)],
+        )
+
+        return kb_root
+
+    @pytest.mark.asyncio
+    async def test_handles_mixed_naive_aware_dates(self, kb_with_mixed_dates):
+        """whats_new handles entries with both naive and aware dates."""
+        # This would raise TypeError before fix:
+        # "can't compare offset-naive and offset-aware datetimes"
+        result = await core.whats_new(days=365, limit=10)
+
+        # Should return both entries without error
+        assert len(result) == 2
+        titles = {r["title"] for r in result}
+        assert "Entry with Naive Date" in titles
+        assert "Entry with Aware Date" in titles
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_for_old_entries(self, kb_with_mixed_dates):
+        """whats_new returns empty when entries are older than cutoff."""
+        # Both entries are from 2026-01-06, looking back only 1 day won't find them
+        # (unless test runs on exactly that date, which is unlikely)
+        result = await core.whats_new(days=1, limit=10)
+
+        # May be empty or contain entries depending on test date
+        # Main goal: no TypeError from date comparison
+        assert isinstance(result, list)

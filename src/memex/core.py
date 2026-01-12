@@ -20,6 +20,22 @@ from typing import Literal
 
 log = logging.getLogger(__name__)
 
+
+def _ensure_aware(dt: datetime | None) -> datetime | None:
+    """Ensure a datetime is timezone-aware, assuming UTC for naive datetimes.
+
+    Args:
+        dt: A datetime that may be naive or aware, or None.
+
+    Returns:
+        Timezone-aware datetime (with UTC if originally naive), or None.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import (
     DUPLICATE_DETECTION_LIMIT,
@@ -1605,13 +1621,17 @@ async def whats_new(
             activity_type: str | None = None
             activity_date: datetime | None = None
 
+            # Normalize dates to aware (assume UTC for naive dates from legacy entries)
+            created_aware = _ensure_aware(metadata.created)
+            updated_aware = _ensure_aware(metadata.updated)
+
             # Check updated first (takes precedence if both qualify)
-            if include_updated and metadata.updated and metadata.updated >= cutoff_datetime:
+            if include_updated and updated_aware and updated_aware >= cutoff_datetime:
                 activity_type = "updated"
-                activity_date = metadata.updated
-            elif include_created and metadata.created >= cutoff_datetime:
+                activity_date = updated_aware
+            elif include_created and created_aware and created_aware >= cutoff_datetime:
                 activity_type = "created"
-                activity_date = metadata.created
+                activity_date = created_aware
 
             if activity_type is None:
                 continue
