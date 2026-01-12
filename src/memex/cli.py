@@ -2088,6 +2088,201 @@ def schema(command_name: Optional[str], compact: bool):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Publishing
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option(
+    "--kb-root", "-k",
+    type=click.Path(exists=True),
+    help="KB source directory (overrides .kbcontext and MEMEX_KB_ROOT)",
+)
+@click.option(
+    "--global", "use_global",
+    is_flag=True,
+    help="Use global MEMEX_KB_ROOT (required when no --kb-root or project_kb)",
+)
+@click.option(
+    "--yes", "-y",
+    is_flag=True,
+    help="Skip confirmation prompt when publishing from global KB",
+)
+@click.option(
+    "--output", "-o", "output_dir",
+    type=click.Path(),
+    default="_site",
+    help="Output directory (default: _site)",
+)
+@click.option(
+    "--base-url", "-b",
+    default="",
+    help="Base URL for links (e.g., /my-kb for subdirectory hosting)",
+)
+@click.option(
+    "--title", "-t",
+    default="Memex",
+    help="Site title for header and page titles (default: Memex)",
+)
+@click.option(
+    "--index", "-i", "index_entry",
+    default=None,
+    help="Path to entry to use as landing page (e.g., guides/welcome)",
+)
+@click.option(
+    "--include-drafts",
+    is_flag=True,
+    help="Include draft entries in output",
+)
+@click.option(
+    "--include-archived",
+    is_flag=True,
+    help="Include archived entries in output",
+)
+@click.option(
+    "--no-clean",
+    is_flag=True,
+    help="Don't remove output directory before build",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def publish(
+    ctx: click.Context,
+    kb_root: str | None,
+    use_global: bool,
+    yes: bool,
+    output_dir: str,
+    base_url: str,
+    title: str,
+    index_entry: str | None,
+    include_drafts: bool,
+    include_archived: bool,
+    no_clean: bool,
+    as_json: bool,
+):
+    """Generate static HTML site for GitHub Pages.
+
+    Converts the knowledge base to a static site with:
+    - Resolved [[wikilinks]] as HTML links
+    - Client-side search (Lunr.js)
+    - Tag pages and index
+    - Minimal responsive theme with dark mode
+
+    \b
+    KB source resolution (in order):
+      1. --kb-root flag (explicit path)
+      2. project_kb in .kbcontext (relative to context file)
+      3. --global flag required to use MEMEX_KB_ROOT
+
+    \b
+    Base URL resolution:
+      1. --base-url flag (explicit)
+      2. publish_base_url in .kbcontext (auto-applied)
+
+    Use --base-url when hosting at a subdirectory (e.g., user.github.io/repo).
+    Without it, links will 404. Configure in .kbcontext to avoid repeating:
+
+    \b
+      # .kbcontext
+      project_kb: ./kb
+      publish_base_url: /repo-name
+
+    \b
+    Examples:
+      mx publish -o docs                   # Uses .kbcontext settings
+      mx publish --kb-root ./kb -o docs    # Explicit KB source
+      mx publish --global -o docs          # Use MEMEX_KB_ROOT
+      mx publish --base-url /my-kb         # Subdirectory hosting
+    """
+    from .config import get_kb_root
+    from .context import get_kb_context
+    from .core import publish as core_publish
+
+    # Get context early - used for multiple settings
+    context = get_kb_context()
+
+    # Resolve KB source with safety guardrails
+    resolved_kb: Path | None = None
+    source_description = ""
+
+    if kb_root:
+        # Explicit --kb-root flag takes priority
+        resolved_kb = Path(kb_root).resolve()
+        source_description = "--kb-root flag"
+    elif context and context.project_kb and context.source_file:
+        # Try .kbcontext project_kb
+        project_kb_path = (context.source_file.parent / context.project_kb).resolve()
+        if project_kb_path.exists():
+            resolved_kb = project_kb_path
+            source_description = ".kbcontext project_kb"
+
+    # No local KB found - require --global flag for safety
+    if not resolved_kb:
+        if not use_global:
+            click.echo("Error: No project KB found", err=True)
+            click.echo("", err=True)
+            click.echo("Options:", err=True)
+            click.echo("  - Add 'project_kb: ./kb' to .kbcontext", err=True)
+            click.echo("  - Use --kb-root ./path/to/kb", err=True)
+            click.echo("  - Use --global to publish from MEMEX_KB_ROOT", err=True)
+            sys.exit(1)
+
+        resolved_kb = get_kb_root()
+        source_description = "MEMEX_KB_ROOT (--global)"
+
+        # Warn and require confirmation when publishing from global KB
+        if not yes:
+            click.echo(f"Warning: You are about to publish content from your global KB at {resolved_kb}", err=True)
+            click.echo("This may include organizational or private content.", err=True)
+            click.echo("", err=True)
+            if not click.confirm("Continue?", default=False):
+                click.echo("Aborted.", err=True)
+                sys.exit(0)
+
+    # Resolve base_url from context if not specified via CLI
+    resolved_base_url = base_url
+    if not resolved_base_url and context and context.publish_base_url:
+        resolved_base_url = context.publish_base_url
+
+    # Show confirmation message
+    click.echo(f"Publishing from: {resolved_kb} (via {source_description})")
+    if resolved_base_url:
+        click.echo(f"Base URL: {resolved_base_url}")
+
+    try:
+        result = run_async(core_publish(
+            output_dir=output_dir,
+            base_url=resolved_base_url,
+            site_title=title,
+            index_entry=index_entry,
+            include_drafts=include_drafts,
+            include_archived=include_archived,
+            clean=not no_clean,
+            kb_root=resolved_kb,
+        ))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        output(result, as_json=True)
+    else:
+        click.echo(f"Published {result['entries_published']} entries to {result['output_dir']}")
+
+        broken_links = result.get("broken_links", [])
+        if broken_links:
+            click.echo(f"\n⚠ Broken links ({len(broken_links)}):")
+            for bl in broken_links[:10]:
+                click.echo(f"  - {bl['source']} -> {bl['target']}")
+            if len(broken_links) > 10:
+                click.echo(f"  ... and {len(broken_links) - 10} more")
+
+        click.echo(f"\nSearch index: {result['search_index_path']}")
+        click.echo("\nTo preview locally:")
+        click.echo(f"  cd {result['output_dir']} && python -m http.server")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Entry Point
 # ─────────────────────────────────────────────────────────────────────────────
 

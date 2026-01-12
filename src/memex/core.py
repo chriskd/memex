@@ -2352,3 +2352,60 @@ async def patch_entry(
         "replacements": result.replacements_made,
         "path": relative_path,
     }
+
+
+async def publish(
+    output_dir: Path | str | None = None,
+    base_url: str = "",
+    site_title: str = "Memex",
+    index_entry: str | None = None,
+    include_drafts: bool = False,
+    include_archived: bool = False,
+    clean: bool = True,
+    kb_root: Path | str | None = None,
+) -> dict:
+    """Generate static HTML site from knowledge base.
+
+    Produces a complete static site suitable for hosting on GitHub Pages,
+    with resolved wikilinks, client-side search, and a minimal theme.
+
+    Args:
+        output_dir: Output directory (default: _site)
+        base_url: Base URL prefix for links (e.g., "/my-kb" for subdirectory hosting)
+        site_title: Site title for header and page titles (default: "Memex")
+        index_entry: Path to entry to use as landing page (e.g., "guides/welcome")
+        include_drafts: Include entries with status="draft"
+        include_archived: Include entries with status="archived"
+        clean: Remove output directory before build (default True)
+        kb_root: KB source directory (overrides MEMEX_KB_ROOT if provided)
+
+    Returns:
+        Dict with:
+        - entries_published: Number of entries written
+        - broken_links: List of {source, target} for unresolved wikilinks
+        - output_dir: Path to output directory
+        - search_index_path: Path to generated search index
+    """
+    from .publisher import PublishConfig, SiteGenerator
+
+    resolved_kb_root = Path(kb_root) if kb_root else get_kb_root()
+
+    config = PublishConfig(
+        output_dir=Path(output_dir) if output_dir else Path("_site"),
+        base_url=base_url,
+        site_title=site_title,
+        index_entry=index_entry,
+        include_drafts=include_drafts,
+        include_archived=include_archived,
+        clean=clean,
+    )
+
+    generator = SiteGenerator(config, resolved_kb_root)
+    result = await generator.generate()
+
+    return {
+        "entries_published": result.entries_published,
+        "broken_links": result.broken_links,
+        "output_dir": result.output_dir,
+        "search_index_path": result.search_index_path,
+    }

@@ -127,6 +127,10 @@ def _normalize_link(link: str) -> str:
     return link
 
 
+# Public alias for backwards compatibility
+normalize_link = _normalize_link
+
+
 # Module-level parser instance (created lazily)
 _parser: MarkdownIt | None = None
 
