@@ -3028,6 +3028,7 @@ def _build_schema() -> dict:
                 "common_mistakes": {},
                 "examples": [
                     "mx tree",
+                    "mx tree tooling --depth=2",
                     "mx tree --scope=project",
                 ],
             },

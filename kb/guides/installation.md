@@ -15,10 +15,10 @@ Fast, lightweight installation with keyword search only:
 
 ```bash
 # With uv (recommended)
-uv tool install memex
+uv tool install memex-kb
 
 # With pip
-pip install memex
+pip install memex-kb
 
 # Verify installation
 mx --version
@@ -36,10 +36,10 @@ Add semantic search for meaning-based queries:
 
 ```bash
 # With uv
-uv tool install "memex[semantic]"
+uv tool install "memex-kb[semantic]"
 
 # With pip
-pip install "memex[semantic]"
+pip install "memex-kb[semantic]"
 ```
 
 This adds:
