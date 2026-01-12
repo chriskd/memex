@@ -32,6 +32,19 @@ def run_async(coro):
     return asyncio.run(coro)
 
 
+def decode_escape_sequences(s: str) -> str:
+    """Decode escape sequences in a string (e.g., \\n -> newline, \\t -> tab).
+
+    Uses Python's unicode_escape codec to interpret common escape sequences.
+    Only applies to CLI --content values where users expect shell-like behavior.
+    """
+    import codecs
+
+    # Use unicode_escape to decode, but we need to encode to bytes first
+    # since unicode_escape works on bytes
+    return codecs.decode(s, "unicode_escape")
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Output Formatting
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1208,6 +1221,9 @@ def add(
         content = sys.stdin.read()
     elif file_path:
         content = Path(file_path).read_text()
+    elif content:
+        # Decode escape sequences in --content (e.g., \n -> newline)
+        content = decode_escape_sequences(content)
 
     tag_list = [t.strip() for t in tags.split(",")]
 
@@ -1294,6 +1310,9 @@ def append(
         content = sys.stdin.read()
     elif file_path:
         content = Path(file_path).read_text()
+    elif content:
+        # Decode escape sequences in --content (e.g., \n -> newline)
+        content = decode_escape_sequences(content)
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
@@ -1380,6 +1399,9 @@ def replace_cmd(
 
     if file_path:
         content = Path(file_path).read_text()
+    elif content:
+        # Decode escape sequences in --content (e.g., \n -> newline)
+        content = decode_escape_sequences(content)
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 

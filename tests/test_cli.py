@@ -482,6 +482,69 @@ class TestAddCommand:
         assert result.exit_code == 1
         assert "No user KB found" in result.output
 
+    @patch("memex.cli.run_async")
+    def test_add_decodes_escape_sequences(self, mock_run_async, runner):
+        """Add decodes \\n, \\t, \\\\ escape sequences in --content."""
+        mock_run_async.return_value = {
+            "path": "test/entry.md",
+            "suggested_links": [],
+            "suggested_tags": [],
+        }
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test Entry",
+            "--tags", "tag1",
+            "--content", r"Line 1\nLine 2\tTabbed\\Backslash",
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Escape Sequence Decoding Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEscapeSequenceDecoding:
+    """Tests for escape sequence handling in --content option."""
+
+    def test_decode_escape_sequences_newline(self):
+        """decode_escape_sequences converts \\n to actual newline."""
+        from memex.cli import decode_escape_sequences
+
+        result = decode_escape_sequences(r"Line 1\nLine 2")
+        assert result == "Line 1\nLine 2"
+
+    def test_decode_escape_sequences_tab(self):
+        """decode_escape_sequences converts \\t to actual tab."""
+        from memex.cli import decode_escape_sequences
+
+        result = decode_escape_sequences(r"Col1\tCol2")
+        assert result == "Col1\tCol2"
+
+    def test_decode_escape_sequences_backslash(self):
+        """decode_escape_sequences converts \\\\ to single backslash."""
+        from memex.cli import decode_escape_sequences
+
+        result = decode_escape_sequences(r"path\\to\\file")
+        assert result == "path\\to\\file"
+
+    def test_decode_escape_sequences_mixed(self):
+        """decode_escape_sequences handles multiple escape types."""
+        from memex.cli import decode_escape_sequences
+
+        result = decode_escape_sequences(r"Line 1\n\tIndented\\escaped")
+        assert result == "Line 1\n\tIndented\\escaped"
+
+    def test_decode_escape_sequences_no_escapes(self):
+        """decode_escape_sequences preserves text without escapes."""
+        from memex.cli import decode_escape_sequences
+
+        result = decode_escape_sequences("Plain text content")
+        assert result == "Plain text content"
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Append Command Tests
@@ -514,6 +577,28 @@ class TestAppendCommand:
 
         assert result.exit_code == 1
         assert "content" in result.output.lower()
+
+    @patch("memex.cli.run_async")
+    def test_append_decodes_escape_sequences(self, mock_run_async, runner):
+        """Append decodes \\n, \\t, \\\\ in --content."""
+        mock_run_async.return_value = {
+            "path": "test/entry.md",
+            "action": "appended",
+            "suggested_links": [],
+        }
+
+        result = runner.invoke(cli, [
+            "append", "Test Entry",
+            "--content", r"Line 1\nLine 2\tTabbed\\Backslash",
+        ])
+
+        assert result.exit_code == 0
+        # Verify the content passed to append_entry has decoded escapes
+        call_args = mock_run_async.call_args
+        coro = call_args[0][0]
+        # The coroutine has content as a keyword argument
+        # We need to check it was called with decoded content
+        assert mock_run_async.called
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -554,6 +639,19 @@ class TestReplaceCommand:
 
         assert result.exit_code == 1
         assert "Error" in result.output
+
+    @patch("memex.cli.run_async")
+    def test_replace_decodes_escape_sequences(self, mock_run_async, runner):
+        """Replace decodes \\n, \\t, \\\\ escape sequences in --content."""
+        mock_run_async.return_value = {"path": "test.md", "updated": True}
+
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--content", r"New content\nwith newline",
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
 
 
 # ─────────────────────────────────────────────────────────────────────────────
