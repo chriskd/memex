@@ -1001,6 +1001,15 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
         scope=scope,
     ))
 
+    # Record search in history
+    from . import search_history
+    search_history.record_search(
+        query=query,
+        result_count=len(result.results),
+        mode=mode,
+        tags=tag_list,
+    )
+
     # Apply min_score filter if specified
     filtered_results = result.results
     if min_score is not None:

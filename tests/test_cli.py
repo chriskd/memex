@@ -208,6 +208,28 @@ class TestSearchCommand:
             assert result.exit_code == 1
             assert "No knowledge base found" in result.output
 
+    @patch("memex.config.get_kb_root")
+    @patch("memex.cli.run_async")
+    @patch("memex.search_history.record_search")
+    def test_search_records_history(self, mock_record, mock_run_async, mock_get_kb_root, runner, tmp_path):
+        """Search records query in history."""
+        mock_get_kb_root.return_value = tmp_path
+        mock_result = MagicMock()
+        mock_result.results = [
+            MagicMock(path="test.md", title="Test", score=0.9, snippet="...")
+        ]
+        mock_run_async.return_value = mock_result
+
+        result = runner.invoke(cli, ["search", "my query", "--tags=infra,docker", "--mode=semantic"])
+
+        assert result.exit_code == 0
+        mock_record.assert_called_once_with(
+            query="my query",
+            result_count=1,
+            mode="semantic",
+            tags=["infra", "docker"],
+        )
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Get Command Tests
