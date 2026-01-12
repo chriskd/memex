@@ -6,7 +6,35 @@ Extracted from core.py to reduce duplication in add_entry/update_entry.
 
 from datetime import datetime, timezone
 
+import yaml
+
 from .models import EntryMetadata
+
+
+def _yaml_quote_if_needed(value: str) -> str:
+    """Quote a string value if it contains YAML special characters.
+
+    Uses PyYAML to determine if quoting is needed by testing if the value
+    roundtrips correctly through YAML parsing. Characters like `: `, `#`,
+    and leading `*`, `&`, `%`, `@`, etc. require quoting.
+
+    Args:
+        value: The string value to potentially quote.
+
+    Returns:
+        The value, quoted if necessary for valid YAML.
+    """
+    test_yaml = f"key: {value}"
+    try:
+        parsed = yaml.safe_load(test_yaml)
+        if isinstance(parsed, dict) and parsed.get("key") == value:
+            return value  # Roundtrips safely, no quoting needed
+    except yaml.YAMLError:
+        pass
+    # Need quoting - let PyYAML figure out proper escaping
+    dumped = yaml.safe_dump({"key": value}, default_flow_style=False).strip()
+    # Returns 'key: VALUE' or "key: 'VALUE'" - extract the value part
+    return dumped[5:]
 
 
 def build_frontmatter(metadata: EntryMetadata) -> str:
@@ -26,11 +54,11 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
     parts = ["---"]
 
     # Required fields
-    parts.append(f"title: {metadata.title}")
+    parts.append(f"title: {_yaml_quote_if_needed(metadata.title)}")
 
     # Description (one-line summary for search results)
     if metadata.description:
-        parts.append(f"description: {metadata.description}")
+        parts.append(f"description: {_yaml_quote_if_needed(metadata.description)}")
 
     parts.append("tags:")
     parts.append(_format_yaml_list(metadata.tags))
@@ -52,11 +80,11 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
 
     # Status (only if not default)
     if metadata.status != "published":
-        parts.append(f"status: {metadata.status}")
+        parts.append(f"status: {_yaml_quote_if_needed(metadata.status)}")
 
     # Source project (where entry was created)
     if metadata.source_project:
-        parts.append(f"source_project: {metadata.source_project}")
+        parts.append(f"source_project: {_yaml_quote_if_needed(metadata.source_project)}")
 
     # Edit sources (projects that have edited this entry)
     if metadata.edit_sources:
@@ -65,18 +93,18 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
 
     # Breadcrumb metadata (agent/LLM provenance)
     if metadata.model:
-        parts.append(f"model: {metadata.model}")
+        parts.append(f"model: {_yaml_quote_if_needed(metadata.model)}")
     if metadata.git_branch:
-        parts.append(f"git_branch: {metadata.git_branch}")
+        parts.append(f"git_branch: {_yaml_quote_if_needed(metadata.git_branch)}")
     if metadata.last_edited_by:
-        parts.append(f"last_edited_by: {metadata.last_edited_by}")
+        parts.append(f"last_edited_by: {_yaml_quote_if_needed(metadata.last_edited_by)}")
 
     # Beads integration fields (preserved for backwards compatibility)
     if metadata.beads_issues:
         parts.append("beads_issues:")
         parts.append(_format_yaml_list(metadata.beads_issues))
     if metadata.beads_project:
-        parts.append(f"beads_project: {metadata.beads_project}")
+        parts.append(f"beads_project: {_yaml_quote_if_needed(metadata.beads_project)}")
 
     parts.append("---\n\n")
 
@@ -92,7 +120,7 @@ def _format_yaml_list(items: list[str]) -> str:
     Returns:
         Multi-line string with "  - item" format, no trailing newline.
     """
-    return "\n".join(f"  - {item}" for item in items)
+    return "\n".join(f"  - {_yaml_quote_if_needed(item)}" for item in items)
 
 
 def create_new_metadata(

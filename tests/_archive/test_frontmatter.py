@@ -297,6 +297,71 @@ class TestBuildFrontmatter:
         assert parsed["aliases"] == ["old-name"]
         assert parsed["contributors"] == ["Alice", "Bob"]
 
+    def test_roundtrip_title_with_colon_space(self):
+        """Titles with ': ' are quoted and roundtrip correctly."""
+        import yaml
+
+        metadata = EntryMetadata(
+            title="Focusgroup Evaluation: mx CLI Discoverability",
+            tags=["test"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+        )
+
+        fm = build_frontmatter(metadata)
+        content = fm.split("---")[1]
+        parsed = yaml.safe_load(content)
+
+        assert parsed["title"] == "Focusgroup Evaluation: mx CLI Discoverability"
+
+    def test_roundtrip_title_with_hash(self):
+        """Titles with '#' are quoted and roundtrip correctly."""
+        import yaml
+
+        metadata = EntryMetadata(
+            title="Issue #123: Bug Report",
+            tags=["test"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+        )
+
+        fm = build_frontmatter(metadata)
+        content = fm.split("---")[1]
+        parsed = yaml.safe_load(content)
+
+        assert parsed["title"] == "Issue #123: Bug Report"
+
+    def test_roundtrip_tags_with_special_chars(self):
+        """Tags with special characters are quoted and roundtrip correctly."""
+        import yaml
+
+        metadata = EntryMetadata(
+            title="Test Entry",
+            tags=["simple", "category: subcategory", "foo:bar", "has # hash"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+        )
+
+        fm = build_frontmatter(metadata)
+        content = fm.split("---")[1]
+        parsed = yaml.safe_load(content)
+
+        assert parsed["tags"] == ["simple", "category: subcategory", "foo:bar", "has # hash"]
+
+    def test_roundtrip_description_with_special_chars(self):
+        """Descriptions with special characters are quoted and roundtrip correctly."""
+        import yaml
+
+        metadata = EntryMetadata(
+            title="Test Entry",
+            description="How to: configure # settings",
+            tags=["test"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+        )
+
+        fm = build_frontmatter(metadata)
+        content = fm.split("---")[1]
+        parsed = yaml.safe_load(content)
+
+        assert parsed["description"] == "How to: configure # settings"
+
 
 class TestCreateNewMetadata:
     """Tests for create_new_metadata function."""
