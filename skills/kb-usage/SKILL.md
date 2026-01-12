@@ -1,16 +1,16 @@
 ---
 name: kb-usage
-description: Use this skill when working with the memex knowledge base. Triggers on queries about "organizational docs", "check the knowledge base", "add to KB", or when an agent discovers reusable knowledge worth documenting.
+description: This skill should be used when the user asks to "search the KB", "find documentation", "add to knowledge base", "document this pattern", "check organizational docs", or when an agent discovers reusable knowledge worth preserving.
 ---
 
 # Using the Memex Knowledge Base
 
-Memex is a knowledge base for documenting patterns, infrastructure, troubleshooting guides, and operational knowledge. This skill teaches you how to search, contribute, and maintain the KB effectively.
+Memex is a knowledge base for documenting patterns, infrastructure, troubleshooting guides, and operational knowledge. This skill teaches how to search, contribute, and maintain the KB effectively.
 
 ## When to Search the KB
 
 Search the knowledge base BEFORE asking questions about:
-- Voidlabs infrastructure (DNS, cloud, networking, servers)
+- Infrastructure (DNS, cloud, networking, servers)
 - Development conventions and patterns
 - CI/CD pipelines and deployment procedures
 - Known issues and their solutions
@@ -20,9 +20,10 @@ Search the knowledge base BEFORE asking questions about:
 # Use the mx CLI
 mx search "kubernetes deployment"
 mx search "how to configure cloudflare"
+mx search "dns" --tags=infrastructure
 ```
 
-If you don't find relevant entries, that's valuable information - consider contributing what you learn.
+If no relevant entries are found, that's valuable information - consider contributing what you learn.
 
 ## When to Contribute
 
@@ -56,6 +57,45 @@ Content goes here...
 
 See [[references/entry-format]] for the complete specification.
 
+## Modifying Entries
+
+Three commands for different modification needs:
+
+### mx patch - Surgical edits (preferred)
+Find and replace specific text while preserving everything else:
+
+```bash
+mx patch devops/deploy.md --find "old text" --replace "new text"
+mx patch devops/deploy.md --find "TODO" --replace "DONE" --replace-all
+mx patch devops/deploy.md --find "..." --replace "..." --dry-run  # Preview
+```
+
+Use `--dry-run` to preview changes before applying.
+
+### mx append - Add content to existing entry
+Append content to the end of an entry (or create if not found):
+
+```bash
+mx append "Daily Log" --content="Session summary here"
+mx append "API Docs" --file=new-section.md
+```
+
+### mx replace - Full replacement
+Overwrite entire content or tags (use sparingly):
+
+```bash
+mx replace path/entry.md --tags="new,tags"
+mx replace path/entry.md --content="Completely new content"
+mx replace path/entry.md --file=rewritten.md
+```
+
+**When to use each:**
+| Command | Use When |
+|---------|----------|
+| `mx patch` | Fixing typos, updating specific sections, surgical edits |
+| `mx append` | Adding new sections, appending logs, incremental updates |
+| `mx replace` | Rewriting entries, changing tags, full overhaul |
+
 ## Linking Best Practices
 
 Bidirectional links help readers discover related knowledge:
@@ -69,11 +109,15 @@ Related: [[troubleshooting/dns-issues]]
 - Link when entries genuinely relate (encouraged, not required)
 - Think about what a reader might want to explore next
 - Don't force links just to have them
-- Update existing entries to link to your new content when relevant
+- Update existing entries to link to new content when relevant
 
 ## Tag Taxonomy
 
-Use existing tags when possible. Check what tags exist before inventing new ones.
+Use existing tags when possible. Check what tags exist before inventing new ones:
+
+```bash
+mx tags  # List all tags with usage counts
+```
 
 **Common tags by category:**
 - infrastructure: `cloud`, `dns`, `networking`, `servers`, `storage`
@@ -102,15 +146,21 @@ See [[references/categories]] for the full category taxonomy.
 
 | Action | Command | Example |
 |--------|---------|---------|
-| Find knowledge | `mx search` | `mx search "cloudflare dns"` |
-| Add new entry | `mx add` | `mx add --title="DNS Setup" --tags=infra` |
-| Update entry | `mx update` | `mx update path/to/entry.md` |
-| Browse tree | `mx tree` | `mx tree` |
-| List entries | `mx list` | `mx list --tag=devops` |
+| Search | `mx search` | `mx search "cloudflare dns"` |
+| Add entry | `mx add` | `mx add --title="DNS Setup" --tags=infra --content="..."` |
+| Read entry | `mx get` | `mx get infrastructure/dns.md` |
+| Patch entry | `mx patch` | `mx patch path.md --find="X" --replace="Y"` |
+| Append | `mx append` | `mx append "Title" --content="..."` |
+| Replace | `mx replace` | `mx replace path.md --tags="new,tags"` |
+| Browse | `mx tree` | `mx tree` |
+| List | `mx list` | `mx list --tag=devops` |
+| Tags | `mx tags` | `mx tags` |
+| Health | `mx health` | `mx health` |
 
 ## Anti-patterns
 
 - Creating an entry without searching first (may duplicate)
+- Using `mx replace` when `mx patch` would preserve context
 - Linking everything to everything (dilutes link value)
 - Using project-specific tags in org-wide KB
 - Leaving entries without tags or with wrong category
