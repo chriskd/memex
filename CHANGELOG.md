@@ -9,26 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **MCP Server**: Full Model Context Protocol support via FastMCP
-  - `search`: Hybrid keyword + semantic search with RRF ranking
-  - `get`: Retrieve entries with metadata, content, links, and backlinks
-  - `add`: Create new entries with auto-generated slugs
-  - `update`: Modify entries with section-level updates
-  - `list`: Browse entries by category, tag, or recency
-  - `tree`: Explore KB directory structure
-  - `suggest_links`: Find semantically related entries
-  - `health`: Audit KB for orphans, broken links, stale content
-
 - **CLI** (`mx`): Token-efficient command-line interface
-  - All MCP operations available as shell commands
+  - Search, browse, and modify KB entries
   - Designed for automation and scripting
   - Minimal output format reduces context usage
-
-- **Web Explorer** (`memex-web`): Visual knowledge browser
-  - Interactive search with live results
-  - Graph visualization of entry connections
-  - Directory tree navigation
-  - Markdown rendering with syntax highlighting
 
 - **Hybrid Search**: Best-of-both-worlds search approach
   - BM25 keyword search via Whoosh

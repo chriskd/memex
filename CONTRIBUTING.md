@@ -22,14 +22,8 @@ uv sync --dev
 # Run tests
 uv run pytest
 
-# Run the MCP server
-uv run memex
-
 # Run the CLI
 uv run mx --help
-
-# Run the web explorer
-uv run memex-web
 ```
 
 ## Code Style
@@ -97,22 +91,19 @@ Example: `feat: add tag filtering to search`
 ```
 memex/
 ├── src/memex/
-│   ├── server.py       # FastMCP server (MCP protocol)
 │   ├── cli.py          # Command-line interface
 │   ├── core.py         # Core business logic
 │   ├── config.py       # Configuration constants
 │   ├── models.py       # Pydantic data models
 │   ├── indexer/        # Search indexing (Whoosh + ChromaDB)
-│   ├── parser/         # Markdown parsing and link extraction
-│   └── webapp/         # Web explorer (FastAPI + static)
+│   └── parser/         # Markdown parsing and link extraction
 ├── tests/              # Test suite
 └── kb/                 # Sample knowledge base entries
 ```
 
 ## Architecture Notes
 
-- **MCP Server** (`server.py`): Thin wrapper around core functions
-- **CLI** (`cli.py`): Token-efficient alternative to MCP for automation
+- **CLI** (`cli.py`): Token-efficient interface for automation
 - **Core** (`core.py`): All business logic, no protocol dependencies
 - **Hybrid Search**: Combines BM25 (keyword) and semantic search via RRF
 
