@@ -586,12 +586,14 @@ mx get tooling/beads.md --metadata  # Just metadata
 # Browse
 mx tree                             # Directory structure
 mx list --tags=infrastructure       # Filter by tag
+mx tags                             # List all tags with counts
 mx whats-new --days=7               # Recent changes
 mx whats-new --scope=project        # Project KB only
 
 # Contribute
 mx add --title="My Entry" --tags="foo,bar" --content="..."
 mx add --title="..." --tags="..." --file=content.md
+mx add --title="..." --tags="..." --category=tooling --content="..."
 cat notes.md | mx add --title="..." --tags="..." --stdin
 
 # Maintenance
@@ -619,7 +621,7 @@ Entries are Markdown with YAML frontmatter:
 ---
 title: Entry Title
 tags: [tag1, tag2]
-created: 2024-01-15
+created: 2024-01-15T10:30:00
 ---
 
 # Entry Title
@@ -769,7 +771,7 @@ Entries are Markdown files with YAML frontmatter:
 ---
 title: Entry Title
 tags: [tag1, tag2]
-created: 2024-01-15
+created: 2024-01-15T10:30:00
 ---
 
 # Entry Title
@@ -804,7 +806,7 @@ Entries are Markdown files with YAML frontmatter:
 ---
 title: Entry Title
 tags: [tag1, tag2]
-created: 2024-01-15
+created: 2024-01-15T10:30:00
 ---
 
 # Entry Title
@@ -927,7 +929,7 @@ def _score_confidence_short(score: float) -> str:
 
 @cli.command()
 @click.argument("query")
-@click.option("--tags", help="Filter by tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", help="Filter by tags (comma-separated)")
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
 @click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
@@ -1133,7 +1135,7 @@ def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: b
 
 @cli.command()
 @click.option("--title", required=True, help="Entry title")
-@click.option("--tags", required=True, help="Tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", required=True, help="Tags (comma-separated)")
 @click.option("--category", default="", help="Category/directory")
 @click.option("--content", help="Content (or use --file/--stdin)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
@@ -1227,7 +1229,7 @@ def add(
 @click.option("--content", help="Content to append (or use --file/--stdin)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
-@click.option("--tags", help="Tags (comma-separated, required for new entries)")
+@click.option("--tag", "--tags", "tags", help="Tags (comma-separated, required for new entries)")
 @click.option("--category", help="Category for new entries")
 @click.option("--no-create", is_flag=True, help="Error if entry not found (don't create)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
@@ -1316,7 +1318,7 @@ def append(
 
 @cli.command(name="replace")
 @click.argument("path")
-@click.option("--tags", help="New tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content (replaces existing)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
@@ -1379,7 +1381,7 @@ def replace_cmd(
 # Hidden alias for backwards compatibility
 @cli.command(name="update", hidden=True)
 @click.argument("path")
-@click.option("--tags", help="New tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
@@ -1449,7 +1451,7 @@ def tree(path: str, depth: int, scope: Optional[str], as_json: bool):
 
 
 @cli.command("list")
-@click.option("--tags", "tag", help="Filter by tag")
+@click.option("--tag", "--tags", help="Filter by tag")
 @click.option("--category", help="Filter by category")
 @click.option("--limit", "-n", default=20, help="Max results")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
@@ -2144,7 +2146,7 @@ def _suggest_category_from_content(content: str, categories: list[str]) -> str |
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--content", help="Raw content to add")
 @click.option("--title", help="Override auto-detected title")
-@click.option("--tags", help="Override auto-suggested tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", help="Override auto-suggested tags (comma-separated)")
 @click.option("--category", help="Override auto-suggested category")
 @click.option("--confirm", "-y", is_flag=True, help="Auto-confirm without prompting")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
@@ -2652,7 +2654,7 @@ def batch(file_path: Optional[str], continue_on_error: bool):
 )
 @click.option("--stdin", is_flag=True, help="Read message from stdin")
 @click.option("--entry", "-e", help="Explicit entry path (overrides context)")
-@click.option("--tags", help="Additional tags (comma-separated)")
+@click.option("--tag", "--tags", "tags", help="Additional tags (comma-separated)")
 @click.option("--links", help="Wiki-style links to include (comma-separated)")
 @click.option("--no-timestamp", is_flag=True, help="Don't add timestamp header")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
@@ -3471,6 +3473,69 @@ def publish(
         click.echo(f"\nSearch index: {result['search_index_path']}")
         click.echo("\nTo preview locally:")
         click.echo(f"  cd {result['output_dir']} && python -m http.server")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Command Aliases (hidden, for convenience)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command("show", hidden=True)
+@click.argument("path", required=False)
+@click.option("--title", "by_title", help="Get entry by title instead of path")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
+@click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
+@click.pass_context
+def show_alias(ctx, path: Optional[str], by_title: Optional[str], as_json: bool, metadata: bool):
+    """Alias for mx get."""
+    ctx.invoke(get, path=path, by_title=by_title, as_json=as_json, metadata=metadata)
+
+
+@cli.command("find", hidden=True)
+@click.argument("query")
+@click.option("--tag", "--tags", "tags", help="Filter by tags (comma-separated)")
+@click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
+@click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
+@click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
+              help="Minimum score threshold (0.0-1.0)")
+@click.option("--content", is_flag=True, help="Include full content in results")
+@click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
+@click.option("--terse", is_flag=True, help="Output paths only (one per line)")
+@click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def find_alias(ctx, query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float],
+               content: bool, strict: bool, terse: bool, full_titles: bool, scope: Optional[str], as_json: bool):
+    """Alias for mx search."""
+    ctx.invoke(search, query=query, tags=tags, mode=mode, limit=limit, min_score=min_score,
+               content=content, strict=strict, terse=terse, full_titles=full_titles, scope=scope, as_json=as_json)
+
+
+@cli.command("recent", hidden=True)
+@click.option("--days", "-d", default=30, help="Look back N days")
+@click.option("--limit", "-n", default=10, help="Max results")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def recent_alias(ctx, days: int, limit: int, scope: Optional[str], as_json: bool):
+    """Alias for mx whats-new."""
+    ctx.invoke(whats_new, days=days, limit=limit, scope=scope, as_json=as_json)
+
+
+@cli.command("ls", hidden=True)
+@click.option("--tag", "--tags", help="Filter by tag")
+@click.option("--category", help="Filter by category")
+@click.option("--limit", "-n", default=20, help="Max results")
+@click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def ls_alias(ctx, tag: Optional[str], category: Optional[str], limit: int, full_titles: bool,
+             scope: Optional[str], as_json: bool):
+    """Alias for mx list."""
+    ctx.invoke(list_entries, tag=tag, category=category, limit=limit, full_titles=full_titles,
+               scope=scope, as_json=as_json)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
