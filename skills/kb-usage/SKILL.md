@@ -7,6 +7,23 @@ description: This skill should be used when the user asks to "search the KB", "f
 
 Memex is a knowledge base for documenting patterns, infrastructure, troubleshooting guides, and operational knowledge. This skill teaches how to search, contribute, and maintain the KB effectively.
 
+## Project vs User KB
+
+Memex supports two knowledge base locations:
+
+| Scope | Location | Use For |
+|-------|----------|---------|
+| `project` | `./kb/` | Team docs, shared patterns. Commit to git. |
+| `user` | `~/.memex/kb/` | Personal notes, available across all projects. |
+
+By default, searches include both KBs. Use `--scope` to target one:
+
+```bash
+mx search "query" --scope=project   # Project KB only
+mx add --title="Note" --scope=user  # Add to personal KB
+mx list --scope=project             # List project entries only
+```
+
 ## When to Search the KB
 
 Search the knowledge base BEFORE asking questions about:
@@ -17,10 +34,9 @@ Search the knowledge base BEFORE asking questions about:
 - Architectural decisions and trade-offs
 
 ```bash
-# Use the mx CLI
 mx search "kubernetes deployment"
-mx search "how to configure cloudflare"
-mx search "dns" --tags=infrastructure
+mx search "cloudflare" --mode=semantic    # Semantic search only
+mx search "dns" --tags=infrastructure     # Filter by tag
 ```
 
 If no relevant entries are found, that's valuable information - consider contributing what you learn.
@@ -156,6 +172,12 @@ See [[references/categories]] for the full category taxonomy.
 | List | `mx list` | `mx list --tag=devops` |
 | Tags | `mx tags` | `mx tags` |
 | Health | `mx health` | `mx health` |
+
+**Useful flags:**
+- `--scope=project|user` - Target specific KB (works with search, add, list)
+- `--mode=semantic|keyword|hybrid` - Search mode (default: hybrid)
+- `--json` - Machine-readable output (most commands)
+- `--dry-run` - Preview changes without applying (patch)
 
 ## Anti-patterns
 
