@@ -2,7 +2,7 @@
 name: kb-search
 description: Search the knowledge base
 allowed-tools:
-  - mcp__memex__search
+  - Bash
 argument-hint: "<query>"
 ---
 
@@ -10,7 +10,7 @@ Search the knowledge base using the provided query.
 
 ## Workflow
 
-1. Call `mcp__memex__search` with the user's query
+1. Run `mx search "<query>"` with the user's query
 2. Display results in a readable format:
    - Title
    - Path
@@ -19,8 +19,16 @@ Search the knowledge base using the provided query.
 ## Search Modes
 
 - **hybrid** (default): Combines keyword and semantic search
-- **keyword**: Traditional text matching
-- **semantic**: Vector similarity search
+- **keyword**: Traditional text matching (`--mode=keyword`)
+- **semantic**: Vector similarity search (`--mode=semantic`)
+
+## Example
+
+```bash
+mx search "kubernetes deployment"
+mx search "cloudflare" --mode=semantic
+mx search "docker" --tags=infrastructure
+```
 
 ## Example Output
 
@@ -39,4 +47,4 @@ Found 3 results for "kubernetes deployment":
 If no results found, suggest:
 - Try different keywords
 - Use a broader search term
-- Check available categories with `/kb-add` to browse
+- Check available categories with `mx tree`

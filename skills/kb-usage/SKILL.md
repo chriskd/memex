@@ -16,10 +16,10 @@ Search the knowledge base BEFORE asking questions about:
 - Known issues and their solutions
 - Architectural decisions and trade-offs
 
-```
-# Use the MCP search tool
-search "kubernetes deployment"
-search "how to configure cloudflare"
+```bash
+# Use the mx CLI
+mx search "kubernetes deployment"
+mx search "how to configure cloudflare"
 ```
 
 If you don't find relevant entries, that's valuable information - consider contributing what you learn.
@@ -100,11 +100,13 @@ See [[references/categories]] for the full category taxonomy.
 
 ## Quick Reference
 
-| Action | Tool | Example |
-|--------|------|---------|
-| Find knowledge | `search` | `search "cloudflare dns"` |
-| Add new entry | `add` | `add infrastructure/dns-setup.md` |
-| Update entry | `update` | `update path="devops/docker.md"` |
+| Action | Command | Example |
+|--------|---------|---------|
+| Find knowledge | `mx search` | `mx search "cloudflare dns"` |
+| Add new entry | `mx add` | `mx add --title="DNS Setup" --tags=infra` |
+| Update entry | `mx update` | `mx update path/to/entry.md` |
+| Browse tree | `mx tree` | `mx tree` |
+| List entries | `mx list` | `mx list --tag=devops` |
 
 ## Anti-patterns
 

@@ -1,20 +1,33 @@
 ---
 name: kb-quality
-description: Evaluate KB search accuracy
+description: Audit KB health and find problems
 allowed-tools:
-  - mcp__memex__quality
-argument-hint: "[limit] [cutoff]"
+  - Bash
+argument-hint: ""
 ---
 
-Run the KB quality checks to understand current search accuracy.
+Audit the knowledge base for health issues and problems.
 
 ## Workflow
 
-1. Call `mcp__memex__quality(limit=<limit>, cutoff=<cutoff>)`
-2. Present:
-   - Overall accuracy percentage
-   - Total queries evaluated
-   - Table of each query with expected documents, actual hits, and whether it passed within the cutoff rank
-3. Highlight any failing queries so authors can improve coverage
+1. Run `mx health` to audit the KB
+2. Present findings:
+   - Orphaned entries (no links to them)
+   - Broken links (links to non-existent entries)
+   - Stale content (old entries needing review)
+   - Empty directories
+3. Suggest fixes for any issues found
 
-Defaults: `limit=5`, `cutoff=3` (expected document must appear in top 3 results).
+## Example
+
+```bash
+mx health           # Human-readable output
+mx health --json    # JSON format for programmatic use
+```
+
+## What It Checks
+
+- **Orphans**: Entries with no inbound links
+- **Broken links**: `[[links]]` pointing to non-existent entries
+- **Stale content**: Entries not updated in a long time
+- **Empty directories**: Folders with no entries

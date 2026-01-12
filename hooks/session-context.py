@@ -241,12 +241,12 @@ def format_output(entries: list[dict], project_name: str) -> str:
         "and operational guides. **Search before creating** to avoid duplicates.",
         "",
         "**Quick Reference:**",
-        "| Action | Tool/Command |",
-        "|--------|--------------|",
-        "| Search | `mcp__memex__search` or `/kb search <query>` |",
-        "| Browse | `mcp__memex__list` or `mcp__memex__tree` |",
-        "| Read entry | `mcp__memex__get` with path |",
-        "| Add new | `mcp__memex__add` with title, content, tags |",
+        "| Action | Command |",
+        "|--------|---------|",
+        "| Search | `mx search <query>` |",
+        "| Browse | `mx list` or `mx tree` |",
+        "| Read entry | `mx get <path>` |",
+        "| Add new | `mx add --title=... --tags=... --content=...` |",
         "",
     ]
 
