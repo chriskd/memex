@@ -3347,6 +3347,123 @@ def schema(command_name: Optional[str], compact: bool):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+def _setup_github_actions_workflow(
+    resolved_kb: Path,
+    base_url: str,
+    title: str,
+    dry_run: bool,
+) -> None:
+    """Generate GitHub Actions workflow for KB publishing."""
+    import subprocess
+
+    # Find git root (run from KB directory to handle nested repos correctly)
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=resolved_kb,
+        )
+        git_root = Path(result.stdout.strip())
+    except subprocess.CalledProcessError:
+        click.echo("Error: Not in a git repository", err=True)
+        sys.exit(1)
+
+    # Calculate KB path relative to git root
+    try:
+        kb_rel_path = resolved_kb.relative_to(git_root)
+    except ValueError:
+        click.echo(f"Error: KB path {resolved_kb} is not within git repo {git_root}", err=True)
+        sys.exit(1)
+
+    # Determine base URL - use shell expansion if not explicitly set
+    if base_url:
+        base_url_line = f"--base-url {base_url}"
+    else:
+        # Use GitHub's repo name variable for auto-detection
+        # Note: ${...} is shell syntax for parameter expansion
+        base_url_line = '--base-url "/${GITHUB_REPOSITORY#*/}"'
+
+    # Generate workflow content
+    workflow = f'''name: Publish KB to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '{kb_rel_path}/**'
+  workflow_dispatch:
+
+# Allow only one concurrent deployment
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install memex
+        run: pip install memex-kb
+
+      - name: Generate static site
+        run: |
+          mx publish --kb-root ./{kb_rel_path} -o _site {base_url_line} --title "{title}"
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{{{ steps.deployment.outputs.page_url }}}}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+'''
+
+    workflow_path = git_root / ".github" / "workflows" / "publish-kb.yml"
+
+    if dry_run:
+        click.echo("Would create workflow at:")
+        click.echo(f"  {workflow_path}")
+        click.echo("")
+        click.echo("Workflow content:")
+        click.echo("─" * 60)
+        click.echo(workflow)
+        click.echo("─" * 60)
+        return
+
+    # Create directory and write file
+    workflow_path.parent.mkdir(parents=True, exist_ok=True)
+    workflow_path.write_text(workflow)
+
+    click.echo(f"Created GitHub Actions workflow: {workflow_path}")
+    click.echo("")
+    click.echo("Next steps:")
+    click.echo("  1. Commit and push the workflow file")
+    click.echo("  2. Go to Settings > Pages in your GitHub repo")
+    click.echo("  3. Set 'Source' to 'GitHub Actions'")
+    click.echo("")
+    click.echo("The workflow will run on pushes to main that modify your KB.")
+
+
 @cli.command()
 @click.option(
     "--kb-root", "-k",
@@ -3400,6 +3517,16 @@ def schema(command_name: Optional[str], compact: bool):
     help="Don't remove output directory before build",
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.option(
+    "--setup-github-actions",
+    is_flag=True,
+    help="Create GitHub Actions workflow for auto-publishing to GitHub Pages",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Preview what would be done (for --setup-github-actions)",
+)
 @click.pass_context
 def publish(
     ctx: click.Context,
@@ -3414,6 +3541,8 @@ def publish(
     include_archived: bool,
     no_clean: bool,
     as_json: bool,
+    setup_github_actions: bool,
+    dry_run: bool,
 ):
     """Generate static HTML site for GitHub Pages.
 
@@ -3448,6 +3577,14 @@ def publish(
       mx publish --kb-root ./kb -o docs    # Explicit KB source
       mx publish --scope=user -o docs      # Publish user KB
       mx publish --base-url /my-kb         # Subdirectory hosting
+
+    \b
+    GitHub Actions Setup:
+      mx publish --setup-github-actions    # Create CI workflow
+      mx publish --setup-github-actions --dry-run  # Preview workflow
+
+    The --setup-github-actions flag creates .github/workflows/publish-kb.yml
+    that auto-publishes your KB to GitHub Pages on push to main.
     """
     from .config import get_kb_root_by_scope
     from .context import get_kb_context
@@ -3502,6 +3639,16 @@ def publish(
     resolved_base_url = base_url
     if not resolved_base_url and context and context.publish_base_url:
         resolved_base_url = context.publish_base_url
+
+    # Handle --setup-github-actions
+    if setup_github_actions:
+        _setup_github_actions_workflow(
+            resolved_kb=resolved_kb,
+            base_url=resolved_base_url,
+            title=title,
+            dry_run=dry_run,
+        )
+        return
 
     # Show confirmation message
     click.echo(f"Publishing from: {resolved_kb} (via {source_description})")

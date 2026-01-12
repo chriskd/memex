@@ -1612,3 +1612,112 @@ class TestPublishCommand:
             assert "Published" in result.output
             # Check output was created
             assert (Path(output_dir) / "index.html").exists()
+
+    def test_setup_github_actions_dry_run(self, runner, tmp_path):
+        """--setup-github-actions --dry-run shows workflow without creating file."""
+        import subprocess
+
+        # Create a git repo with a KB directory
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        kb_dir = tmp_path / "kb"
+        kb_dir.mkdir()
+        (kb_dir / "test.md").write_text("---\ntitle: Test\ntags: [test]\n---\nContent")
+
+        result = runner.invoke(
+            cli,
+            ["publish", "--setup-github-actions", "--dry-run", "--kb-root", str(kb_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert "Would create workflow at:" in result.output
+        assert "publish-kb.yml" in result.output
+        assert "name: Publish KB to GitHub Pages" in result.output
+        assert "paths:" in result.output
+        assert "'kb/**'" in result.output
+        # Should not actually create the file
+        assert not (tmp_path / ".github" / "workflows" / "publish-kb.yml").exists()
+
+    def test_setup_github_actions_creates_workflow(self, runner, tmp_path):
+        """--setup-github-actions creates workflow file."""
+        import subprocess
+
+        # Create a git repo with a KB directory
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        kb_dir = tmp_path / "kb"
+        kb_dir.mkdir()
+        (kb_dir / "test.md").write_text("---\ntitle: Test\ntags: [test]\n---\nContent")
+
+        result = runner.invoke(
+            cli,
+            ["publish", "--setup-github-actions", "--kb-root", str(kb_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert "Created GitHub Actions workflow:" in result.output
+        assert "Next steps:" in result.output
+
+        # Verify the file was created
+        workflow_path = tmp_path / ".github" / "workflows" / "publish-kb.yml"
+        assert workflow_path.exists()
+
+        # Verify content
+        content = workflow_path.read_text()
+        assert "name: Publish KB to GitHub Pages" in content
+        assert "mx publish --kb-root ./kb" in content
+        assert "actions/deploy-pages@v4" in content
+
+    def test_setup_github_actions_uses_explicit_base_url(self, runner, tmp_path):
+        """--setup-github-actions uses explicit --base-url in workflow."""
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        kb_dir = tmp_path / "kb"
+        kb_dir.mkdir()
+        (kb_dir / "test.md").write_text("---\ntitle: Test\ntags: [test]\n---\nContent")
+
+        result = runner.invoke(
+            cli,
+            ["publish", "--setup-github-actions", "--dry-run", "--kb-root", str(kb_dir),
+             "--base-url", "/my-project"],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        assert "--base-url /my-project" in result.output
+        # Should NOT use the GitHub variable when explicit URL is given
+        assert "${GITHUB_REPOSITORY" not in result.output
+
+    def test_setup_github_actions_auto_detects_base_url(self, runner, tmp_path):
+        """--setup-github-actions uses GitHub variable for base URL by default."""
+        import subprocess
+
+        subprocess.run(["git", "init"], cwd=tmp_path, capture_output=True)
+        kb_dir = tmp_path / "kb"
+        kb_dir.mkdir()
+        (kb_dir / "test.md").write_text("---\ntitle: Test\ntags: [test]\n---\nContent")
+
+        result = runner.invoke(
+            cli,
+            ["publish", "--setup-github-actions", "--dry-run", "--kb-root", str(kb_dir)],
+            catch_exceptions=False,
+        )
+
+        assert result.exit_code == 0
+        # Should use the GitHub variable for auto-detection
+        assert "${GITHUB_REPOSITORY#*/}" in result.output
+
+    def test_setup_github_actions_fails_outside_git_repo(self, runner, tmp_path):
+        """--setup-github-actions fails outside a git repository."""
+        kb_dir = tmp_path / "kb"
+        kb_dir.mkdir()
+        (kb_dir / "test.md").write_text("---\ntitle: Test\ntags: [test]\n---\nContent")
+
+        result = runner.invoke(
+            cli,
+            ["publish", "--setup-github-actions", "--kb-root", str(kb_dir)],
+        )
+
+        assert result.exit_code == 1
+        assert "Not in a git repository" in result.output
