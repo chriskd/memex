@@ -28,7 +28,7 @@ from .config import (
     TAG_SUGGESTION_MIN_SCORE,
     get_kb_root,
 )
-from .context import KBContext, get_kb_context
+from .context import KBContext, get_kb_context, get_kbconfig
 from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
@@ -793,20 +793,36 @@ async def add_entry(
         min_score=0.3,
     )
 
-    # Prepend context default_tags (if not already in tags or suggestions)
+    # Collect default_tags from .kbconfig (KB-level) and .kbcontext (project-level)
+    existing_tag_set = set(tags)
+    suggested_tag_set = {s["tag"] for s in suggested_tags}
+    config_suggestions = []
+
+    # Check for .kbconfig in the target directory (KB-level default_tags)
+    kbconfig = get_kbconfig(target_dir)
+    if kbconfig and kbconfig.default_tags:
+        for tag in kbconfig.default_tags:
+            if tag not in existing_tag_set and tag not in suggested_tag_set:
+                config_suggestions.append({
+                    "tag": tag,
+                    "score": 1.0,  # High priority for KB config tags
+                    "reason": "From .kbconfig",
+                })
+                suggested_tag_set.add(tag)
+
+    # Also check .kbcontext default_tags (project-level, for backwards compatibility)
     if kb_context and kb_context.default_tags:
-        existing_tag_set = set(tags)
-        suggested_tag_set = {s["tag"] for s in suggested_tags}
-        context_suggestions = []
         for tag in kb_context.default_tags:
             if tag not in existing_tag_set and tag not in suggested_tag_set:
-                context_suggestions.append({
+                config_suggestions.append({
                     "tag": tag,
                     "score": 1.0,  # High priority for context tags
                     "reason": "From project .kbcontext",
                 })
-        # Prepend context suggestions to semantic suggestions
-        suggested_tags = context_suggestions + suggested_tags
+                suggested_tag_set.add(tag)
+
+    # Prepend config suggestions to semantic suggestions
+    suggested_tags = config_suggestions + suggested_tags
 
     return {"path": rel_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
 

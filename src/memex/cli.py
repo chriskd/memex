@@ -1340,8 +1340,6 @@ def context(ctx):
     - paths: Boost these paths in search results
     - default_tags: Suggested tags for new entries
 
-    Note: Use 'mx init' to create a new KB instead of 'mx context init'.
-
     \b
     Examples:
       mx context            # Show current context
@@ -1400,63 +1398,6 @@ def context_show(as_json: bool):
 def context_status(ctx):
     """Alias for 'show' - used when 'context' is called without subcommand."""
     ctx.invoke(context_show)
-
-
-@context.command("init", hidden=True)  # DEPRECATED: use mx init instead
-@click.option("--project", "-p", help="Project name (auto-detected from directory if not provided)")
-@click.option("--directory", "-d", help="KB directory (defaults to projects/<project>)")
-@click.option("--force", "-f", is_flag=True, help="Overwrite existing .kbcontext file")
-@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def context_init(project: Optional[str], directory: Optional[str], force: bool, as_json: bool):
-    """DEPRECATED: Create a .kbcontext file. Use 'mx init' instead.
-
-    This command is deprecated. Use 'mx init' to create a project KB,
-    or 'mx init --user' for a user-scope KB.
-
-    \b
-    Examples:
-      mx init                  # Create project KB (recommended)
-      mx init --user           # Create user KB
-    """
-    from .context import CONTEXT_FILENAME, create_default_context
-
-    # Show deprecation warning
-    if not as_json:
-        click.echo("Warning: 'mx context init' is deprecated.", err=True)
-        click.echo("Use 'mx init' for project KB or 'mx init --user' for user KB.", err=True)
-        click.echo()
-
-    context_path = Path.cwd() / CONTEXT_FILENAME
-
-    if context_path.exists() and not force:
-        if as_json:
-            output({"error": f"{CONTEXT_FILENAME} already exists. Use --force to overwrite."}, as_json=True)
-        else:
-            click.echo(f"Error: {CONTEXT_FILENAME} already exists. Use --force to overwrite.", err=True)
-        sys.exit(1)
-
-    # Auto-detect project name from directory
-    if not project:
-        project = Path.cwd().name
-
-    content = create_default_context(project, directory)
-    context_path.write_text(content, encoding="utf-8")
-
-    primary_dir = directory or f"projects/{project}"
-
-    if as_json:
-        output({
-            "created": str(context_path),
-            "primary": primary_dir,
-            "default_tags": [project],
-            "deprecated": True,
-            "migration": "Use 'mx init' instead"
-        }, as_json=True)
-    else:
-        click.echo(f"Created {CONTEXT_FILENAME}")
-        click.echo(f"  Primary directory: {primary_dir}")
-        click.echo(f"  Default tags: {project}")
-        click.echo("\nEdit the file to customize paths and tags.")
 
 
 @context.command("validate")
@@ -2010,9 +1951,7 @@ def _build_schema() -> dict:
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["add", "search"],
-                "common_mistakes": {
-                    "using context init": "mx context init is deprecated. Use 'mx init' for project KB or 'mx init --user' for user KB.",
-                },
+                "common_mistakes": {},
                 "examples": [
                     "mx init",
                     "mx init --user",
@@ -2040,9 +1979,7 @@ def _build_schema() -> dict:
                 "subcommands": ["show", "validate"],
                 "options": [],
                 "related": ["init", "add", "search"],
-                "common_mistakes": {
-                    "using context init": "mx context init is deprecated. Use 'mx init' instead.",
-                },
+                "common_mistakes": {},
                 "examples": [
                     "mx context",
                     "mx context show",

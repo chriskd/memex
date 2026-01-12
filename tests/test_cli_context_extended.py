@@ -213,23 +213,20 @@ paths:
         assert isinstance(data["warnings"], list)
 
 
-class TestContextInit:
-    """Tests for mx context init subcommand (DEPRECATED)."""
+class TestContextInitRemoved:
+    """Tests that mx context init has been removed."""
 
-    def test_context_init_shows_deprecation_warning(self, project_dir, monkeypatch):
-        """Shows deprecation warning when using mx context init."""
-        monkeypatch.chdir(project_dir)
-
+    def test_context_init_not_available(self):
+        """'context init' command no longer exists."""
         runner = CliRunner()
         result = runner.invoke(cli, ["context", "init"])
 
-        assert result.exit_code == 0
-        # Check deprecation warning is shown
-        assert "deprecated" in result.output.lower()
-        assert "mx init" in result.output
+        # Should fail - command doesn't exist
+        assert result.exit_code != 0
+        assert "No such command" in result.output or "Error" in result.output
 
-    def test_context_init_hidden_from_help(self):
-        """'context init' is hidden from Commands section in help output."""
+    def test_context_init_not_in_help(self):
+        """'init' is not listed in context help."""
         runner = CliRunner()
         result = runner.invoke(cli, ["context", "--help"])
 
@@ -243,58 +240,7 @@ class TestContextInit:
             elif in_commands:
                 # 'init' should NOT be listed as a command
                 if line.strip().startswith("init"):
-                    assert False, "init command should be hidden from help"
+                    assert False, "init command should not exist"
         # show and validate should be in Commands
         assert "show" in result.output
         assert "validate" in result.output
-
-    def test_context_init_auto_detects_project(self, project_dir, monkeypatch):
-        """Auto-detects project name from directory name (still works but deprecated)."""
-        monkeypatch.chdir(project_dir)
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["context", "init"])
-
-        assert result.exit_code == 0
-        assert "Created .kbcontext" in result.output
-
-        # Verify file contents
-        context_path = project_dir / CONTEXT_FILENAME
-        assert context_path.exists()
-        content = context_path.read_text()
-        assert "my-awesome-project" in content
-        assert "primary:" in content
-
-    def test_context_init_custom_project(self, project_dir, monkeypatch):
-        """--project sets project name instead of auto-detection."""
-        monkeypatch.chdir(project_dir)
-
-        runner = CliRunner()
-        result = runner.invoke(cli, ["context", "init", "--project=customname"])
-
-        assert result.exit_code == 0
-        assert "Created .kbcontext" in result.output
-        assert "customname" in result.output
-
-        # Verify file contents
-        context_path = project_dir / CONTEXT_FILENAME
-        content = context_path.read_text()
-        assert "customname" in content
-        assert "projects/customname" in content
-
-    def test_context_init_custom_directory(self, project_dir, monkeypatch):
-        """--directory sets KB directory path."""
-        monkeypatch.chdir(project_dir)
-
-        runner = CliRunner()
-        result = runner.invoke(
-            cli, ["context", "init", "--directory=custom/kb/path"]
-        )
-
-        assert result.exit_code == 0
-        assert "custom/kb/path" in result.output
-
-        # Verify file contents
-        context_path = project_dir / CONTEXT_FILENAME
-        content = context_path.read_text()
-        assert "primary: custom/kb/path" in content
