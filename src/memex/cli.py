@@ -3286,14 +3286,14 @@ def schema(command_name: Optional[str], compact: bool):
     help="KB source directory (overrides .kbcontext and MEMEX_KB_ROOT)",
 )
 @click.option(
-    "--global", "use_global",
-    is_flag=True,
-    help="Use global MEMEX_KB_ROOT (required when no --kb-root or project_kb)",
+    "--scope", "-s",
+    type=click.Choice(["project", "user"]),
+    help="KB scope: project (from .kbcontext) or user (~/.memex/kb/)",
 )
 @click.option(
     "--yes", "-y",
     is_flag=True,
-    help="Skip confirmation prompt when publishing from global KB",
+    help="Skip confirmation prompt when publishing from user KB",
 )
 @click.option(
     "--output", "-o", "output_dir",
@@ -3336,7 +3336,7 @@ def schema(command_name: Optional[str], compact: bool):
 def publish(
     ctx: click.Context,
     kb_root: str | None,
-    use_global: bool,
+    scope: str | None,
     yes: bool,
     output_dir: str,
     base_url: str,
@@ -3358,8 +3358,8 @@ def publish(
     \b
     KB source resolution (in order):
       1. --kb-root flag (explicit path)
-      2. project_kb in .kbcontext (relative to context file)
-      3. --global flag required to use MEMEX_KB_ROOT
+      2. --scope flag (project or user)
+      3. project_kb in .kbcontext (relative to context file)
 
     \b
     Base URL resolution:
@@ -3378,10 +3378,10 @@ def publish(
     Examples:
       mx publish -o docs                   # Uses .kbcontext settings
       mx publish --kb-root ./kb -o docs    # Explicit KB source
-      mx publish --global -o docs          # Use MEMEX_KB_ROOT
+      mx publish --scope=user -o docs      # Publish user KB
       mx publish --base-url /my-kb         # Subdirectory hosting
     """
-    from .config import get_kb_root
+    from .config import get_kb_root_by_scope
     from .context import get_kb_context
     from .core import publish as core_publish
 
@@ -3396,6 +3396,23 @@ def publish(
         # Explicit --kb-root flag takes priority
         resolved_kb = Path(kb_root).resolve()
         source_description = "--kb-root flag"
+    elif scope:
+        # Explicit --scope flag
+        try:
+            resolved_kb = get_kb_root_by_scope(scope)
+            source_description = f"--scope={scope}"
+        except Exception as e:
+            click.echo(f"Error: {e}", err=True)
+            sys.exit(1)
+
+        # Warn and require confirmation when publishing from user KB
+        if scope == "user" and not yes:
+            click.echo(f"Warning: You are about to publish content from your user KB at {resolved_kb}", err=True)
+            click.echo("This may include personal or private content.", err=True)
+            click.echo("", err=True)
+            if not click.confirm("Continue?", default=False):
+                click.echo("Aborted.", err=True)
+                sys.exit(0)
     elif context and context.project_kb and context.source_file:
         # Try .kbcontext project_kb
         project_kb_path = (context.source_file.parent / context.project_kb).resolve()
@@ -3403,28 +3420,15 @@ def publish(
             resolved_kb = project_kb_path
             source_description = ".kbcontext project_kb"
 
-    # No local KB found - require --global flag for safety
+    # No KB found - show options
     if not resolved_kb:
-        if not use_global:
-            click.echo("Error: No project KB found", err=True)
-            click.echo("", err=True)
-            click.echo("Options:", err=True)
-            click.echo("  - Add 'project_kb: ./kb' to .kbcontext", err=True)
-            click.echo("  - Use --kb-root ./path/to/kb", err=True)
-            click.echo("  - Use --global to publish from MEMEX_KB_ROOT", err=True)
-            sys.exit(1)
-
-        resolved_kb = get_kb_root()
-        source_description = "MEMEX_KB_ROOT (--global)"
-
-        # Warn and require confirmation when publishing from global KB
-        if not yes:
-            click.echo(f"Warning: You are about to publish content from your global KB at {resolved_kb}", err=True)
-            click.echo("This may include organizational or private content.", err=True)
-            click.echo("", err=True)
-            if not click.confirm("Continue?", default=False):
-                click.echo("Aborted.", err=True)
-                sys.exit(0)
+        click.echo("Error: No KB found to publish", err=True)
+        click.echo("", err=True)
+        click.echo("Options:", err=True)
+        click.echo("  - Add 'project_kb: ./kb' to .kbcontext", err=True)
+        click.echo("  - Use --kb-root ./path/to/kb", err=True)
+        click.echo("  - Use --scope=user to publish your user KB", err=True)
+        sys.exit(1)
 
     # Resolve base_url from context if not specified via CLI
     resolved_base_url = base_url
