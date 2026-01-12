@@ -927,12 +927,12 @@ def _score_confidence_short(score: float) -> str:
 
 @cli.command()
 @click.argument("query")
-@click.option("--tags", "-t", help="Filter by tags (comma-separated)")
+@click.option("--tags", help="Filter by tags (comma-separated)")
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
 @click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
               help="Minimum score threshold (0.0-1.0). Scores: >=0.7 high, 0.4-0.7 moderate, <0.4 weak")
-@click.option("--content", "-c", is_flag=True, help="Include full content in results")
+@click.option("--content", is_flag=True, help="Include full content in results")
 @click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
@@ -1049,7 +1049,7 @@ def search(query: str, tags: Optional[str], mode: str, limit: int, min_score: Op
 
 @cli.command()
 @click.argument("path", required=False)
-@click.option("--title", "-t", "by_title", help="Get entry by title instead of path")
+@click.option("--title", "by_title", help="Get entry by title instead of path")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
 def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: bool):
@@ -1061,7 +1061,7 @@ def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: b
       mx get tooling/beads-issue-tracker.md --json
       mx get tooling/beads-issue-tracker.md --metadata
       mx get --title="Docker Guide"
-      mx get -t "Python Tooling"
+      mx get --title "Python Tooling"
 
     \b
     See also:
@@ -1132,9 +1132,9 @@ def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: b
 
 
 @cli.command()
-@click.option("--title", "-t", required=True, help="Entry title")
+@click.option("--title", required=True, help="Entry title")
 @click.option("--tags", required=True, help="Tags (comma-separated)")
-@click.option("--category", "-c", default="", help="Category/directory")
+@click.option("--category", default="", help="Category/directory")
 @click.option("--content", help="Content (or use --file/--stdin)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
@@ -1224,12 +1224,11 @@ def add(
 
 @cli.command()
 @click.argument("title")
-@click.option("--content", "-c", help="Content to append (or use --file/--stdin)")
+@click.option("--content", help="Content to append (or use --file/--stdin)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
-@click.option("--tags", "-t", help="Tags (comma-separated, required for new entries)")
+@click.option("--tags", help="Tags (comma-separated, required for new entries)")
 @click.option("--category", help="Category for new entries")
-@click.option("--directory", "-d", help="Directory for new entries")
 @click.option("--no-create", is_flag=True, help="Error if entry not found (don't create)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def append(
@@ -1239,7 +1238,6 @@ def append(
     stdin: bool,
     tags: Optional[str],
     category: Optional[str],
-    directory: Optional[str],
     no_create: bool,
     as_json: bool,
 ):
@@ -1286,7 +1284,6 @@ def append(
             content=content,
             tags=tag_list,
             category=category or "",
-            directory=directory,
             no_create=no_create,
         ))
     except Exception as e:
@@ -1452,8 +1449,8 @@ def tree(path: str, depth: int, scope: Optional[str], as_json: bool):
 
 
 @cli.command("list")
-@click.option("--tag", "-t", help="Filter by tag")
-@click.option("--category", "-c", help="Filter by category")
+@click.option("--tags", "tag", help="Filter by tag")
+@click.option("--category", help="Filter by category")
 @click.option("--limit", "-n", default=20, help="Max results")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
@@ -1464,7 +1461,7 @@ def list_entries(tag: Optional[str], category: Optional[str], limit: int, full_t
     \b
     Examples:
       mx list
-      mx list --tag=tooling
+      mx list --tags=tooling
       mx list --category=infrastructure --limit=10
       mx list --scope=project              # Project KB only
     """
@@ -2145,8 +2142,8 @@ def _suggest_category_from_content(content: str, categories: list[str]) -> str |
     type=click.Path(exists=True), help="Read content from file",
 )
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
-@click.option("--content", "-c", help="Raw content to add")
-@click.option("--title", "-t", help="Override auto-detected title")
+@click.option("--content", help="Raw content to add")
+@click.option("--title", help="Override auto-detected title")
 @click.option("--tags", help="Override auto-suggested tags (comma-separated)")
 @click.option("--category", help="Override auto-suggested category")
 @click.option("--confirm", "-y", is_flag=True, help="Auto-confirm without prompting")
@@ -2826,11 +2823,11 @@ def _build_schema() -> dict:
                     {"name": "query", "required": True, "description": "Search query text"}
                 ],
                 "options": [
-                    {"name": "--tags", "short": "-t", "type": "string", "description": "Filter by tags (comma-separated)"},
+                    {"name": "--tags", "type": "string", "description": "Filter by tags (comma-separated)"},
                     {"name": "--mode", "type": "choice", "choices": ["hybrid", "keyword", "semantic"], "default": "hybrid", "description": "Search mode"},
                     {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
                     {"name": "--min-score", "type": "float", "description": "Minimum score threshold (0.0-1.0)"},
-                    {"name": "--content", "short": "-c", "type": "flag", "description": "Include full content in results"},
+                    {"name": "--content", "type": "flag", "description": "Include full content in results"},
                     {"name": "--strict", "type": "flag", "description": "Disable semantic fallback for keyword mode"},
                     {"name": "--terse", "type": "flag", "description": "Output paths only (one per line)"},
                     {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
@@ -2873,9 +2870,9 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--title", "short": "-t", "type": "string", "required": True, "description": "Entry title"},
+                    {"name": "--title", "type": "string", "required": True, "description": "Entry title"},
                     {"name": "--tags", "type": "string", "required": True, "description": "Tags (comma-separated)"},
-                    {"name": "--category", "short": "-c", "type": "string", "description": "Category/directory"},
+                    {"name": "--category", "type": "string", "description": "Category/directory"},
                     {"name": "--content", "type": "string", "description": "Content (or use --file/--stdin)"},
                     {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
                     {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
@@ -2898,12 +2895,11 @@ def _build_schema() -> dict:
                     {"name": "title", "required": True, "description": "Title of entry to append to (case-insensitive)"}
                 ],
                 "options": [
-                    {"name": "--content", "short": "-c", "type": "string", "description": "Content to append"},
+                    {"name": "--content", "type": "string", "description": "Content to append"},
                     {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
                     {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
-                    {"name": "--tags", "short": "-t", "type": "string", "description": "Tags (required for new entries)"},
+                    {"name": "--tags", "type": "string", "description": "Tags (required for new entries)"},
                     {"name": "--category", "type": "string", "description": "Category for new entries"},
-                    {"name": "--directory", "short": "-d", "type": "string", "description": "Directory for new entries"},
                     {"name": "--no-create", "type": "flag", "description": "Error if entry not found"},
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
@@ -2996,8 +2992,8 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--tag", "short": "-t", "type": "string", "description": "Filter by tag"},
-                    {"name": "--category", "short": "-c", "type": "string", "description": "Filter by category"},
+                    {"name": "--tags", "type": "string", "description": "Filter by tag"},
+                    {"name": "--category", "type": "string", "description": "Filter by category"},
                     {"name": "--limit", "short": "-n", "type": "integer", "default": 20, "description": "Max results"},
                     {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
                     {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
@@ -3311,7 +3307,7 @@ def schema(command_name: Optional[str], compact: bool):
     help="Base URL for links (e.g., /my-kb for subdirectory hosting)",
 )
 @click.option(
-    "--title", "-t",
+    "--title",
     default="Memex",
     help="Site title for header and page titles (default: Memex)",
 )
