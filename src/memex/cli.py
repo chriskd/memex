@@ -3425,9 +3425,9 @@ def publish(
         click.echo("Error: No KB found to publish", err=True)
         click.echo("", err=True)
         click.echo("Options:", err=True)
-        click.echo("  - Add 'project_kb: ./kb' to .kbcontext", err=True)
-        click.echo("  - Use --kb-root ./path/to/kb", err=True)
-        click.echo("  - Use --scope=user to publish your user KB", err=True)
+        click.echo("  - Use --scope=project (requires project_kb in .kbcontext)", err=True)
+        click.echo("  - Use --scope=user for your personal KB", err=True)
+        click.echo("  - Use --kb-root ./path/to/kb for an arbitrary directory", err=True)
         sys.exit(1)
 
     # Resolve base_url from context if not specified via CLI
