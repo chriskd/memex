@@ -130,7 +130,7 @@ List entries with optional filters.
 
 ```bash
 mx list                        # All entries
-mx list --tag=infrastructure   # Filter by tag
+mx list --tags=infrastructure  # Filter by tag
 mx list --category=tooling     # Filter by category
 mx list --limit=50             # More results
 mx list --full-titles          # Show untruncated titles

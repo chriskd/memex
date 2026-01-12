@@ -107,7 +107,7 @@ mx get path/to/entry.md --metadata # Metadata only
 
 # Browse
 mx tree                            # Directory structure
-mx list --tag=docs                 # Filter by tag
+mx list --tags=docs                # Filter by tag
 mx whats-new --days=7              # Recent changes
 mx tags                            # All tags
 

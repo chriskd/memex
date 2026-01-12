@@ -585,7 +585,7 @@ mx get tooling/beads.md --metadata  # Just metadata
 
 # Browse
 mx tree                             # Directory structure
-mx list --tag=infrastructure        # Filter by tag
+mx list --tags=infrastructure       # Filter by tag
 mx whats-new --days=7               # Recent changes
 mx whats-new --scope=project        # Project KB only
 
@@ -3005,7 +3005,7 @@ def _build_schema() -> dict:
                 },
                 "examples": [
                     "mx list",
-                    "mx list --tag=infrastructure",
+                    "mx list --tags=infrastructure",
                     "mx list --scope=project",
                 ],
             },

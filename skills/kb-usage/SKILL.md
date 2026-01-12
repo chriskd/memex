@@ -169,7 +169,7 @@ See [[references/categories]] for the full category taxonomy.
 | Append | `mx append` | `mx append "Title" --content="..."` |
 | Replace | `mx replace` | `mx replace path.md --tags="new,tags"` |
 | Browse | `mx tree` | `mx tree` |
-| List | `mx list` | `mx list --tag=devops` |
+| List | `mx list` | `mx list --tags=devops` |
 | Tags | `mx tags` | `mx tags` |
 | Health | `mx health` | `mx health` |
 
