@@ -784,17 +784,22 @@ class TestHealthCommand:
 class TestInitCommand:
     """Tests for 'mx init' command."""
 
-    def test_init_creates_kb(self, runner, tmp_path):
+    def test_init_creates_kb(self, runner, tmp_path, monkeypatch):
         """Init creates KB directory structure."""
+        # Change to tmp_path so .kbconfig is written there, not project root
+        monkeypatch.chdir(tmp_path)
         result = runner.invoke(cli, ["init", "--path", str(tmp_path / "kb")])
 
         assert result.exit_code == 0
         assert "Initialized" in result.output
         assert (tmp_path / "kb").exists()
         assert (tmp_path / "kb" / "README.md").exists()
+        # Verify .kbconfig was written to tmp_path, not project root
+        assert (tmp_path / ".kbconfig").exists()
 
-    def test_init_already_exists(self, runner, tmp_path):
+    def test_init_already_exists(self, runner, tmp_path, monkeypatch):
         """Init fails if KB already exists (without --force)."""
+        monkeypatch.chdir(tmp_path)
         kb_path = tmp_path / "kb"
         kb_path.mkdir()
 
@@ -803,8 +808,9 @@ class TestInitCommand:
         assert result.exit_code == 1
         assert "already exists" in result.output
 
-    def test_init_mutually_exclusive_options(self, runner, tmp_path):
+    def test_init_mutually_exclusive_options(self, runner, tmp_path, monkeypatch):
         """Init rejects --user and --path together."""
+        monkeypatch.chdir(tmp_path)
         result = runner.invoke(cli, ["init", "--user", "--path", str(tmp_path / "kb")])
 
         assert result.exit_code == 1
