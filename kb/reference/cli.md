@@ -165,17 +165,17 @@ mx add --title="..." --tags="..." --dry-run  # Preview only
 - `--tags`: Tags (comma-separated)
 - `--category, -c`: Target directory (unless .kbcontext sets primary)
 
-### mx update
+### mx replace
 
-Update an existing entry.
+Replace content or metadata in an existing entry.
 
 ```bash
-mx update path/entry.md --tags="new,tags"
-mx update path/entry.md --content="New content"
-mx update path/entry.md --content="Append this" --append
-mx update path/entry.md --content="..." --append --timestamp
-mx update path/entry.md --file=new-content.md
+mx replace path/entry.md --tags="new,tags"
+mx replace path/entry.md --content="New content"
+mx replace path/entry.md --file=new-content.md
 ```
+
+Note: For appending content, use `mx append`. For surgical edits, use `mx patch`.
 
 ### mx patch
 
@@ -196,7 +196,7 @@ Error: --find is required for find-replace operations.
 Did you mean:
   - To append content:  mx append 'Title' --content='...'
   - To replace text:    mx patch entry.md --find 'x' --replace 'y'
-  - To overwrite entry: mx update entry.md --content='...'
+  - To overwrite entry: mx replace entry.md --content='...'
 ```
 
 ### mx append

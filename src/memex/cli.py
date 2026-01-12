@@ -2335,34 +2335,60 @@ def templates(action: str, name: Optional[str], as_json: bool):
 def info(as_json: bool):
     """Show knowledge base configuration and stats.
 
+    Shows all active KBs (project + user) with entry counts.
+
     \b
     Examples:
       mx info
       mx info --json
     """
-    from .config import ConfigurationError, get_index_root, get_kb_root
+    from .config import (
+        ConfigurationError,
+        get_index_root,
+        get_kb_root,
+        get_kb_roots,
+        get_project_kb_root,
+        get_user_kb_root,
+    )
     from .core import get_valid_categories
 
     try:
-        kb_root = get_kb_root()
+        primary_kb = get_kb_root()
         index_root = get_index_root()
     except ConfigurationError as exc:
         click.echo(f"Error: {exc}", err=True)
         sys.exit(1)
 
+    # Get all active KBs
+    project_kb = get_project_kb_root()
+    user_kb = get_user_kb_root()
+    all_kbs = get_kb_roots()
+
+    # Count entries per KB
+    def count_entries(kb_path):
+        if not kb_path or not kb_path.exists():
+            return 0
+        return sum(1 for p in kb_path.rglob("*.md") if not p.name.startswith((".", "_")))
+
+    project_count = count_entries(project_kb)
+    user_count = count_entries(user_kb)
+    total_count = project_count + user_count
+
     categories = get_valid_categories()
-    # Exclude hidden (.) and special (_) files, consistent with tree command
-    entry_count = (
-        sum(1 for p in kb_root.rglob("*.md") if not p.name.startswith((".", "_")))
-        if kb_root.exists()
-        else 0
-    )
+
+    # Build payload
+    kbs_info = []
+    if project_kb:
+        kbs_info.append({"scope": "project", "path": str(project_kb), "entries": project_count})
+    if user_kb:
+        kbs_info.append({"scope": "user", "path": str(user_kb), "entries": user_count})
 
     payload = {
-        "kb_root": str(kb_root),
+        "primary_kb": str(primary_kb),
         "index_root": str(index_root),
+        "kbs": kbs_info,
+        "total_entries": total_count,
         "categories": categories,
-        "entry_count": entry_count,
     }
 
     if as_json:
@@ -2371,13 +2397,22 @@ def info(as_json: bool):
 
     click.echo("Memex Info")
     click.echo("=" * 40)
-    click.echo(f"KB Root:    {kb_root}")
+    click.echo(f"Primary KB: {primary_kb}")
     click.echo(f"Index Root: {index_root}")
-    click.echo(f"Entries:    {entry_count}")
+    click.echo()
+    click.echo("Active KBs:")
+    if project_kb:
+        click.echo(f"  project:  {project_kb} ({project_count} entries)")
+    else:
+        click.echo("  project:  (none)")
+    if user_kb:
+        click.echo(f"  user:     {user_kb} ({user_count} entries)")
+    else:
+        click.echo("  user:     (none)")
+    click.echo()
+    click.echo(f"Total:      {total_count} entries")
     if categories:
         click.echo(f"Categories: {', '.join(categories)}")
-    else:
-        click.echo("Categories: (none)")
 
 
 @cli.command("config")

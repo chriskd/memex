@@ -40,7 +40,9 @@ mx add --title="My First Note" --tags="example" --category=kb --content="Hello, 
 mx search "hello"
 ```
 
-This creates a `kb/` directory that you can commit to share knowledge with collaborators.
+This creates:
+- `kb/` directory for entries (commit to share with collaborators)
+- `.kbconfig` at project root with `kb_path: ./kb`
 
 ### User KB (Personal)
 
@@ -53,6 +55,23 @@ mx add --title="My Note" --tags="personal" --category=kb --content="Personal kno
 ```
 
 User KB entries are personal and available in all projects.
+
+### Additive Scope (Default)
+
+By default, searches span **both** project and user KBs:
+
+```bash
+# Search finds entries from project KB AND user KB
+mx search "deployment"
+
+# Restrict to project KB only
+mx search "deployment" --project-only
+mx reindex --project-only
+```
+
+Results from different KBs use scope prefixes when both exist:
+- `@project/guides/setup.md` - Entry from project KB
+- `@user/personal/notes.md` - Entry from user KB
 
 ### Global KB
 
@@ -86,7 +105,8 @@ mx tags                             # List all tags with counts
 
 # Create/update entries
 mx add --title="My Entry" --tags="foo,bar" --content="# Content..."
-mx update path/entry.md --tags="new,tags"
+mx replace path/entry.md --tags="new,tags"
+mx patch path/entry.md --find="old text" --replace="new text"
 
 # Analysis
 mx hubs                             # Most connected entries
@@ -184,30 +204,50 @@ Use `[[path/to/entry|Display Text]]` for custom link text.
 
 ## Configuration
 
-### KB Configuration (.kbconfig)
+### Project Configuration (.kbconfig)
 
-Each KB directory can have a `.kbconfig` file with settings:
+For project KBs, `.kbconfig` lives at the **project root** (not inside kb/):
 
 ```yaml
-# Default tags suggested when adding entries to this KB
+# Required: path to the KB directory
+kb_path: ./kb
+
+# Default tags suggested when adding entries
 default_tags:
   - myproject
-  - docs
+
+# Boost these paths in search results
+boost_paths:
+  - guides/*
+  - reference/*
+
+# Default write directory for new entries
+primary: guides
 
 # Patterns to exclude from indexing
 exclude:
   - "*.draft.md"
-  - "private/**"
 ```
 
-When you run `mx init`, a `.kbconfig` template is created automatically.
+When you run `mx init`, this file is created automatically at your project root.
+
+### User KB Configuration
+
+For user KBs (`~/.memex/kb/`), the `.kbconfig` lives inside the KB directory
+since there's no project root:
+
+```yaml
+# Optional settings for user KB
+default_tags:
+  - personal
+```
 
 ### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `MEMEX_KB_ROOT` | Knowledge base directory | `./kb` |
-| `MEMEX_INDEX_ROOT` | Search index directory | `./.indices` |
+| `MEMEX_KB_ROOT` | Override KB discovery (single KB mode) | auto-discover |
+| `MEMEX_INDEX_ROOT` | Search index directory | `{kb}/.indices` |
 | `MEMEX_PRELOAD` | Preload embedding model | `false` |
 | `MEMEX_LOG_LEVEL` | Log level (DEBUG, INFO, WARNING, ERROR) | `INFO` |
 

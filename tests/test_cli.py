@@ -763,8 +763,8 @@ class TestInfoCommand:
         result = runner.invoke(cli, ["info"])
 
         assert result.exit_code == 0
-        assert "KB Root" in result.output
-        assert "Entries" in result.output
+        assert "Primary KB" in result.output
+        assert "Active KBs" in result.output
 
     @patch("memex.core.get_valid_categories")
     @patch("memex.config.get_index_root")
@@ -782,7 +782,9 @@ class TestInfoCommand:
 
         assert result.exit_code == 0
         data = json.loads(result.output)
-        assert "kb_root" in data
+        assert "primary_kb" in data
+        assert "kbs" in data
+        assert "total_entries" in data
 
 
 # ─────────────────────────────────────────────────────────────────────────────
