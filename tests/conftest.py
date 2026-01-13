@@ -101,7 +101,9 @@ tags:
 
     # Store original and set test env
     original_kb_root = os.environ.get("MEMEX_USER_KB_ROOT")
+    original_skip_project = os.environ.get("MEMEX_SKIP_PROJECT_KB")
     os.environ["MEMEX_USER_KB_ROOT"] = str(kb_root)
+    os.environ["MEMEX_SKIP_PROJECT_KB"] = "1"  # Prevent leaking into real project KB
 
     # Clear any cached KB context
     try:
@@ -125,6 +127,11 @@ tags:
         os.environ["MEMEX_USER_KB_ROOT"] = original_kb_root
     else:
         os.environ.pop("MEMEX_USER_KB_ROOT", None)
+
+    if original_skip_project is not None:
+        os.environ["MEMEX_SKIP_PROJECT_KB"] = original_skip_project
+    else:
+        os.environ.pop("MEMEX_SKIP_PROJECT_KB", None)
 
     # Clear cache again
     try:

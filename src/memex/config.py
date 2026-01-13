@@ -19,7 +19,15 @@ def get_project_kb_root() -> Path | None:
 
     Returns:
         Path to project KB if found, None otherwise.
+
+    Note:
+        Set MEMEX_SKIP_PROJECT_KB=1 to disable project KB discovery.
+        This is useful for testing to ensure isolation.
     """
+    # Allow tests to disable project KB discovery
+    if os.environ.get("MEMEX_SKIP_PROJECT_KB"):
+        return None
+
     project_config = _discover_project_config()
     if project_config:
         config_path, kb_path = project_config

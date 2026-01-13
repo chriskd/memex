@@ -1,5 +1,7 @@
 ---
-title: "Focusgroup Evaluation: mx CLI Discoverability (2026-01)"
+title: 'Focusgroup Evaluation: mx CLI Discoverability (2026-01)'
+description: 'Focusgroup Evaluation: mx CLI Discoverability Date: 2026-01-12 Agents: Opus
+  4.5 (Claude), Codex (OpenAI) Mode:...'
 tags:
   - focusgroup
   - evaluation
