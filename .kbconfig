@@ -2,14 +2,14 @@
 # This file configures the project knowledge base
 
 # Path to the KB directory (required for project-scope KBs)
-kb_path: .//srv/fast/devbox.voidlabs.local/tmp/pytest-of-chris/pytest-171/test_init_creates_kb0/kb
+kb_path: kb
 
 # Optional: default tags for entries created here
 # default_tags:
 #   - memex
 
 # Optional: default write directory for new entries
-# primary: guides
+primary: projects/memex
 
 # Optional: boost these paths in search (glob patterns)
 # boost_paths:
