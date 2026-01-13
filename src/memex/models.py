@@ -153,15 +153,6 @@ class UpsertResult(BaseModel):
     match_score: float | None = None  # Confidence score if matched
 
 
-class SessionLogResult(BaseModel):
-    """Result of session-log operation."""
-
-    path: str  # Path to the session entry
-    action: Literal["appended", "created"]  # What action was taken
-    project: str | None = None  # Detected project name
-    context_source: str | None = None  # How context was determined
-
-
 class SearchHistoryEntry(BaseModel):
     """A recorded search query."""
 

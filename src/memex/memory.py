@@ -1,8 +1,8 @@
 """Agent memory subsystem for memex.
 
 Provides automatic session memory capture and injection for AI coding assistants.
-This module consolidates the session-log functionality and adds:
-- Automatic capture via hooks
+Features:
+- Automatic capture via hooks (Stop/PreCompact)
 - Automatic injection at session start
 - Per-day session files with retention
 """

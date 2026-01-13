@@ -47,7 +47,7 @@ from .config import (
     get_kb_root,
     get_kb_root_by_scope,
 )
-from .context import KBContext, get_kb_context, get_kbconfig, get_session_entry_path
+from .context import KBContext, get_kb_context, get_kbconfig
 from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .evaluation import run_quality_checks
 from .indexer import HybridSearcher
@@ -60,7 +60,6 @@ from .models import (
     QualityReport,
     SearchResponse,
     SearchResult,
-    SessionLogResult,
     UpsertMatch,
 )
 from .parser import ParseError, extract_links, parse_entry, update_links_batch
@@ -2932,146 +2931,3 @@ def resolve_entry_by_title(
     return matches[0]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Session Logging
-# ─────────────────────────────────────────────────────────────────────────────
-
-
-async def log_session(
-    message: str,
-    entry_path: str | None = None,
-    tags: list[str] | None = None,
-    links: list[str] | None = None,
-    timestamp: bool = True,
-    kb_context: KBContext | None = None,
-) -> SessionLogResult:
-    """Log a session summary to the appropriate KB entry.
-
-    Resolution order for entry path:
-    1. Explicit entry_path argument
-    2. context.session_entry field
-    3. {context.primary}/sessions.md
-    4. Error if no context and no explicit path
-
-    Args:
-        message: Session summary to log.
-        entry_path: Explicit entry path (overrides context).
-        tags: Additional tags to add to message section.
-        links: Wiki-style links to include in message.
-        timestamp: Add timestamp header (default True).
-        kb_context: Optional context (auto-discovered if None).
-
-    Returns:
-        SessionLogResult with path and action taken.
-
-    Raises:
-        ValueError: If no entry path can be determined.
-    """
-    from datetime import timezone
-
-    kb_root = get_kb_root()
-
-    # Auto-discover KB context if not provided
-    if kb_context is None:
-        kb_context = get_kb_context()
-
-    # Resolve entry path
-    resolved_path: str | None = entry_path
-
-    if resolved_path is None:
-        resolved_path = get_session_entry_path(kb_context)
-
-    if resolved_path is None:
-        raise ValueError(
-            "Cannot determine session entry path. "
-            "Options:\n"
-            "  1. Create .kbcontext: mx context init\n"
-            "  2. Specify entry: mx session-log --entry=path/to/sessions.md"
-        )
-
-    # Prepare content
-    final_content = message
-
-    # Add links if provided
-    if links:
-        final_content += "\n\nRelated: " + ", ".join(f"[[{link}]]" for link in links)
-
-    # Add tags as inline metadata if provided
-    if tags:
-        tag_str = " ".join(f"#{tag}" for tag in tags)
-        final_content = f"{tag_str}\n\n{final_content}"
-
-    # Check if entry exists
-    file_path = kb_root / resolved_path
-    action: Literal["appended", "created"]
-
-    if file_path.exists():
-        # Append to existing entry
-        if timestamp:
-            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-            timestamped_content = f"## {ts}\n\n{final_content}"
-        else:
-            timestamped_content = final_content
-
-        # Manually append since update_entry doesn't have append mode in current version
-        try:
-            metadata, existing_content, _ = parse_entry(file_path)
-            new_content = existing_content.rstrip() + "\n\n" + timestamped_content
-            updated_metadata = update_metadata_for_edit(
-                metadata,
-                new_tags=list(metadata.tags),
-                new_contributor=get_current_contributor(),
-                edit_source=get_current_project(),
-                model=get_llm_model(),
-                git_branch=get_git_branch(),
-                actor=get_actor_identity(),
-            )
-            frontmatter = build_frontmatter(updated_metadata)
-            file_path.write_text(frontmatter + new_content, encoding="utf-8")
-            rebuild_backlink_cache(kb_root)
-        except ParseError as e:
-            raise ValueError(f"Failed to parse existing entry: {e}") from e
-        action = "appended"
-    else:
-        # Create new session entry with template
-        project_name = kb_context.get_project_name() if kb_context else "Unknown"
-        default_tags = ["sessions"]
-        if project_name and project_name != "Unknown":
-            default_tags.insert(0, project_name)
-
-        # Build initial content with template
-        if timestamp:
-            ts = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-            initial_content = f"# Session Log\n\nSession notes for {project_name}.\n\n## {ts}\n\n{final_content}"
-        else:
-            initial_content = f"# Session Log\n\nSession notes for {project_name}.\n\n{final_content}"
-
-        # Ensure directory exists
-        file_path.parent.mkdir(parents=True, exist_ok=True)
-
-        # Write directly to that location
-        metadata = create_new_metadata(
-            title=f"{project_name} Sessions",
-            tags=default_tags,
-            source_project=kb_context.name if kb_context and hasattr(kb_context, "name") else None,
-        )
-        frontmatter = build_frontmatter(metadata)
-        file_path.write_text(frontmatter + initial_content.lstrip(), encoding="utf-8")
-        rebuild_backlink_cache(kb_root)
-        action = "created"
-
-    # Determine context source for reporting
-    context_source: str | None = None
-    if entry_path:
-        context_source = "explicit"
-    elif kb_context and hasattr(kb_context, "session_entry") and kb_context.session_entry:
-        context_source = ".kbcontext (session_entry)"
-    elif kb_context and kb_context.primary:
-        context_source = ".kbcontext (primary)"
-
-    return SessionLogResult(
-        path=resolved_path,
-        action=action,
-        project=kb_context.get_project_name() if kb_context else None,
-        context_source=context_source,
-    )
