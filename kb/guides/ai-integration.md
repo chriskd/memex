@@ -30,13 +30,15 @@ This grants Claude Code permission to run any `mx` command without prompting.
 Memex includes automatic session memory that remembers what you worked on across sessions. See [[guides/agent-memory]] for full documentation.
 
 **Quick setup:**
-1. Set `ANTHROPIC_API_KEY` environment variable
-2. Ensure `.kbconfig` has `primary:` set
-3. Memory hooks activate automatically
+```bash
+mx memory init
+```
 
-**What it does:**
-- **SessionStart**: Injects recent session summaries (~1000 tokens)
-- **Stop/PreCompact**: Captures session observations via Claude haiku
+This installs hooks that:
+- **SessionStart**: Inject recent session context (~1000 tokens)
+- **Stop/PreCompact**: Capture session observations via Claude haiku
+
+Requires `ANTHROPIC_API_KEY` environment variable for summarization.
 
 ### Session Hooks
 
@@ -67,8 +69,8 @@ mx search "authentication patterns"
 mx add --title="OAuth2 Setup" --tags="auth,patterns" --category=patterns \
   --content="..."
 
-# Track progress: update project session log
-mx session-log --message="Implemented OAuth2 flow"
+# Add manual memory notes (auto-captured on session end)
+mx memory add "Implemented OAuth2 flow"
 ```
 
 ## Codex CLI
@@ -141,19 +143,19 @@ This creates a `.kbcontext` file that:
 - Boosts project entries in search results
 - Suggests project-specific tags
 
-## Session Management
+## Session Memory
 
-Track work across sessions:
+Memory is captured automatically at session end. For manual notes:
 
 ```bash
-# Start a session with context
-mx session start --tags=infrastructure --project=myapp
+# Add a memory note
+mx memory add "Fixed auth bug, added tests"
 
-# Log session activity
-mx session-log --message="Fixed auth bug, added tests"
+# Check memory status
+mx memory status
 
-# Clear session context
-mx session clear
+# Preview what would be injected at session start
+mx memory inject
 ```
 
 ## Best Practices
