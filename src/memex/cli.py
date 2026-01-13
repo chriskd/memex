@@ -2707,7 +2707,288 @@ def batch(file_path: Optional[str], continue_on_error: bool):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Session-Log Command
+# Memory Commands
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.group(invoke_without_command=True)
+@click.pass_context
+def memory(ctx):
+    """Agent memory for AI coding assistants.
+
+    Automatic session capture and injection. Remembers what you worked on
+    across sessions without manual effort.
+
+    \b
+    Examples:
+      mx memory              # Show memory status
+      mx memory init         # Enable memory for this project
+      mx memory add "note"   # Add a manual memory note
+      mx memory inject       # Preview what would be injected
+      mx memory capture      # Manually trigger capture
+    """
+    if ctx.invoked_subcommand is None:
+        ctx.invoke(memory_status)
+
+
+@memory.command("status")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_status(as_json: bool = False):
+    """Show memory configuration status.
+
+    \b
+    Examples:
+      mx memory status
+      mx memory status --json
+    """
+    from .memory import get_memory_status
+
+    status = get_memory_status()
+
+    if as_json:
+        output(status, as_json=True)
+        return
+
+    config = status["config"]
+    hooks = status["hooks_installed"]
+
+    click.echo("Memory Status")
+    click.echo("─" * 40)
+
+    # Hooks status
+    if hooks["project"]:
+        click.echo("Hooks: ✓ Installed (project)")
+    elif hooks["user"]:
+        click.echo("Hooks: ✓ Installed (user)")
+    else:
+        click.echo("Hooks: ✗ Not installed")
+        click.echo("  Run 'mx memory init' to enable")
+
+    # Config
+    if config["kb_path"]:
+        click.echo(f"Session dir: {config['session_dir']}")
+        click.echo(f"Retention: {config['retention_days']} days")
+    else:
+        click.echo("KB: Not configured")
+
+    # API key
+    if status["api_key_set"]:
+        click.echo("API key: ✓ Set")
+    else:
+        click.echo("API key: ✗ ANTHROPIC_API_KEY not set")
+
+
+@memory.command("init")
+@click.option("--user", "user_scope", is_flag=True, help="Install hooks user-wide")
+@click.option("--session-dir", default="sessions", help="Directory for session files")
+@click.option("--retention", "retention_days", default=30, type=int, help="Days to retain sessions")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_init(user_scope: bool, session_dir: str, retention_days: int, as_json: bool):
+    """Enable memory for this project.
+
+    Sets up hooks for automatic capture and injection.
+
+    \b
+    Examples:
+      mx memory init                    # Enable for this project
+      mx memory init --user             # Enable user-wide
+      mx memory init --retention=7      # Keep only 7 days
+    """
+    from .memory import init_memory
+
+    result = init_memory(
+        user_scope=user_scope,
+        session_dir=session_dir,
+        retention_days=retention_days,
+    )
+
+    if as_json:
+        output(result, as_json=True)
+        return
+
+    if result["success"]:
+        click.echo("✓ Memory enabled")
+        for action in result["actions"]:
+            click.echo(f"  {action}")
+
+        if result["warnings"]:
+            click.echo()
+            for warning in result["warnings"]:
+                click.echo(f"⚠ {warning}", err=True)
+    else:
+        click.echo("✗ Failed to enable memory", err=True)
+        sys.exit(1)
+
+
+@memory.command("disable")
+@click.option("--user", "user_scope", is_flag=True, help="Remove from user-wide settings")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_disable(user_scope: bool, as_json: bool):
+    """Disable memory by removing hooks.
+
+    \b
+    Examples:
+      mx memory disable         # Disable for this project
+      mx memory disable --user  # Disable user-wide
+    """
+    from .memory import disable_memory
+
+    result = disable_memory(user_scope=user_scope)
+
+    if as_json:
+        output(result, as_json=True)
+        return
+
+    click.echo("✓ Memory disabled")
+    for action in result["actions"]:
+        click.echo(f"  {action}")
+
+
+@memory.command("add")
+@click.argument("message", required=False)
+@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read from file")
+@click.option("--stdin", is_flag=True, help="Read from stdin")
+@click.option("--tag", "--tags", "tags", help="Tags (comma-separated)")
+@click.option("--no-timestamp", is_flag=True, help="Don't add timestamp")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_add(
+    message: str | None,
+    file_path: str | None,
+    stdin: bool,
+    tags: str | None,
+    no_timestamp: bool,
+    as_json: bool,
+):
+    """Add a manual memory note.
+
+    \b
+    Examples:
+      mx memory add "Fixed auth bug using refresh tokens"
+      mx memory add --file=notes.md
+      echo "notes" | mx memory add --stdin
+      mx memory add "Deploy prep" --tags=deployment,release
+    """
+    from .config import get_kb_root
+    from .memory import add_memory, get_memory_config
+
+    # Get message from source
+    content_sources = sum([bool(message), bool(file_path), stdin])
+    if content_sources == 0:
+        click.echo("Error: Provide message, --file, or --stdin", err=True)
+        sys.exit(1)
+    if content_sources > 1:
+        click.echo("Error: message, --file, and --stdin are mutually exclusive", err=True)
+        sys.exit(1)
+
+    if stdin:
+        message = sys.stdin.read().strip()
+    elif file_path:
+        message = Path(file_path).read_text(encoding="utf-8").strip()
+
+    # Parse tags
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    try:
+        kb_root = get_kb_root()
+        config = get_memory_config()
+
+        result = add_memory(
+            message=message,
+            kb_root=kb_root,
+            session_dir=config["session_dir"],
+            tags=tag_list,
+            timestamp=not no_timestamp,
+        )
+
+        if as_json:
+            output(result, as_json=True)
+        else:
+            click.echo(f"✓ Added to {result['path']}")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@memory.command("inject")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_inject(as_json: bool):
+    """Show or output memory injection for session start.
+
+    This is called automatically by the SessionStart hook.
+    Run manually to preview what would be injected.
+
+    \b
+    Examples:
+      mx memory inject          # Preview injection
+      mx memory inject --json   # Output as JSON
+    """
+    # Import and run the injection logic from hooks
+    import subprocess
+
+    hooks_dir = Path(__file__).parent.parent.parent / "hooks"
+    inject_script = hooks_dir / "memory-inject.py"
+
+    if inject_script.exists():
+        result = subprocess.run(
+            ["python", str(inject_script)],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "CLAUDE_PROJECT_DIR": str(Path.cwd())},
+        )
+        if result.stdout:
+            click.echo(result.stdout)
+        if result.stderr:
+            click.echo(result.stderr, err=True)
+    else:
+        click.echo("Memory injection not available - hooks not found", err=True)
+        sys.exit(1)
+
+
+@memory.command("capture")
+@click.option("--event", default="manual", help="Event type (stop, precompact, manual)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def memory_capture(event: str, as_json: bool):
+    """Manually trigger memory capture.
+
+    This is called automatically by Stop/PreCompact hooks.
+    Run manually to capture current session.
+
+    \b
+    Examples:
+      mx memory capture             # Capture now
+      mx memory capture --event=stop  # Simulate stop event
+    """
+    import subprocess
+
+    hooks_dir = Path(__file__).parent.parent.parent / "hooks"
+    capture_script = hooks_dir / "memory-capture.py"
+
+    if capture_script.exists():
+        result = subprocess.run(
+            ["python", str(capture_script), event],
+            capture_output=True,
+            text=True,
+            env={
+                **os.environ,
+                "CLAUDE_PROJECT_DIR": str(Path.cwd()),
+            },
+        )
+        if result.stdout:
+            click.echo(result.stdout)
+        if result.stderr:
+            click.echo(result.stderr, err=True)
+        if result.returncode == 0:
+            click.echo("✓ Memory captured")
+        else:
+            sys.exit(result.returncode)
+    else:
+        click.echo("Memory capture not available - hooks not found", err=True)
+        sys.exit(1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Session-Log Command (Deprecated)
 # ─────────────────────────────────────────────────────────────────────────────
 
 
@@ -2736,6 +3017,8 @@ def session_log(
 ):
     """Log a session summary to the project's session entry.
 
+    DEPRECATED: Use 'mx memory add' instead.
+
     Auto-detects the correct entry from .kbcontext, or uses --entry
     to specify explicitly. Creates the entry if it doesn't exist.
 
@@ -2753,6 +3036,17 @@ def session_log(
       3. {.kbcontext primary}/sessions.md
       4. Error with guidance if no context
     """
+    # Deprecation warning
+    click.echo(
+        "⚠ Warning: 'mx session-log' is deprecated. Use 'mx memory add' instead.",
+        err=True
+    )
+    click.echo(
+        "  Example: mx memory add \"Fixed auth bug, added tests\"",
+        err=True
+    )
+    click.echo("", err=True)
+
     try:
         from .core import log_session as core_log_session
     except ImportError:
