@@ -32,9 +32,44 @@ mx memory init
 | `mx memory init` | Enable memory for this project |
 | `mx memory init --user` | Enable memory user-wide |
 | `mx memory add "note"` | Add a manual memory note |
-| `mx memory inject` | Preview what would be injected |
-| `mx memory capture` | Manually trigger capture |
+| `mx memory inject` | Preview/output session context |
+| `mx memory capture` | Summarize current session |
 | `mx memory disable` | Remove memory hooks |
+
+### mx memory add
+
+Writes a timestamped note to today's session file (`kb/sessions/YYYY-MM-DD.md`).
+
+```bash
+mx memory add "Fixed auth bug using refresh tokens"
+mx memory add "Deployed v2.0" --tags=deployment,release
+mx memory add --file=notes.md
+echo "notes" | mx memory add --stdin
+```
+
+Use this for quick notes during a session. Automatic capture happens at session end.
+
+### mx memory inject
+
+Reads recent session files and outputs formatted context. Called automatically by the SessionStart hook to inject memory into new sessions.
+
+```bash
+mx memory inject          # Preview what agents see
+mx memory inject --json   # Machine-readable output
+```
+
+Output is capped at ~1000 tokens and includes entries from the last 7 days.
+
+### mx memory capture
+
+Reads the current conversation from `~/.claude/projects/`, calls Claude haiku to extract a summary and observations, then writes to today's session file.
+
+```bash
+mx memory capture               # Manual capture
+mx memory capture --event=stop  # Simulate stop hook
+```
+
+Called automatically by Stop and PreCompact hooks. Requires `ANTHROPIC_API_KEY`.
 
 ## How It Works
 
@@ -57,19 +92,26 @@ When you end a session or context compacts:
 
 When you start a Claude Code session:
 
-1. Hook reads recent session files from `kb/sessions/`
-2. Formats ~1000 tokens of relevant context
-3. Outputs as system reminder
+1. Hook calls `mx memory inject`
+2. Reads recent session files from `kb/sessions/`
+3. Formats ~1000 tokens of context
+4. Outputs as system reminder
 
 **Example injection:**
 ```
 ## Recent Memory (myproject)
 
-**2h ago:** Fixed authentication bug in login flow
+**2026-01-12 15:30 UTC**
+Fixed authentication bug in login flow
+
+### Observations
 - [learned] OAuth tokens expire after 1 hour, need refresh logic
 - [decision] Use httpx instead of requests for async support
 
-**yesterday:** Refactored database connection pooling
+**2026-01-11 10:00 UTC**
+Refactored database connection pooling
+
+### Observations
 - [pattern] Connection pools should be initialized once at startup
 ```
 
@@ -133,21 +175,6 @@ Implemented user authentication with OAuth2.
 
 Fixed rate limiting bug in API.
 ...
-```
-
-## Manual Notes
-
-Add notes without waiting for auto-capture:
-
-```bash
-# Quick note
-mx memory add "Fixed auth bug using refresh tokens"
-
-# With tags
-mx memory add "Deployed v2.0" --tags=deployment,release
-
-# From file
-mx memory add --file=notes.md
 ```
 
 ## Troubleshooting

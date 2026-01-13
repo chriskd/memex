@@ -442,3 +442,267 @@ def get_memory_status(project_path: Path | None = None) -> dict[str, Any]:
         "api_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
         "project_path": str(project_path),
     }
+
+
+def inject_memory(
+    project_path: Path | None = None,
+    max_days: int = 7,
+    max_tokens: int = 1000,
+) -> dict[str, Any]:
+    """Generate memory context for injection at session start.
+
+    Reads recent session files and formats them for injection as a system reminder.
+    Called automatically by the SessionStart hook.
+
+    Args:
+        project_path: Project directory (defaults to cwd or CLAUDE_PROJECT_DIR)
+        max_days: Maximum days of history to include
+        max_tokens: Approximate token budget (chars / 4)
+
+    Returns:
+        Dict with 'output' (formatted text) and 'sessions' (count)
+    """
+    if project_path is None:
+        project_path = get_project_path()
+
+    config = get_memory_config(project_path)
+    if not config["kb_path"]:
+        return {"output": "", "sessions": 0, "error": "No kb_path configured"}
+
+    kb_root = project_path / config["kb_path"]
+    session_dir = kb_root / config["session_dir"]
+
+    if not session_dir.exists():
+        return {"output": "", "sessions": 0}
+
+    # Find recent session files (sorted by date, newest first)
+    session_files = sorted(session_dir.glob("*.md"), reverse=True)
+
+    if not session_files:
+        return {"output": "", "sessions": 0}
+
+    # Parse and collect entries
+    entries = []
+    char_budget = max_tokens * 4  # Rough chars-to-tokens
+
+    for session_file in session_files[:max_days]:
+        try:
+            content = session_file.read_text()
+            # Extract date from filename
+            date_str = session_file.stem  # e.g., "2026-01-12"
+
+            # Skip frontmatter, get body
+            if content.startswith("---"):
+                parts = content.split("---", 2)
+                if len(parts) >= 3:
+                    body = parts[2].strip()
+                else:
+                    body = content
+            else:
+                body = content
+
+            # Extract session entries (## timestamps)
+            for section in body.split("\n## ")[1:]:  # Skip header
+                lines = section.strip().split("\n")
+                if not lines:
+                    continue
+
+                timestamp_line = lines[0].strip()
+                entry_content = "\n".join(lines[1:]).strip()
+
+                if entry_content:
+                    entries.append({
+                        "date": date_str,
+                        "timestamp": timestamp_line,
+                        "content": entry_content,
+                    })
+
+        except Exception:
+            continue
+
+    if not entries:
+        return {"output": "", "sessions": 0}
+
+    # Format output within budget
+    project_name = get_project_name(project_path)
+    output_lines = [f"## Recent Memory ({project_name})", ""]
+
+    current_chars = sum(len(line) for line in output_lines)
+
+    for entry in entries[:10]:  # Cap at 10 entries
+        # Format: **2026-01-12 10:30 UTC** (timestamp already includes date)
+        entry_header = f"**{entry['timestamp']}**"
+        entry_text = entry["content"]
+
+        # Truncate long entries
+        if len(entry_text) > 500:
+            entry_text = entry_text[:500] + "..."
+
+        entry_block = f"{entry_header}\n{entry_text}\n"
+
+        if current_chars + len(entry_block) > char_budget:
+            break
+
+        output_lines.append(entry_block)
+        current_chars += len(entry_block)
+
+    output = "\n".join(output_lines).strip()
+
+    return {
+        "output": output,
+        "sessions": len(entries),
+    }
+
+
+def capture_memory(
+    project_path: Path | None = None,
+    event: str = "manual",
+) -> dict[str, Any]:
+    """Capture session memory by summarizing the current conversation.
+
+    Reads the conversation from Claude's project directory, calls Claude haiku
+    to extract observations, and writes to today's session file.
+
+    Args:
+        project_path: Project directory (defaults to CLAUDE_PROJECT_DIR)
+        event: Event type (stop, precompact, manual)
+
+    Returns:
+        Dict with status and path
+    """
+    import anthropic
+
+    if project_path is None:
+        project_path = get_project_path()
+
+    config = get_memory_config(project_path)
+    if not config["kb_path"]:
+        return {"error": "No kb_path configured", "captured": False}
+
+    kb_root = project_path / config["kb_path"]
+    session_dir = config["session_dir"]
+
+    # Find the conversation file
+    claude_project_dir = os.environ.get("CLAUDE_PROJECT_DIR")
+    if not claude_project_dir:
+        return {"error": "CLAUDE_PROJECT_DIR not set", "captured": False}
+
+    # Claude stores conversations in ~/.claude/projects/<encoded-path>/
+    # The path is encoded with dashes replacing slashes
+    home = Path.home()
+    encoded_path = claude_project_dir.replace("/", "-")
+    if encoded_path.startswith("-"):
+        encoded_path = encoded_path[1:]  # Remove leading dash
+
+    conversations_dir = home / ".claude" / "projects" / encoded_path
+
+    if not conversations_dir.exists():
+        return {"error": f"Conversations dir not found: {conversations_dir}", "captured": False}
+
+    # Find most recent conversation file
+    conv_files = sorted(conversations_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not conv_files:
+        return {"error": "No conversation files found", "captured": False}
+
+    latest_conv = conv_files[0]
+
+    # Read conversation (last N lines to stay within limits)
+    try:
+        lines = latest_conv.read_text().strip().split("\n")
+        # Take last 100 messages max
+        recent_lines = lines[-100:]
+        messages = []
+        for line in recent_lines:
+            try:
+                msg = json.loads(line)
+                if msg.get("type") == "user" or msg.get("type") == "assistant":
+                    content = msg.get("message", {}).get("content", "")
+                    if isinstance(content, list):
+                        content = " ".join(
+                            c.get("text", "") for c in content if c.get("type") == "text"
+                        )
+                    if content:
+                        messages.append(f"{msg['type']}: {content[:500]}")
+            except json.JSONDecodeError:
+                continue
+
+        if not messages:
+            return {"error": "No messages found in conversation", "captured": False}
+
+        conversation_text = "\n\n".join(messages[-20:])  # Last 20 messages
+
+    except Exception as e:
+        return {"error": f"Failed to read conversation: {e}", "captured": False}
+
+    # Call Claude haiku to summarize
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {"error": "ANTHROPIC_API_KEY not set", "captured": False}
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+
+        prompt = f"""Summarize this coding session in 2-3 sentences, then list key observations.
+
+Use these categories for observations:
+- [learned] - New knowledge or insights discovered
+- [decision] - Choices made and reasoning
+- [pattern] - Recurring approaches or conventions
+- [issue] - Problems encountered
+- [todo] - Follow-up work identified
+
+Format:
+<summary>
+Brief 2-3 sentence summary of what was accomplished.
+</summary>
+
+<observations>
+- [category] observation text
+- [category] observation text
+</observations>
+
+Conversation:
+{conversation_text}"""
+
+        response = client.messages.create(
+            model="claude-3-haiku-20240307",
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+
+        result_text = response.content[0].text
+
+        # Parse response
+        summary = ""
+        observations = []
+
+        if "<summary>" in result_text and "</summary>" in result_text:
+            summary = result_text.split("<summary>")[1].split("</summary>")[0].strip()
+
+        if "<observations>" in result_text and "</observations>" in result_text:
+            obs_text = result_text.split("<observations>")[1].split("</observations>")[0].strip()
+            observations = [line.strip() for line in obs_text.split("\n") if line.strip().startswith("-")]
+
+        # Format the memory entry
+        memory_content = summary
+        if observations:
+            memory_content += "\n\n### Observations\n" + "\n".join(observations)
+
+        # Add to session file
+        result = add_memory(
+            message=memory_content,
+            kb_root=kb_root,
+            session_dir=session_dir,
+            timestamp=True,
+        )
+
+        return {
+            "captured": True,
+            "path": result["path"],
+            "summary": summary,
+            "observations": len(observations),
+            "event": event,
+        }
+
+    except Exception as e:
+        return {"error": f"Failed to summarize: {e}", "captured": False}

@@ -2913,35 +2913,33 @@ def memory_add(
 @memory.command("inject")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def memory_inject(as_json: bool):
-    """Show or output memory injection for session start.
+    """Output memory context for session start injection.
 
-    This is called automatically by the SessionStart hook.
-    Run manually to preview what would be injected.
+    Reads recent session files and formats them for injection.
+    Called automatically by the SessionStart hook.
+
+    When run manually, previews what would be injected.
 
     \b
     Examples:
       mx memory inject          # Preview injection
       mx memory inject --json   # Output as JSON
     """
-    # Import and run the injection logic from hooks
-    import subprocess
+    from .memory import inject_memory
 
-    hooks_dir = Path(__file__).parent.parent.parent / "hooks"
-    inject_script = hooks_dir / "memory-inject.py"
+    try:
+        result = inject_memory()
 
-    if inject_script.exists():
-        result = subprocess.run(
-            ["python", str(inject_script)],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "CLAUDE_PROJECT_DIR": str(Path.cwd())},
-        )
-        if result.stdout:
-            click.echo(result.stdout)
-        if result.stderr:
-            click.echo(result.stderr, err=True)
-    else:
-        click.echo("Memory injection not available - hooks not found", err=True)
+        if as_json:
+            output(result, as_json=True)
+        elif result.get("output"):
+            click.echo(result["output"])
+        elif result.get("error"):
+            click.echo(f"Error: {result['error']}", err=True)
+        # Silent if no output (no sessions yet)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
@@ -2949,41 +2947,36 @@ def memory_inject(as_json: bool):
 @click.option("--event", default="manual", help="Event type (stop, precompact, manual)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def memory_capture(event: str, as_json: bool):
-    """Manually trigger memory capture.
+    """Capture current session to memory.
 
-    This is called automatically by Stop/PreCompact hooks.
-    Run manually to capture current session.
+    Reads the conversation, calls Claude haiku to extract observations,
+    and writes to today's session file.
+
+    Called automatically by Stop/PreCompact hooks.
 
     \b
     Examples:
-      mx memory capture             # Capture now
-      mx memory capture --event=stop  # Simulate stop event
+      mx memory capture               # Capture now
+      mx memory capture --event=stop  # With event type
     """
-    import subprocess
+    from .memory import capture_memory
 
-    hooks_dir = Path(__file__).parent.parent.parent / "hooks"
-    capture_script = hooks_dir / "memory-capture.py"
+    try:
+        result = capture_memory(event=event)
 
-    if capture_script.exists():
-        result = subprocess.run(
-            ["python", str(capture_script), event],
-            capture_output=True,
-            text=True,
-            env={
-                **os.environ,
-                "CLAUDE_PROJECT_DIR": str(Path.cwd()),
-            },
-        )
-        if result.stdout:
-            click.echo(result.stdout)
-        if result.stderr:
-            click.echo(result.stderr, err=True)
-        if result.returncode == 0:
-            click.echo("✓ Memory captured")
-        else:
-            sys.exit(result.returncode)
-    else:
-        click.echo("Memory capture not available - hooks not found", err=True)
+        if as_json:
+            output(result, as_json=True)
+        elif result.get("captured"):
+            click.echo(f"✓ Captured to {result['path']}")
+            if result.get("summary"):
+                click.echo(f"  Summary: {result['summary'][:80]}...")
+            click.echo(f"  Observations: {result.get('observations', 0)}")
+        elif result.get("error"):
+            click.echo(f"Error: {result['error']}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
 
