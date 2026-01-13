@@ -1480,8 +1480,12 @@ body::before {
     }
 
     /* Prevent content overflow */
-    .entry-content {
+    .reader-container {
         overflow-x: hidden;
+        max-width: 100vw;
+    }
+
+    .entry-content {
         word-wrap: break-word;
         overflow-wrap: break-word;
     }
@@ -1490,18 +1494,23 @@ body::before {
         word-break: break-all;
     }
 
+    /* Tables: wrap in scrollable container */
     .entry-content table {
-        display: block;
+        display: table;
+        width: max-content;
+        min-width: 100%;
+        margin: 20px 0;
+    }
+
+    /* Create scrollable wrapper using overflow on parent when table overflows */
+    .entry-content {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-        margin: 20px 0;
-        max-width: 100%;
     }
 
     .entry-content th,
     .entry-content td {
         padding: 10px 12px;
-        white-space: nowrap;
     }
 
     /* Index page mobile */
