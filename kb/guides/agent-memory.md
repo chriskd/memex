@@ -38,16 +38,33 @@ mx memory init
 
 ### mx memory add
 
-Writes a timestamped note to today's session file (`kb/sessions/YYYY-MM-DD.md`).
+Appends a timestamped note to today's session file. Creates the file with frontmatter if it doesn't exist.
 
 ```bash
 mx memory add "Fixed auth bug using refresh tokens"
 mx memory add "Deployed v2.0" --tags=deployment,release
 mx memory add --file=notes.md
-echo "notes" | mx memory add --stdin
+mx memory add --stdin < notes.txt
+mx memory add "Quick note" --no-timestamp
 ```
 
-Use this for quick notes during a session. Automatic capture happens at session end.
+**What it writes:**
+```markdown
+## 2026-01-12 15:30 UTC
+
+Fixed auth bug using refresh tokens
+
+Tags: deployment, release
+```
+
+**Options:**
+- `--tags` - Comma-separated tags appended to the entry
+- `--file` - Read content from a file instead of argument
+- `--stdin` - Read content from stdin (for piping)
+- `--no-timestamp` - Skip the timestamp header
+- `--json` - Output result as JSON
+
+Use for quick notes during a session. For automatic summaries with observations, see `mx memory capture`.
 
 ### mx memory inject
 
