@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Memory Comparison - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                <div class="logo-text">Memex<span> / knowledge</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search knowledge base..." autocomplete="off">
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/agent-memory.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Agent Memory</span>
+                    </a>
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/agent-memory-comparison.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Agent Memory Comparison</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">sessions</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/sessions/2026-01-12.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Session Log 2026-01-12</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/reference/agent-memory-comparison.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Agent Memory Comparison</span>
+            </a>
+            <a href="/sessions/2026-01-12.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Session Log 2026-01-12</span>
+            </a>
+            <a href="/guides/agent-memory.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Agent Memory</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup</span>
+            </a>
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex" target="_blank" rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/reference/agent-memory-comparison.html" class="entry-path">reference/agent-memory-comparison</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">Created: <span>Jan 13, 2026 at 1:25 AM</span></div>
+                
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/memory.html" class="tag">memory</a>
+                
+                <a href="/tags/comparison.html" class="tag">comparison</a>
+                
+                <a href="/tags/basic-memory.html" class="tag">basic-memory</a>
+                
+                <a href="/tags/claude-mem.html" class="tag">claude-mem</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <h1>Agent Memory Tool Comparison</h1>
+<p>Comparison of memex memory with basic-memory and claude-mem (January 2026).</p>
+<h2>Feature Matrix</h2>
+<table>
+<thead>
+<tr>
+<th>Aspect</th>
+<th><strong>Memex Memory</strong></th>
+<th><strong>Basic-Memory</strong></th>
+<th><strong>Claude-Mem</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Storage</strong></td>
+<td>Markdown files in <code>kb/sessions/</code></td>
+<td>Markdown + SQLite</td>
+<td>SQLite + Chroma vector DB</td>
+</tr>
+<tr>
+<td><strong>Format</strong></td>
+<td>Per-day <code>.md</code> files</td>
+<td>Semantic markdown with relations</td>
+<td>Structured database tables</td>
+</tr>
+<tr>
+<td><strong>Dependencies</strong></td>
+<td>Just `anthropic` package</td>
+<td>Python 3.12+, MCP server</td>
+<td>Node.js, Bun, SQLite, Chroma</td>
+</tr>
+<tr>
+<td><strong>Setup</strong></td>
+<td>`mx memory init`</td>
+<td>MCP server config in Claude settings</td>
+<td>Plugin install + background service</td>
+</tr>
+<tr>
+<td><strong>Capture</strong></td>
+<td>Stop/PreCompact hooks â Haiku</td>
+<td>Manual via MCP tools</td>
+<td>All hooks (every tool use captured)</td>
+</tr>
+<tr>
+<td><strong>Injection</strong></td>
+<td>SessionStart â ~1000 tokens</td>
+<td>`build_context` with `memory://` URLs</td>
+<td>SessionStart â configurable limit</td>
+</tr>
+<tr>
+<td><strong>Search</strong></td>
+<td>Sequential read (no index)</td>
+<td>SQLite + pattern matching</td>
+<td>Hybrid semantic + FTS5</td>
+</tr>
+<tr>
+<td><strong>Knowledge Graph</strong></td>
+<td>Wikilinks (existing KB)</td>
+<td>Built-in relations &amp; traversal</td>
+<td>Observation hierarchy</td>
+</tr>
+<tr>
+<td><strong>UI</strong></td>
+<td>CLI only</td>
+<td>Works with Obsidian</td>
+<td>Web viewer on port 37777</td>
+</tr>
+<tr>
+<td><strong>Privacy</strong></td>
+<td>Local markdown, git-trackable</td>
+<td>Local-first, optional cloud</td>
+<td>Local with `<private>` tags</td>
+</tr>
+<tr>
+<td><strong>Token Cost</strong></td>
+<td>~$0.001/capture (Haiku)</td>
+<td>None (no LLM for storage)</td>
+<td>Higher (processes all tool use)</td>
+</tr>
+</tbody>
+</table>
+<h2>Key Differentiators</h2>
+<h3>Memex Memory (lightest)</h3>
+<ul>
+<li>Zero infrastructure - just markdown files</li>
+<li>Git-trackable sessions</li>
+<li>Leverages existing KB system</li>
+<li>Minimal capture (session end only)</li>
+<li>~700 lines of Python</li>
+</ul>
+<h3>Basic-Memory (knowledge graph)</h3>
+<ul>
+<li>Rich semantic linking between documents</li>
+<li>`memory://` URL scheme for graph traversal</li>
+<li>MCP tools for structured CRUD operations</li>
+<li>Works alongside Obsidian</li>
+<li>Typed relations: `implements`, `depends_on`, `extends`</li>
+</ul>
+<h3>Claude-Mem (most comprehensive)</h3>
+<ul>
+<li>Captures everything (every tool use)</li>
+<li>Vector search for semantic retrieval</li>
+<li>Web UI for visualization</li>
+<li>Background service architecture</li>
+<li>~4k GitHub stars, active development</li>
+<li>Configurable observation types and concepts</li>
+</ul>
+<h2>When to Use What</h2>
+<table>
+<thead>
+<tr>
+<th>Use Case</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Simple, git-tracked memory</td>
+<td><strong>Memex</strong></td>
+</tr>
+<tr>
+<td>Building connected knowledge graph</td>
+<td><strong>Basic-Memory</strong></td>
+</tr>
+<tr>
+<td>Using Obsidian for notes</td>
+<td><strong>Basic-Memory</strong></td>
+</tr>
+<tr>
+<td>Want comprehensive capture + semantic search</td>
+<td><strong>Claude-Mem</strong></td>
+</tr>
+<tr>
+<td>Minimal dependencies</td>
+<td><strong>Memex</strong></td>
+</tr>
+<tr>
+<td>Don't mind complexity for features</td>
+<td><strong>Claude-Mem</strong></td>
+</tr>
+</tbody>
+</table>
+<h2>Architecture Comparison</h2>
+<h3>Memex Memory</h3>
+<pre><code>SessionStart Hook â mx memory inject â read kb/sessions/*.md â output context
+Stop/PreCompact Hook â mx memory capture â read conversation â Haiku â write session file
+</code></pre>
+<h3>Basic-Memory</h3>
+<pre><code>User Request â MCP Tool (write_note, search_notes, build_context) â SQLite + Markdown files
+memory:// URLs enable graph traversal across linked documents
+</code></pre>
+<h3>Claude-Mem</h3>
+<pre><code>All Hooks â Worker Service (port 37777) â SQLite + Chroma
+SessionStart â inject from session_summaries table
+PostToolUse â capture to observations table
+Stop â generate summary via Claude SDK
+</code></pre>
+<h2>Observation Categories</h2>
+<table>
+<thead>
+<tr>
+<th>Memex</th>
+<th>Basic-Memory</th>
+<th>Claude-Mem</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>`[learned]`</td>
+<td>`[tech]`</td>
+<td>`discovery`</td>
+</tr>
+<tr>
+<td>`[decision]`</td>
+<td>`[decision]`</td>
+<td>`decision`</td>
+</tr>
+<tr>
+<td>`[pattern]`</td>
+<td>`[design]`</td>
+<td>`pattern`</td>
+</tr>
+<tr>
+<td>`[issue]`</td>
+<td>`[feature]`</td>
+<td>`bugfix`</td>
+</tr>
+<tr>
+<td>`[todo]`</td>
+<td>-</td>
+<td>`feature`, `refactor`</td>
+</tr>
+</tbody>
+</table>
+<h2>See Also</h2>
+<ul>
+<li><a href="../guides/agent-memory.html" class="wikilink">guides/agent-memory</a> - Memex memory setup guide</li>
+<li><a href="https://github.com/basicmachines-co/basic-memory">Basic-Memory GitHub</a></li>
+<li><a href="https://github.com/thedotmack/claude-mem">Claude-Mem GitHub</a></li>
+</ul>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="/guides/agent-memory.html">
+                        <div class="link-title">Agent Memory</div>
+                        <div class="link-path">guides/agent-memory</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list"><li class="empty-state">No backlinks</li>
+            </ul>
+        </div>
+        </aside>
+    </div>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>

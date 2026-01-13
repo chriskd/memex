@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Memory - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <a href="/" class="logo">
+                <div class="logo-mark"></div>
+                <div class="logo-text">Memex<span> / knowledge</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input type="text" id="search-input" placeholder="Search knowledge base..." autocomplete="off">
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+        </header>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/agent-memory.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Agent Memory</span>
+                    </a>
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/agent-memory-comparison.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Agent Memory Comparison</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">sessions</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/sessions/2026-01-12.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Session Log 2026-01-12</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/reference/agent-memory-comparison.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Agent Memory Comparison</span>
+            </a>
+            <a href="/sessions/2026-01-12.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Session Log 2026-01-12</span>
+            </a>
+            <a href="/guides/agent-memory.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Agent Memory</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup</span>
+            </a>
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex" target="_blank" rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/guides/agent-memory.html" class="entry-path">guides/agent-memory</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">Created: <span>Jan 13, 2026 at 12:02 AM</span></div>
+                
+                
+                <div class="entry-meta-item">Updated: <span>Jan 13, 2026</span></div>
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/agent-memory.html" class="tag">agent-memory</a>
+                
+                <a href="/tags/hooks.html" class="tag">hooks</a>
+                
+                <a href="/tags/claude-code.html" class="tag">claude-code</a>
+                
+                <a href="/tags/sessions.html" class="tag">sessions</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <h1>Agent Memory</h1>
+<p>Automatic session memory capture and injection for Claude Code. Remembers what you worked on across sessions without manual effort.</p>
+<h2>Quick Start</h2>
+<pre><code class="language-bash"># 1. Enable memory for this project
+mx memory init
+
+# 2. That's it! Memory is now active.
+#    - Sessions auto-captured when you exit
+#    - Context auto-injected when you start
+</code></pre>
+<h2>Commands</h2>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mx memory</code></td>
+<td>Show memory status</td>
+</tr>
+<tr>
+<td><code>mx memory init</code></td>
+<td>Enable memory for this project</td>
+</tr>
+<tr>
+<td><code>mx memory init --user</code></td>
+<td>Enable memory user-wide</td>
+</tr>
+<tr>
+<td><code>mx memory add &quot;note&quot;</code></td>
+<td>Add a manual memory note</td>
+</tr>
+<tr>
+<td><code>mx memory inject</code></td>
+<td>Preview/output session context</td>
+</tr>
+<tr>
+<td><code>mx memory capture</code></td>
+<td>Summarize current session</td>
+</tr>
+<tr>
+<td><code>mx memory disable</code></td>
+<td>Remove memory hooks</td>
+</tr>
+</tbody>
+</table>
+<h3>mx memory add</h3>
+<p>Appends a timestamped note to today's session file. Creates the file with frontmatter if it doesn't exist.</p>
+<pre><code class="language-bash">mx memory add &quot;Fixed auth bug using refresh tokens&quot;
+mx memory add &quot;Deployed v2.0&quot; --tags=deployment,release
+mx memory add --file=notes.md
+mx memory add --stdin &lt; notes.txt
+mx memory add &quot;Quick note&quot; --no-timestamp
+</code></pre>
+<p><strong>What it writes:</strong></p>
+<pre><code class="language-markdown">## 2026-01-12 15:30 UTC
+
+Fixed auth bug using refresh tokens
+
+Tags: deployment, release
+</code></pre>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--tags</code> - Comma-separated tags appended to the entry</li>
+<li><code>--file</code> - Read content from a file instead of argument</li>
+<li><code>--stdin</code> - Read content from stdin (for piping)</li>
+<li><code>--no-timestamp</code> - Skip the timestamp header</li>
+<li><code>--json</code> - Output result as JSON</li>
+</ul>
+<p>Use for quick notes during a session. For automatic summaries with observations, see <code>mx memory capture</code>.</p>
+<h3>mx memory inject</h3>
+<p>Reads recent session files and outputs formatted context. Called automatically by the SessionStart hook to inject memory into new sessions.</p>
+<pre><code class="language-bash">mx memory inject          # Preview what agents see
+mx memory inject --json   # Machine-readable output
+</code></pre>
+<p>Output is capped at ~1000 tokens and includes entries from the last 7 days.</p>
+<h3>mx memory capture</h3>
+<p>Reads the current conversation from <code>~/.claude/projects/</code>, calls Claude haiku to extract a summary and observations, then writes to today's session file.</p>
+<pre><code class="language-bash">mx memory capture               # Manual capture
+mx memory capture --event=stop  # Simulate stop hook
+</code></pre>
+<p>Called automatically by Stop and PreCompact hooks. Requires <code>ANTHROPIC_API_KEY</code>.</p>
+<h2>How It Works</h2>
+<h3>Automatic Capture (Stop/PreCompact)</h3>
+<p>When you end a session or context compacts:</p>
+<ol>
+<li>Hook reads your conversation from <code>~/.claude/projects/</code></li>
+<li>Calls Claude haiku to extract structured observations</li>
+<li>Writes to today's session file: <code>kb/sessions/2026-01-12.md</code></li>
+</ol>
+<p><strong>Observation categories extracted:</strong></p>
+<ul>
+<li><code>[learned]</code> - New knowledge or insights</li>
+<li><code>[decision]</code> - Choices made and why</li>
+<li><code>[pattern]</code> - Recurring approaches or conventions</li>
+<li><code>[issue]</code> - Problems encountered</li>
+<li><code>[todo]</code> - Follow-up work identified</li>
+</ul>
+<h3>Automatic Injection (SessionStart)</h3>
+<p>When you start a Claude Code session:</p>
+<ol>
+<li>Hook calls <code>mx memory inject</code></li>
+<li>Reads recent session files from <code>kb/sessions/</code></li>
+<li>Formats ~1000 tokens of context</li>
+<li>Outputs as system reminder</li>
+</ol>
+<p><strong>Example injection:</strong></p>
+<pre><code>## Recent Memory (myproject)
+
+**2026-01-12 15:30 UTC**
+Fixed authentication bug in login flow
+
+### Observations
+- [learned] OAuth tokens expire after 1 hour, need refresh logic
+- [decision] Use httpx instead of requests for async support
+
+**2026-01-11 10:00 UTC**
+Refactored database connection pooling
+
+### Observations
+- [pattern] Connection pools should be initialized once at startup
+</code></pre>
+<h2>Configuration</h2>
+<h3>.kbconfig</h3>
+<pre><code class="language-yaml"># Required
+kb_path: kb
+
+# Memory settings (set by mx memory init)
+session_dir: sessions              # Where session files go
+session_retention_days: 30         # Auto-cleanup after N days
+</code></pre>
+<h3>Environment Variables</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ANTHROPIC_API_KEY</code></td>
+<td>Yes</td>
+<td>API key for haiku summarization</td>
+</tr>
+<tr>
+<td><code>CLAUDE_PROJECT_DIR</code></td>
+<td>Auto</td>
+<td>Set by Claude Code hooks</td>
+</tr>
+<tr>
+<td><code>CLAUDE_SESSION_ID</code></td>
+<td>Auto</td>
+<td>Set by Claude Code hooks</td>
+</tr>
+</tbody>
+</table>
+<h2>Session Files</h2>
+<p>Sessions are stored as per-day markdown files:</p>
+<pre><code>kb/sessions/
+  2026-01-12.md
+  2026-01-11.md
+  2026-01-10.md
+</code></pre>
+<p>Each file contains multiple session entries:</p>
+<pre><code class="language-markdown">---
+title: Session Log 2026-01-12
+tags: [sessions, memory]
+created: 2026-01-12T10:00:00
+---
+
+# Session Log - 2026-01-12
+
+## 2026-01-12 10:30 UTC
+
+Implemented user authentication with OAuth2.
+
+### Observations
+- [learned] OAuth tokens need refresh logic
+- [decision] Using httpx for async HTTP
+- [pattern] Store tokens in httponly cookies
+
+### Files
+- src/auth.py
+- tests/test_auth.py
+
+## 2026-01-12 15:00 UTC
+
+Fixed rate limiting bug in API.
+...
+</code></pre>
+<h2>Troubleshooting</h2>
+<h3>Check Status</h3>
+<pre><code class="language-bash">mx memory status
+</code></pre>
+<p>Shows:</p>
+<ul>
+<li>Whether hooks are installed</li>
+<li>Session directory configuration</li>
+<li>API key status</li>
+</ul>
+<h3>&quot;Hooks not installed&quot;</h3>
+<p>Run <code>mx memory init</code> to install hooks.</p>
+<h3>&quot;API key not set&quot;</h3>
+<pre><code class="language-bash">export ANTHROPIC_API_KEY=&quot;sk-ant-...&quot;
+</code></pre>
+<h3>Preview Injection</h3>
+<pre><code class="language-bash">mx memory inject
+</code></pre>
+<p>Shows what context would be injected at session start.</p>
+<h2>Architecture</h2>
+<pre><code>SessionStart Hook
+       │
+       ▼
+┌─────────────────┐
+│ mx memory inject│ ─── reads ──▶ kb/sessions/*.md
+└────────┬────────┘
+         │
+         ▼
+  System Reminder
+  (injected ctx)
+
+
+Stop/PreCompact Hook
+       │
+       ▼
+┌──────────────────┐      ┌─────────────┐
+│ mx memory capture│ ───▶ │Claude Haiku │
+└────────┬─────────┘      │(summarize)  │
+         │                └─────────────┘
+         ▼
+  kb/sessions/2026-01-12.md
+</code></pre>
+<h2>See Also</h2>
+<ul>
+<li><a href="ai-integration.html" class="wikilink">guides/ai-integration</a> - General AI agent setup</li>
+<li><a href="../reference/cli.html" class="wikilink">reference/cli</a> - CLI command reference</li>
+</ul>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="/guides/ai-integration.html">
+                        <div class="link-title">AI Agent Integration</div>
+                        <div class="link-path">guides/ai-integration</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/reference/cli.html">
+                        <div class="link-title">CLI Reference</div>
+                        <div class="link-path">reference/cli</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="/guides/ai-integration.html">
+                        <div class="link-title">AI Agent Integration</div>
+                        <div class="link-path">guides/ai-integration</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/reference/agent-memory-comparison.html">
+                        <div class="link-title">Agent Memory Comparison</div>
+                        <div class="link-path">reference/agent-memory-comparison</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        </aside>
+    </div>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>
