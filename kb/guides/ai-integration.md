@@ -25,6 +25,19 @@ Add to `.claude/settings.local.json`:
 
 This grants Claude Code permission to run any `mx` command without prompting.
 
+### Agent Memory
+
+Memex includes automatic session memory that remembers what you worked on across sessions. See [[guides/agent-memory]] for full documentation.
+
+**Quick setup:**
+1. Set `ANTHROPIC_API_KEY` environment variable
+2. Ensure `.kbconfig` has `primary:` set
+3. Memory hooks activate automatically
+
+**What it does:**
+- **SessionStart**: Injects recent session summaries (~1000 tokens)
+- **Stop/PreCompact**: Captures session observations via Claude haiku
+
 ### Session Hooks
 
 For automatic context injection, use hooks:
@@ -153,6 +166,7 @@ mx session clear
 
 ## See Also
 
+- [[guides/agent-memory|Agent Memory]] - Automatic session memory
 - [[reference/cli|CLI Reference]]
 - [[guides/mcp-setup|MCP Server Setup]]
 - [[reference/entry-format|Entry Format]]
