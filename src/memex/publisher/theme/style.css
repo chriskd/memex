@@ -1479,13 +1479,23 @@ body::before {
         padding-left: 16px;
     }
 
-    /* Tables scroll horizontally */
+    /* Prevent content overflow */
+    .entry-content {
+        overflow-x: hidden;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+    }
+
+    .entry-content code {
+        word-break: break-all;
+    }
+
     .entry-content table {
         display: block;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
-        margin: 20px -16px;
-        width: calc(100% + 32px);
+        margin: 20px 0;
+        max-width: 100%;
     }
 
     .entry-content th,
