@@ -1,0 +1,36 @@
+{
+  "kb_mtime": 1767726256.6009965,
+  "file_count": 6,
+  "dir_mtime": 1767726115.5122037,
+  "backlinks": {
+    "reference/cli": [
+      "guides/mcp-setup",
+      "guides/installation",
+      "guides/ai-integration",
+      "guides/quick-start",
+      "reference/entry-format"
+    ],
+    "reference/entry-format": [
+      "guides/quick-start",
+      "reference/cli",
+      "guides/ai-integration"
+    ],
+    "guides/ai-integration": [
+      "guides/quick-start",
+      "guides/mcp-setup",
+      "reference/cli"
+    ],
+    "guides/mcp-setup": [
+      "guides/installation",
+      "guides/ai-integration"
+    ],
+    "guides/installation": [
+      "reference/cli",
+      "guides/mcp-setup"
+    ],
+    "guides/quick-start": [
+      "guides/installation",
+      "reference/entry-format"
+    ]
+  }
+}

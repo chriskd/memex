@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "files": {
+    "guides/quick-start.md": {
+      "mtime": 1767726146.025369,
+      "size": 1939
+    },
+    "guides/ai-integration.md": {
+      "mtime": 1767726235.3288758,
+      "size": 3537
+    },
+    "guides/mcp-setup.md": {
+      "mtime": 1767726208.2887223,
+      "size": 2862
+    },
+    "guides/installation.md": {
+      "mtime": 1767726131.9172902,
+      "size": 1850
+    },
+    "reference/entry-format.md": {
+      "mtime": 1767726256.6009965,
+      "size": 3902
+    },
+    "reference/cli.md": {
+      "mtime": 1767726189.5216157,
+      "size": 5494
+    }
+  }
+}

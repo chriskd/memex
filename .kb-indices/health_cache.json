@@ -1,0 +1,82 @@
+{
+  "kb_mtime": 1767726256.6009965,
+  "files": {
+    "guides/quick-start": {
+      "mtime": 1767726146.025369,
+      "rel_path": "guides/quick-start.md",
+      "title": "Quick Start Guide",
+      "description": "Get productive with memex in 5 minutes",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "reference/cli",
+        "reference/entry-format",
+        "guides/ai-integration"
+      ]
+    },
+    "guides/ai-integration": {
+      "mtime": 1767726235.3288758,
+      "rel_path": "guides/ai-integration.md",
+      "title": "AI Agent Integration",
+      "description": "How to use memex with AI coding assistants",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "reference/cli",
+        "guides/mcp-setup",
+        "reference/entry-format"
+      ]
+    },
+    "guides/mcp-setup": {
+      "mtime": 1767726208.2887223,
+      "rel_path": "guides/mcp-setup.md",
+      "title": "MCP Server Setup",
+      "description": "Configure memex as an MCP server for Claude Desktop",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "guides/installation",
+        "guides/ai-integration",
+        "reference/cli"
+      ]
+    },
+    "guides/installation": {
+      "mtime": 1767726131.9172902,
+      "rel_path": "guides/installation.md",
+      "title": "Installation Guide",
+      "description": "How to install memex with different configurations",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "guides/quick-start",
+        "reference/cli",
+        "guides/mcp-setup"
+      ]
+    },
+    "reference/entry-format": {
+      "mtime": 1767726256.6009965,
+      "rel_path": "reference/entry-format.md",
+      "title": "Entry Format Reference",
+      "description": "Markdown entry format with YAML frontmatter and bidirectional links",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "reference/cli",
+        "guides/quick-start"
+      ]
+    },
+    "reference/cli": {
+      "mtime": 1767726189.5216157,
+      "rel_path": "reference/cli.md",
+      "title": "CLI Reference",
+      "description": "Complete reference for the mx command-line interface",
+      "created": "2026-01-06T00:00:00",
+      "updated": null,
+      "links": [
+        "guides/installation",
+        "guides/ai-integration",
+        "reference/entry-format"
+      ]
+    }
+  }
+}

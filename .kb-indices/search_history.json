@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "history": [
+    {
+      "query": "test",
+      "timestamp": "2026-01-06T14:07:48.618692",
+      "result_count": 1,
+      "mode": "keyword",
+      "tags": []
+    },
+    {
+      "query": "CLI commands",
+      "timestamp": "2026-01-06T14:07:16.765950",
+      "result_count": 6,
+      "mode": "hybrid",
+      "tags": []
+    },
+    {
+      "query": "how to set up memex",
+      "timestamp": "2026-01-06T14:07:04.312992",
+      "result_count": 6,
+      "mode": "semantic",
+      "tags": []
+    },
+    {
+      "query": "installation",
+      "timestamp": "2026-01-06T14:06:52.348807",
+      "result_count": 4,
+      "mode": "keyword",
+      "tags": []
+    }
+  ]
+}
