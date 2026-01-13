@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-inject.sh",
+            "command": "mx memory inject",
             "timeout": 30000
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-capture.sh stop",
+            "command": "mx memory capture --event=stop",
             "timeout": 60000
           }
         ]
@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/memory-capture.sh precompact",
+            "command": "mx memory capture --event=precompact",
             "timeout": 60000
           }
         ]
