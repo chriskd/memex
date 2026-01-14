@@ -80,6 +80,27 @@ class ChromaIndex:
         embeddings = model.encode(texts, convert_to_numpy=True)
         return embeddings.tolist()
 
+    def _build_embedding_text(self, content: str, keywords: list[str], tags: list[str]) -> str:
+        """Build text for embedding by concatenating content, keywords, and tags.
+
+        This follows A-Mem's approach of enriching embeddings with semantic context
+        to improve search quality for keyword-rich entries.
+
+        Args:
+            content: The document content.
+            keywords: LLM-extracted key concepts from metadata.
+            tags: Document tags from metadata.
+
+        Returns:
+            Combined text for embedding.
+        """
+        parts = [content]
+        if keywords:
+            parts.append(f"\n\nKeywords: {', '.join(keywords)}")
+        if tags:
+            parts.append(f"\nTags: {', '.join(tags)}")
+        return "".join(parts)
+
     def index_document(self, chunk: DocumentChunk) -> None:
         """Index a document chunk.
 
@@ -91,8 +112,15 @@ class ChromaIndex:
         # Create unique chunk ID
         chunk_id = f"{chunk.path}#{chunk.section or 'main'}"
 
+        # Build text for embedding with keywords and tags
+        embedding_text = self._build_embedding_text(
+            chunk.content,
+            chunk.metadata.keywords,
+            chunk.metadata.tags,
+        )
+
         # Generate embedding
-        embedding = self._embed([chunk.content])[0]
+        embedding = self._embed([embedding_text])[0]
 
         # Prepare metadata
         metadata = {
@@ -135,12 +163,21 @@ class ChromaIndex:
         # Build lists using deduplicated indices
         ids = []
         documents = []
+        embedding_texts = []
         metadatas = []
 
         for chunk_id, idx in seen_ids.items():
             chunk = chunks[idx]
             ids.append(chunk_id)
             documents.append(chunk.content)
+            # Build enriched text for embedding (content + keywords + tags)
+            embedding_texts.append(
+                self._build_embedding_text(
+                    chunk.content,
+                    chunk.metadata.keywords,
+                    chunk.metadata.tags,
+                )
+            )
             metadatas.append(
                 {
                     "path": chunk.path,
@@ -154,8 +191,8 @@ class ChromaIndex:
                 }
             )
 
-        # Generate embeddings in batch
-        embeddings = self._embed(documents)
+        # Generate embeddings in batch using enriched texts
+        embeddings = self._embed(embedding_texts)
 
         # Upsert all at once
         collection.upsert(
