@@ -66,7 +66,7 @@ def build_title_index(
             continue
 
         try:
-            post = frontmatter.load(md_file)
+            post = frontmatter.load(str(md_file))
         except Exception as e:
             log.debug("Skipping %s during title index build: %s", md_file, e)
             continue
@@ -94,7 +94,7 @@ def build_title_index(
 
         # Index the title
         title = post.metadata.get("title")
-        if title:
+        if title and isinstance(title, str):
             # Use lowercase for case-insensitive matching
             title_key = title.lower().strip()
             if title_key not in title_index:
@@ -104,7 +104,7 @@ def build_title_index(
         aliases = post.metadata.get("aliases", [])
         if isinstance(aliases, list):
             for alias in aliases:
-                if alias:
+                if alias and isinstance(alias, str):
                     alias_key = alias.lower().strip()
                     if alias_key not in title_index:
                         title_index[alias_key] = path_str
@@ -116,7 +116,7 @@ def build_title_index(
 
 def resolve_link_target(
     target: str,
-    title_index: dict[str, str] | TitleIndex,
+    title_index: dict[str, str] | TitleIndex | None,
     source_path: str | None = None,
     *,
     filename_index: dict[str, list[str]] | None = None,
@@ -145,6 +145,10 @@ def resolve_link_target(
     # If it contains a path separator, it's likely a path reference
     if "/" in normalized:
         return normalized
+
+    # If no title index provided, can't resolve non-path references
+    if title_index is None:
+        return None
 
     # Extract the actual title_to_path dict and filename_to_paths if available
     if isinstance(title_index, TitleIndex):

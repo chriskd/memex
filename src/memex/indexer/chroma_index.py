@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from ..config import EMBEDDING_MODEL, SEMANTIC_MIN_SIMILARITY, get_index_root
 from ..models import DocumentChunk, SearchResult
@@ -12,6 +12,7 @@ log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import chromadb
+    from chromadb.api import ClientAPI
     from sentence_transformers import SentenceTransformer
 
 
@@ -27,7 +28,7 @@ class ChromaIndex:
             index_dir: Directory for index storage. Defaults to INDEX_ROOT/chroma/.
         """
         self._index_dir = index_dir or get_index_root() / "chroma"
-        self._client: chromadb.PersistentClient | None = None
+        self._client: ClientAPI | None = None
         self._collection: chromadb.Collection | None = None
         self._model: SentenceTransformer | None = None
 
@@ -197,7 +198,7 @@ class ChromaIndex:
         # Upsert all at once
         collection.upsert(
             ids=ids,
-            embeddings=embeddings,
+            embeddings=cast(Any, embeddings),
             documents=documents,
             metadatas=metadatas,
         )
@@ -241,7 +242,7 @@ class ChromaIndex:
         results = collection.query(
             query_embeddings=[query_embedding],
             n_results=fetch_limit,
-            include=["documents", "metadatas", "distances"],
+            include=cast(Any, ["documents", "metadatas", "distances"]),
         )
 
         if not results["ids"] or not results["ids"][0]:

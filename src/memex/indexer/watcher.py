@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 from watchdog.events import FileSystemEvent, FileSystemEventHandler
 from watchdog.observers import Observer
+from watchdog.observers.api import BaseObserver
 from watchdog.observers.polling import PollingObserver
 
 from ..backlinks_cache import rebuild_backlink_cache
@@ -97,7 +98,8 @@ class DebouncedHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        src_path = Path(event.src_path)
+        # event.src_path is bytes | str, but we only handle str paths
+        src_path = Path(str(event.src_path))
 
         # Only handle markdown files
         if src_path.suffix.lower() != ".md":
@@ -124,8 +126,9 @@ class DebouncedHandler(FileSystemEventHandler):
         if event.is_directory:
             return
 
-        src_path = Path(event.src_path)
-        dest_path = Path(event.dest_path) if hasattr(event, "dest_path") else None
+        # event paths are bytes | str, but we only handle str paths
+        src_path = Path(str(event.src_path))
+        dest_path = Path(str(event.dest_path)) if hasattr(event, "dest_path") else None
 
         if src_path.suffix.lower() == ".md":
             self._pending_files.add(src_path)
@@ -156,7 +159,7 @@ class FileWatcher:
         self._searcher = searcher
         self._kb_root = kb_root or get_kb_root()
         self._debounce_seconds = debounce_seconds
-        self._observer: Observer | None = None
+        self._observer: BaseObserver | None = None
         self._running = False
 
     def _on_files_changed(self, files: set[Path]) -> None:
@@ -170,11 +173,8 @@ class FileWatcher:
 
         # Import here to avoid circular imports
         from ..parser import parse_entry
-        from ..webapp.events import Event, EventType, get_broadcaster
 
-        broadcaster = get_broadcaster()
         refresh_backlinks = False
-        changed_paths: list[str] = []
 
         for file_path in files:
             try:
@@ -184,15 +184,6 @@ class FileWatcher:
                     self._searcher.delete_document(relative_path)
                     logger.debug(f"Removed from index: {relative_path}")
                     refresh_backlinks = True
-                    changed_paths.append(relative_path)
-
-                    # Broadcast delete event
-                    broadcaster.broadcast_sync(
-                        Event(
-                            type=EventType.FILE_DELETED,
-                            data={"path": relative_path},
-                        )
-                    )
                     continue
 
                 relative_path = str(file_path.relative_to(self._kb_root))
@@ -209,30 +200,12 @@ class FileWatcher:
                 self._searcher.index_chunks(normalized_chunks)
                 logger.debug(f"Re-indexed: {relative_path}")
                 refresh_backlinks = True
-                changed_paths.append(relative_path)
-
-                # Broadcast change event
-                broadcaster.broadcast_sync(
-                    Event(
-                        type=EventType.FILE_CHANGED,
-                        data={"path": relative_path},
-                    )
-                )
 
             except Exception as e:
                 logger.warning(f"Failed to process {file_path}: {e}")
 
         if refresh_backlinks:
             rebuild_backlink_cache(self._kb_root)
-
-        # Broadcast completion event
-        if changed_paths:
-            broadcaster.broadcast_sync(
-                Event(
-                    type=EventType.REINDEX_COMPLETE,
-                    data={"paths": changed_paths, "count": len(changed_paths)},
-                )
-            )
 
     def start(self) -> None:
         """Start watching for file changes."""

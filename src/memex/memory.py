@@ -13,9 +13,23 @@ import json
 import os
 import re
 import subprocess
-from datetime import datetime
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
+
+
+class InitResult(TypedDict):
+    """Result type for init_memory function."""
+    success: bool
+    actions: list[str]
+    warnings: list[str]
+
+
+class DisableResult(TypedDict):
+    """Result type for disable_memory function."""
+    success: bool
+    actions: list[str]
 
 # Default configuration
 DEFAULT_SESSION_DIR = "sessions"
@@ -141,7 +155,7 @@ def add_memory(
     lines = []
 
     if timestamp:
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         lines.append(f"\n## {now.strftime('%Y-%m-%d %H:%M')} UTC\n")
 
     lines.append(message)
@@ -158,7 +172,7 @@ def add_memory(
         frontmatter = f"""---
 title: Session Log {date_str}
 tags: [sessions, memory]
-created: {datetime.utcnow().isoformat()}
+created: {datetime.now(UTC).isoformat()}
 ---
 
 # Session Log - {date_str}
@@ -223,7 +237,7 @@ def init_memory(
     user_scope: bool = False,
     session_dir: str = DEFAULT_SESSION_DIR,
     retention_days: int = DEFAULT_RETENTION_DAYS,
-) -> dict[str, Any]:
+) -> InitResult:
     """Initialize memory for a project or user.
 
     Args:
@@ -238,7 +252,7 @@ def init_memory(
     if project_path is None:
         project_path = get_project_path()
 
-    result = {
+    result: InitResult = {
         "success": True,
         "actions": [],
         "warnings": [],
@@ -333,7 +347,7 @@ def init_memory(
 def disable_memory(
     project_path: Path | None = None,
     user_scope: bool = False,
-) -> dict[str, Any]:
+) -> DisableResult:
     """Disable memory by removing hooks.
 
     Args:
@@ -346,7 +360,7 @@ def disable_memory(
     if project_path is None:
         project_path = get_project_path()
 
-    result = {
+    result: DisableResult = {
         "success": True,
         "actions": [],
     }

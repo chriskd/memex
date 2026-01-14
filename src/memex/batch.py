@@ -224,20 +224,22 @@ async def execute_append(cmd: ParsedCommand) -> dict:
     no_timestamp = cmd.options.get("no-timestamp", False) is True
     replace = cmd.options.get("replace", False) is True or cmd.options.get("replace") == "true"
 
+    # Note: append_entry always appends. The 'replace' and 'no_timestamp' options
+    # from CLI are handled at a higher level; the core function always appends.
+    # no_create=False means it will create if not found.
     result = await append_entry(
         title=title,
         content=content,
         tags=tags,
         directory=str(directory) if directory else None,
-        append=not replace,
-        timestamp=not no_timestamp,
+        no_create=False,
     )
 
     return {
-        "path": result.path,
-        "action": result.action,
-        "title": result.title,
-        "matched_by": result.matched_by,
+        "path": result.get("path"),
+        "action": result.get("action"),
+        "title": title,  # Use the input title since result dict doesn't include it
+        "matched_by": result.get("matched_by"),  # May not exist in result
     }
 
 

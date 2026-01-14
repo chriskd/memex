@@ -102,7 +102,7 @@ def find_matches(content: str, find_string: str) -> list[MatchContext]:
     lines = content.split("\n")
 
     # Build line offset map for line number lookup
-    line_offsets = [0]
+    line_offsets: list[int] = [0]
     for line in lines:
         line_offsets.append(line_offsets[-1] + len(line) + 1)
 
@@ -116,7 +116,7 @@ def find_matches(content: str, find_string: str) -> list[MatchContext]:
         match_num += 1
 
         # Find line number (1-indexed)
-        line_num = bisect.bisect_right(line_offsets, pos)
+        line_num = bisect.bisect_right(line_offsets, pos)  # type: ignore[arg-type]
 
         # Extract context (~50 chars before/after)
         ctx_start = max(0, pos - 50)

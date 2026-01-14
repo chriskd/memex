@@ -1697,6 +1697,72 @@ class TestTypoSuggestions:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Input Validation Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestInputValidation:
+    """Tests for CLI input validation - ensures clean errors, not tracebacks.
+
+    These tests verify that invalid inputs produce user-friendly error messages
+    rather than Python tracebacks. Covers bugs: jcg7, e4sx, wydj.
+    """
+
+    # --limit validation (bug: jcg7)
+
+    def test_search_limit_zero_shows_error(self, runner):
+        """--limit 0 should show a clean error, not a traceback."""
+        result = runner.invoke(cli, ["search", "test", "--limit", "0"])
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+        assert "0 is not in the range" in result.output
+
+    def test_search_limit_negative_shows_error(self, runner):
+        """--limit -1 should show a clean error, not a traceback."""
+        result = runner.invoke(cli, ["search", "test", "--limit", "-1"])
+        assert result.exit_code != 0
+        assert "Traceback" not in result.output
+        assert "-1 is not in the range" in result.output
+
+    def test_search_limit_positive_accepted(self, runner):
+        """--limit with positive values should be accepted."""
+        result = runner.invoke(cli, ["search", "test", "--limit", "1"])
+        assert "is not in the range" not in result.output
+
+    # Empty query validation (bug: terw)
+
+    def test_search_empty_query_shows_error(self, runner):
+        """Empty string query should show a clean error."""
+        result = runner.invoke(cli, ["search", ""])
+        assert result.exit_code != 0
+        assert "Query cannot be empty" in result.output
+
+    def test_search_whitespace_query_shows_error(self, runner):
+        """Whitespace-only query should show a clean error."""
+        result = runner.invoke(cli, ["search", "   "])
+        assert result.exit_code != 0
+        assert "Query cannot be empty" in result.output
+
+    # --json-errors validation (bug: wydj)
+
+    def test_empty_query_json_errors_mode(self, runner):
+        """Empty query with --json-errors should return JSON error."""
+        result = runner.invoke(cli, ["--json-errors", "search", ""])
+        assert result.exit_code != 0
+        error_data = json.loads(result.output)
+        assert "error" in error_data
+        assert "Query cannot be empty" in error_data["error"]["message"]
+
+    # Invalid category validation (bug: e4sx)
+
+    def test_list_invalid_category_no_traceback(self, runner):
+        """Invalid category should not cause traceback."""
+        result = runner.invoke(cli, ["list", "--category", "nonexistent"])
+        # Should handle gracefully (either error or empty results), never traceback
+        assert "Traceback" not in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # KBContext Tests
 # ─────────────────────────────────────────────────────────────────────────────
 

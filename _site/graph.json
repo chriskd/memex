@@ -1,14 +1,69 @@
 {
   "nodes": [
     {
-      "id": "guides/quick-start",
-      "title": "Quick Start Guide",
+      "id": "reference/focusgroup-evaluation-mx-cli-discoverability-2026-01",
+      "title": "Focusgroup Evaluation: mx CLI Discoverability (2026-01)",
       "tags": [
-        "getting-started",
-        "tutorial",
-        "basics"
+        "focusgroup",
+        "evaluation",
+        "mx",
+        "cli"
       ],
-      "url": "guides/quick-start.html"
+      "url": "reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html"
+    },
+    {
+      "id": "reference/agent-memory-comparison",
+      "title": "Agent Memory Comparison",
+      "tags": [
+        "memory",
+        "comparison",
+        "basic-memory",
+        "claude-mem"
+      ],
+      "url": "reference/agent-memory-comparison.html"
+    },
+    {
+      "id": "reference/cli",
+      "title": "CLI Reference",
+      "tags": [
+        "cli",
+        "reference",
+        "commands"
+      ],
+      "url": "reference/cli.html"
+    },
+    {
+      "id": "reference/focusgroup-evaluation-2026-01",
+      "title": "Focusgroup Agent UX Evaluation (2026-01)",
+      "tags": [
+        "focusgroup",
+        "agent-ux",
+        "evaluation",
+        "cli"
+      ],
+      "url": "reference/focusgroup-evaluation-2026-01.html"
+    },
+    {
+      "id": "reference/entry-format",
+      "title": "Entry Format Reference",
+      "tags": [
+        "reference",
+        "frontmatter",
+        "markdown",
+        "links"
+      ],
+      "url": "reference/entry-format.html"
+    },
+    {
+      "id": "guides/mcp-setup",
+      "title": "MCP Server Setup",
+      "tags": [
+        "mcp",
+        "claude-desktop",
+        "setup",
+        "configuration"
+      ],
+      "url": "guides/mcp-setup.html"
     },
     {
       "id": "guides/ai-integration",
@@ -23,15 +78,15 @@
       "url": "guides/ai-integration.html"
     },
     {
-      "id": "guides/mcp-setup",
-      "title": "MCP Server Setup",
+      "id": "guides/agent-memory",
+      "title": "Agent Memory",
       "tags": [
-        "mcp",
-        "claude-desktop",
-        "setup",
-        "configuration"
+        "agent-memory",
+        "hooks",
+        "claude-code",
+        "sessions"
       ],
-      "url": "guides/mcp-setup.html"
+      "url": "guides/agent-memory.html"
     },
     {
       "id": "guides/installation",
@@ -44,118 +99,29 @@
       "url": "guides/installation.html"
     },
     {
-      "id": "reference/beads",
-      "title": "Beads Integration",
+      "id": "guides/quick-start",
+      "title": "Quick Start Guide",
       "tags": [
-        "reference",
-        "beads",
-        "issue-tracking"
+        "getting-started",
+        "tutorial",
+        "basics"
       ],
-      "url": "reference/beads.html"
+      "url": "guides/quick-start.html"
     },
     {
-      "id": "reference/templates",
-      "title": "Templates Reference",
+      "id": "sessions/2026-01-12",
+      "title": "Session Log 2026-01-12",
       "tags": [
-        "reference",
-        "templates"
+        "sessions",
+        "memory"
       ],
-      "url": "reference/templates.html"
-    },
-    {
-      "id": "reference/entry-format",
-      "title": "Entry Format Reference",
-      "tags": [
-        "reference",
-        "frontmatter",
-        "markdown",
-        "links"
-      ],
-      "url": "reference/entry-format.html"
-    },
-    {
-      "id": "reference/cli",
-      "title": "CLI Reference",
-      "tags": [
-        "cli",
-        "reference",
-        "commands"
-      ],
-      "url": "reference/cli.html"
+      "url": "sessions/2026-01-12.html"
     }
   ],
   "edges": [
     {
-      "source": "guides/quick-start",
-      "target": "guides/ai-integration"
-    },
-    {
-      "source": "guides/quick-start",
-      "target": "reference/cli"
-    },
-    {
-      "source": "guides/quick-start",
-      "target": "reference/entry-format"
-    },
-    {
-      "source": "guides/ai-integration",
-      "target": "reference/cli"
-    },
-    {
-      "source": "guides/ai-integration",
-      "target": "guides/mcp-setup"
-    },
-    {
-      "source": "guides/ai-integration",
-      "target": "reference/entry-format"
-    },
-    {
-      "source": "guides/mcp-setup",
-      "target": "guides/ai-integration"
-    },
-    {
-      "source": "guides/mcp-setup",
-      "target": "guides/installation"
-    },
-    {
-      "source": "guides/mcp-setup",
-      "target": "reference/cli"
-    },
-    {
-      "source": "guides/installation",
-      "target": "reference/cli"
-    },
-    {
-      "source": "guides/installation",
-      "target": "guides/quick-start"
-    },
-    {
-      "source": "guides/installation",
-      "target": "guides/mcp-setup"
-    },
-    {
-      "source": "reference/beads",
-      "target": "reference/cli"
-    },
-    {
-      "source": "reference/beads",
-      "target": "reference/entry-format"
-    },
-    {
-      "source": "reference/templates",
-      "target": "reference/cli"
-    },
-    {
-      "source": "reference/templates",
-      "target": "reference/entry-format"
-    },
-    {
-      "source": "reference/entry-format",
-      "target": "reference/cli"
-    },
-    {
-      "source": "reference/entry-format",
-      "target": "guides/quick-start"
+      "source": "reference/agent-memory-comparison",
+      "target": "guides/agent-memory"
     },
     {
       "source": "reference/cli",
@@ -167,6 +133,74 @@
     },
     {
       "source": "reference/cli",
+      "target": "reference/entry-format"
+    },
+    {
+      "source": "reference/entry-format",
+      "target": "reference/cli"
+    },
+    {
+      "source": "reference/entry-format",
+      "target": "guides/quick-start"
+    },
+    {
+      "source": "guides/mcp-setup",
+      "target": "guides/ai-integration"
+    },
+    {
+      "source": "guides/mcp-setup",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/mcp-setup",
+      "target": "guides/installation"
+    },
+    {
+      "source": "guides/ai-integration",
+      "target": "guides/mcp-setup"
+    },
+    {
+      "source": "guides/ai-integration",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/ai-integration",
+      "target": "reference/entry-format"
+    },
+    {
+      "source": "guides/ai-integration",
+      "target": "guides/agent-memory"
+    },
+    {
+      "source": "guides/agent-memory",
+      "target": "guides/ai-integration"
+    },
+    {
+      "source": "guides/agent-memory",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/installation",
+      "target": "guides/mcp-setup"
+    },
+    {
+      "source": "guides/installation",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/installation",
+      "target": "guides/quick-start"
+    },
+    {
+      "source": "guides/quick-start",
+      "target": "guides/ai-integration"
+    },
+    {
+      "source": "guides/quick-start",
+      "target": "reference/cli"
+    },
+    {
+      "source": "guides/quick-start",
       "target": "reference/entry-format"
     }
   ]

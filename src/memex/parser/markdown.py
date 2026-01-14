@@ -56,7 +56,7 @@ def parse_entry(path: Path) -> tuple[EntryMetadata, str, list[DocumentChunk]]:
         raise ParseError(path, "Path is not a file")
 
     try:
-        post = frontmatter.load(path)
+        post = frontmatter.load(str(path))
     except Exception as e:
         raise ParseError(path, f"Failed to parse frontmatter: {e}") from e
 

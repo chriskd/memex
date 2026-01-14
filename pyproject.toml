@@ -41,3 +41,23 @@ select = ["E", "F", "I", "UP"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 norecursedirs = ["_archive", "__pycache__"]
+
+[tool.ty.environment]
+python-version = "3.11"
+
+[tool.ty.rules]
+# Enable stricter rules that are off by default
+division-by-zero = "error"              # Catch x / 0
+possibly-unresolved-reference = "warn"  # Catch typos in conditional branches
+
+# Promote warnings to errors for CI strictness
+possibly-missing-attribute = "error"    # Was warning, catches real bugs
+
+[tool.ty.terminal]
+error-on-warning = true                 # Fail CI on warnings too
+
+# Relax rules for tests (they often do weird things intentionally)
+[[tool.ty.overrides]]
+include = ["tests/**"]
+[tool.ty.overrides.rules]
+possibly-unresolved-reference = "ignore"

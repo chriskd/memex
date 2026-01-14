@@ -319,7 +319,7 @@ class HybridSearcher:
         self._whoosh.delete_document(path)
         self._chroma.delete_document(path)
 
-    def reindex(self, kb_root: Path | None = None, kb_roots: list[tuple[str, Path]] | None = None) -> int:
+    def reindex(self, kb_root: Path | None = None, kb_roots: list[tuple[str | None, Path]] | None = None) -> int:
         """Clear and rebuild indices from all markdown files.
 
         Args:

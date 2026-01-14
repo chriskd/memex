@@ -28,7 +28,7 @@ class StaticWikilinkRenderer(RendererHTML):
         self,
         parser=None,
         *,
-        title_index: TitleIndex = None,
+        title_index: TitleIndex | dict[str, str] | None = None,
         source_path: str = "",
         base_url: str = "",
         broken_links: set[str] | None = None,

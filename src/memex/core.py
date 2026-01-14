@@ -1486,6 +1486,9 @@ async def append_entry(
     existing_entry.write_text(frontmatter + new_content, encoding="utf-8")
     rebuild_backlink_cache(kb_root)
 
+    # At this point existing_entry is not None, so existing_path is also set
+    assert existing_path is not None
+
     # Reindex
     searcher = get_searcher()
     try:
@@ -1499,7 +1502,7 @@ async def append_entry(
     except Exception as e:
         log.error("Unexpected error re-indexing %s: %s", existing_path, e)
 
-    # Compute suggestions
+    # Compute suggestions (existing_path was asserted above)
     existing_links = set(extract_links(new_content))
     suggested_links = compute_link_suggestions(
         title=metadata.title,
@@ -1960,7 +1963,7 @@ async def whats_new(
                 activity_type = "created"
                 activity_date = created_aware
 
-            if activity_type is None:
+            if activity_type is None or activity_date is None:
                 continue
 
             candidates.append(
@@ -2922,6 +2925,9 @@ async def patch_entry(
 
     if not result.success:
         return result.to_dict()
+
+    # When success is True, new_content is guaranteed to be set
+    assert result.new_content is not None
 
     # Handle dry-run: return diff without writing
     if dry_run:

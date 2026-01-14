@@ -18,6 +18,8 @@ import json
 import os
 import sys
 from pathlib import Path
+from collections.abc import Sequence
+from typing import Any, Literal, NoReturn, Optional, cast
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -97,7 +99,7 @@ def _handle_error(
     error: Exception,
     fallback_message: str | None = None,
     exit_code: int = 1,
-) -> None:
+) -> NoReturn:
     """Handle an error with optional JSON output.
 
     If --json-errors is enabled, outputs structured JSON error.
@@ -314,7 +316,14 @@ class JsonErrorGroup(click.Group):
                 ctx.exit(1)
             raise
 
-    def main(self, *args, standalone_mode=True, **kwargs):
+    def main(
+        self,
+        args: Sequence[str] | None = None,
+        prog_name: str | None = None,
+        complete_var: str | None = None,
+        standalone_mode: bool = True,
+        **extra: Any,
+    ) -> Any:
         """Override main to catch errors during argument parsing.
 
         This catches errors that happen before invoke() is called,
@@ -326,11 +335,15 @@ class JsonErrorGroup(click.Group):
         json_errors_requested = "--json-errors" in sys.argv
 
         if not json_errors_requested:
-            return super().main(*args, standalone_mode=standalone_mode, **kwargs)
+            return super().main(
+                args, prog_name, complete_var, standalone_mode, **extra
+            )
 
         try:
-            return super().main(*args, standalone_mode=standalone_mode, **kwargs)
-        except SystemExit:
+            return super().main(
+                args, prog_name, complete_var, standalone_mode, **extra
+            )
+        except SystemExit as e:
             # Click calls sys.exit() on errors; re-raise to preserve exit code
             raise
         except ClickException as e:
@@ -406,7 +419,7 @@ def _get_recent_entries_for_status(
     try:
         # Try project-specific first
         if project:
-            entries = run_async(core_whats_new(days=14, limit=limit, project=project))
+            entries = run_async(core_whats_new(days=14, limit=limit, scope=project))
             if entries:
                 return entries
 
@@ -1027,10 +1040,13 @@ def search(
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
+    # Cast mode to literal type (validated by click.Choice above)
+    mode_literal = cast(Literal["hybrid", "keyword", "semantic"], mode)
+
     result = run_async(core_search(
         query=query,
         limit=limit,
-        mode=mode,
+        mode=mode_literal,
         tags=tag_list,
         include_content=content,
         strict=strict,
@@ -1223,6 +1239,9 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
         # Single match - use its path
         path = matches[0]["path"]
 
+    # At this point path is guaranteed to be set (either from arg or from matches)
+    assert path is not None, "path must be set by this point"
+
     try:
         entry = run_async(get_entry(path=path))
     except Exception as e:
@@ -1326,6 +1345,9 @@ def add(
     elif content:
         # Decode escape sequences in --content (e.g., \n -> newline)
         content = decode_escape_sequences(content)
+
+    # Content is guaranteed to be set by one of the branches above (validated earlier)
+    assert content is not None, "content must be set by this point"
 
     tag_list = [t.strip() for t in tags.split(",")]
     keyword_list = [k.strip() for k in keywords.split(",")] if keywords else None
@@ -1454,6 +1476,9 @@ def append(
     elif content:
         # Decode escape sequences in --content (e.g., \n -> newline)
         content = decode_escape_sequences(content)
+
+    # Content is guaranteed to be set by one of the branches above (validated earlier)
+    assert content is not None, "content must be set by this point"
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
@@ -2114,9 +2139,11 @@ def context_validate(as_json: bool):
             click.echo("Error: No .kbcontext file found.", err=True)
         sys.exit(1)
 
+    # ctx is guaranteed non-None after the check above
     kb_root = get_kb_root()
-    warnings = validate_context(ctx, kb_root)
+    warnings = validate_context(ctx, kb_root)  # type: ignore[arg-type]
 
+    assert ctx is not None
     if as_json:
         output({
             "valid": True,
@@ -2453,6 +2480,7 @@ def quick_add(
         click.echo("Error: Provide --content, --file, or --stdin", err=True)
         sys.exit(1)
 
+    assert content is not None
     if not content.strip():
         click.echo("Error: Content is empty", err=True)
         sys.exit(1)
@@ -2476,6 +2504,7 @@ def quick_add(
     except Exception:
         pass
 
+    assert content is not None
     # Auto-generate metadata
     auto_title = title or _extract_title_from_content(content)
     auto_tags = tags.split(",") if tags else _suggest_tags_from_content(content, existing_tags)
@@ -2564,6 +2593,7 @@ def templates(action: str, name: str | None, as_json: bool):
             click.echo("Usage: mx templates show <name>", err=True)
             sys.exit(1)
 
+        assert name is not None  # Checked above
         template = get_template(name)
         if not template:
             available = ", ".join(t.name for t in list_templates())
@@ -2571,6 +2601,7 @@ def templates(action: str, name: str | None, as_json: bool):
             click.echo(f"Available: {available}", err=True)
             sys.exit(1)
 
+        assert template is not None  # Checked above
         if as_json:
             output({
                 "name": template.name,
@@ -2744,6 +2775,8 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
             click.echo(f"Error: No search at position {rerun}", err=True)
             sys.exit(1)
 
+        assert entry is not None  # type narrowing after sys.exit
+
         # Re-run the search using the search command logic
         if not as_json:
             click.echo(f"Re-running: {entry.query}")
@@ -2758,7 +2791,7 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
         result = run_async(core_search(
             query=entry.query,
             limit=10,
-            mode=entry.mode,
+            mode=cast(Literal["hybrid", "keyword", "semantic"], entry.mode),
             tags=entry.tags if entry.tags else None,
             include_content=False,
         ))
@@ -3090,6 +3123,8 @@ def memory_add(
 
     # Parse tags
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    assert message is not None  # One of the sources must have set it
 
     try:
         kb_root = get_kb_root()
@@ -4024,6 +4059,7 @@ def publish(
 
     # Handle --setup-github-actions
     if setup_github_actions:
+        assert resolved_kb is not None  # Checked above (exits if None)
         _setup_github_actions_workflow(
             resolved_kb=resolved_kb,
             base_url=resolved_base_url,
