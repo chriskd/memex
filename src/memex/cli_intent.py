@@ -51,7 +51,7 @@ def detect_patch_intent_mismatch(
             suggestions=[
                 IntentSuggestion(
                     description="For appending content",
-                    command=f"mx append 'Title' --content='...'",
+                    command="mx append 'Title' --content='...'",
                 ),
                 IntentSuggestion(
                     description="For find-replace",
@@ -67,7 +67,7 @@ def detect_patch_intent_mismatch(
             suggestions=[
                 IntentSuggestion(
                     description="To append content",
-                    command=f"mx append 'Title' --content='...'",
+                    command="mx append 'Title' --content='...'",
                 ),
                 IntentSuggestion(
                     description="To replace text",

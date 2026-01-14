@@ -18,7 +18,6 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Optional
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -50,7 +49,7 @@ def decode_escape_sequences(s: str) -> str:
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def format_table(rows: list[dict], columns: list[str], max_widths: Optional[dict] = None) -> str:
+def format_table(rows: list[dict], columns: list[str], max_widths: dict | None = None) -> str:
     """Format rows as a simple table."""
     if not rows:
         return ""
@@ -251,7 +250,7 @@ def _handle_add_error(ctx: click.Context, error: Exception, tags: list[str]) -> 
     _handle_error(ctx, error)
 
 
-def format_json_error(code: str, message: str, details: Optional[dict] = None) -> str:
+def format_json_error(code: str, message: str, details: dict | None = None) -> str:
     """Format an error as JSON for --json-errors output."""
     error = {"error": {"code": code, "message": message}}
     if details:
@@ -331,7 +330,7 @@ class JsonErrorGroup(click.Group):
 
         try:
             return super().main(*args, standalone_mode=standalone_mode, **kwargs)
-        except SystemExit as e:
+        except SystemExit:
             # Click calls sys.exit() on errors; re-raise to preserve exit code
             raise
         except ClickException as e:
@@ -653,7 +652,6 @@ Search: `mx search "query"` | Read: `mx get path.md` | Add: `mx add --title="...
 
 def _detect_mcp_mode() -> bool:
     """Detect if running in MCP context (minimal output preferred)."""
-    import os
     # If MCP server is active, we're likely in a context where minimal output is better
     # Check for common MCP environment indicators
     return os.environ.get("MCP_SERVER_ACTIVE") == "1"
@@ -708,7 +706,7 @@ LOCAL_KB_DIR = "kb"
 @click.option("--user", "-u", is_flag=True, help="Create user-scope KB at ~/.memex/kb/")
 @click.option("--force", "-f", is_flag=True, help="Reinitialize existing KB")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def init(path: Optional[str], user: bool, force: bool, as_json: bool):
+def init(path: str | None, user: bool, force: bool, as_json: bool):
     """Initialize a knowledge base.
 
     By default, creates a project-scope KB at kb/ in the current directory.
@@ -886,7 +884,7 @@ kb_path: ./{relative_kb_path}
     # Output
     scope_label = "user" if user else "project"
     if user:
-        files_created = [f"kb/README.md", f"kb/{LOCAL_KB_CONFIG_FILENAME}"]
+        files_created = ["kb/README.md", f"kb/{LOCAL_KB_CONFIG_FILENAME}"]
     else:
         files_created = [f"{kb_path.name}/README.md", ".kbconfig"]
 
@@ -896,7 +894,7 @@ kb_path: ./{relative_kb_path}
             "config": str(config_path),
             "scope": scope_label,
             "files": files_created,
-            "hint": f"Use 'mx add' to add entries to this KB"
+            "hint": "Use 'mx add' to add entries to this KB"
         }, as_json=True)
     else:
         click.echo(f"✓ Initialized {scope_label} KB at {kb_path}")
@@ -955,7 +953,7 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def search(ctx: click.Context, query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float], content: bool, strict: bool, terse: bool, full_titles: bool, scope: Optional[str], as_json: bool):
+def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: int, min_score: float | None, content: bool, strict: bool, terse: bool, full_titles: bool, scope: str | None, as_json: bool):
     """Search the knowledge base.
 
     Scores are normalized to 0.0-1.0 (higher = better match):
@@ -1084,7 +1082,7 @@ def search(ctx: click.Context, query: str, tags: Optional[str], mode: str, limit
 @click.option("--title", "by_title", help="Get entry by title instead of path")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
-def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: bool):
+def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     """Read a knowledge base entry.
 
     \b
@@ -1171,15 +1169,17 @@ def get(path: Optional[str], by_title: Optional[str], as_json: bool, metadata: b
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope (default: auto-detect)")
+@click.option("--keywords", help="Key concepts for semantic linking (comma-separated)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
     title: str,
     tags: str,
     category: str,
-    content: Optional[str],
-    file_path: Optional[str],
+    content: str | None,
+    file_path: str | None,
     stdin: bool,
-    scope: Optional[str],
+    scope: str | None,
+    keywords: str | None,
     as_json: bool,
 ):
     """Create a new knowledge base entry.
@@ -1226,9 +1226,10 @@ def add(
         content = decode_escape_sequences(content)
 
     tag_list = [t.strip() for t in tags.split(",")]
+    keyword_list = [k.strip() for k in keywords.split(",")] if keywords else None
 
     try:
-        result = run_async(add_entry(title=title, content=content, tags=tag_list, category=category, scope=scope))
+        result = run_async(add_entry(title=title, content=content, tags=tag_list, category=category, scope=scope, keywords=keyword_list))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1268,11 +1269,11 @@ def add(
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def append(
     title: str,
-    content: Optional[str],
-    file_path: Optional[str],
+    content: str | None,
+    file_path: str | None,
     stdin: bool,
-    tags: Optional[str],
-    category: Optional[str],
+    tags: str | None,
+    category: str | None,
     no_create: bool,
     as_json: bool,
 ):
@@ -1357,16 +1358,18 @@ def append(
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content (replaces existing)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
 @click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def replace_cmd(
     path: str,
-    tags: Optional[str],
-    content: Optional[str],
-    file_path: Optional[str],
-    find_flag: Optional[str],
-    replace_flag: Optional[str],
+    tags: str | None,
+    content: str | None,
+    file_path: str | None,
+    keywords: str | None,
+    find_flag: str | None,
+    replace_flag: str | None,
     as_json: bool,
 ):
     """Replace content or tags in a knowledge base entry.
@@ -1404,9 +1407,10 @@ def replace_cmd(
         content = decode_escape_sequences(content)
 
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
+    keyword_list = [k.strip() for k in keywords.split(",")] if keywords else None
 
     try:
-        result = run_async(update_entry(path=path, content=content, tags=tag_list))
+        result = run_async(update_entry(path=path, content=content, tags=tag_list, keywords=keyword_list))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1423,11 +1427,12 @@ def replace_cmd(
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def update_alias(ctx, path, tags, content, file_path, as_json):
+def update_alias(ctx, path, tags, content, file_path, keywords, as_json):
     """(Deprecated: use 'mx replace' instead)"""
-    ctx.invoke(replace_cmd, path=path, tags=tags, content=content, file_path=file_path, as_json=as_json)
+    ctx.invoke(replace_cmd, path=path, tags=tags, content=content, file_path=file_path, keywords=keywords, as_json=as_json)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1462,7 +1467,7 @@ def format_tree(tree_data: dict, prefix: str = "") -> str:
 @click.option("--depth", "-d", default=3, help="Max depth")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def tree(path: str, depth: int, scope: Optional[str], as_json: bool):
+def tree(path: str, depth: int, scope: str | None, as_json: bool):
     """Display knowledge base directory structure.
 
     \b
@@ -1496,7 +1501,7 @@ def tree(path: str, depth: int, scope: Optional[str], as_json: bool):
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def list_entries(tag: Optional[str], category: Optional[str], limit: int, full_titles: bool, scope: Optional[str], as_json: bool):
+def list_entries(tag: str | None, category: str | None, limit: int, full_titles: bool, scope: str | None, as_json: bool):
     """List knowledge base entries.
 
     \b
@@ -1506,7 +1511,8 @@ def list_entries(tag: Optional[str], category: Optional[str], limit: int, full_t
       mx list --category=infrastructure --limit=10
       mx list --scope=project              # Project KB only
     """
-    from .core import get_valid_categories, list_entries as core_list_entries
+    from .core import get_valid_categories
+    from .core import list_entries as core_list_entries
 
     try:
         result = run_async(core_list_entries(tag=tag, category=category, limit=limit, scope=scope))
@@ -1549,7 +1555,7 @@ def list_entries(tag: Optional[str], category: Optional[str], limit: int, full_t
 @click.option("--limit", "-n", default=10, help="Max results")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def whats_new(days: int, limit: int, scope: Optional[str], as_json: bool):
+def whats_new(days: int, limit: int, scope: str | None, as_json: bool):
     """Show recently created or updated entries.
 
     \b
@@ -1774,7 +1780,7 @@ def suggest_links(path: str, limit: int, as_json: bool):
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def reindex(ctx: click.Context, scope: Optional[str], as_json: bool):
+def reindex(ctx: click.Context, scope: str | None, as_json: bool):
     """Rebuild search indices from all markdown files.
 
     By default, indexes entries from both project and user KBs.
@@ -2218,12 +2224,12 @@ def _suggest_category_from_content(content: str, categories: list[str]) -> str |
 @click.option("--confirm", "-y", is_flag=True, help="Auto-confirm without prompting")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def quick_add(
-    file_path: Optional[str],
+    file_path: str | None,
     stdin: bool,
-    content: Optional[str],
-    title: Optional[str],
-    tags: Optional[str],
-    category: Optional[str],
+    content: str | None,
+    title: str | None,
+    tags: str | None,
+    category: str | None,
     confirm: bool,
     as_json: bool,
 ):
@@ -2335,7 +2341,7 @@ def quick_add(
 @click.argument("action", default="list", type=click.Choice(["list", "show"]))
 @click.argument("name", required=False)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def templates(action: str, name: Optional[str], as_json: bool):
+def templates(action: str, name: str | None, as_json: bool):
     """List or show entry templates.
 
     \b
@@ -2433,7 +2439,6 @@ def info(ctx: click.Context, as_json: bool):
         ConfigurationError,
         get_index_root,
         get_kb_root,
-        get_kb_roots,
         get_project_kb_root,
         get_user_kb_root,
     )
@@ -2518,7 +2523,7 @@ def config_alias(ctx, as_json: bool):
 @click.option("--rerun", "-r", type=int, help="Re-execute search at position N (1=most recent)")
 @click.option("--clear", is_flag=True, help="Clear all search history")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def history(limit: int, rerun: Optional[int], clear: bool, as_json: bool):
+def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
     """Show recent search history and optionally re-run searches.
 
     \b
@@ -2636,7 +2641,7 @@ def history(limit: int, rerun: Optional[int], clear: bool, as_json: bool):
     default=True,
     help="Continue processing after errors (default: continue)",
 )
-def batch(file_path: Optional[str], continue_on_error: bool):
+def batch(file_path: str | None, continue_on_error: bool):
     """Execute multiple KB operations in a single invocation.
 
     Reads commands from stdin (or --file) and executes them sequentially.
@@ -2990,7 +2995,7 @@ def memory_capture(event: str, as_json: bool):
 @click.option("--dry-run", is_flag=True, help="Preview changes without writing")
 @click.option("--limit", type=int, help="Maximum entries to process")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def summarize(dry_run: bool, limit: Optional[int], as_json: bool):
+def summarize(dry_run: bool, limit: int | None, as_json: bool):
     """Generate descriptions for entries missing them.
 
     Extracts a one-line summary from entry content to use as the description
@@ -3468,7 +3473,7 @@ def _build_schema() -> dict:
 @cli.command()
 @click.option("--command", "-c", "command_name", help="Show schema for specific command only")
 @click.option("--compact", is_flag=True, help="Minimal output (commands and options only)")
-def schema(command_name: Optional[str], compact: bool):
+def schema(command_name: str | None, compact: bool):
     """Output CLI schema with agent-friendly metadata for introspection.
 
     Provides structured JSON describing all commands, their options,
@@ -3879,7 +3884,7 @@ def publish(
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
 @click.pass_context
-def show_alias(ctx, path: Optional[str], by_title: Optional[str], as_json: bool, metadata: bool):
+def show_alias(ctx, path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     """Alias for mx get."""
     ctx.invoke(get, path=path, by_title=by_title, as_json=as_json, metadata=metadata)
 
@@ -3898,8 +3903,8 @@ def show_alias(ctx, path: Optional[str], by_title: Optional[str], as_json: bool,
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def find_alias(ctx, query: str, tags: Optional[str], mode: str, limit: int, min_score: Optional[float],
-               content: bool, strict: bool, terse: bool, full_titles: bool, scope: Optional[str], as_json: bool):
+def find_alias(ctx, query: str, tags: str | None, mode: str, limit: int, min_score: float | None,
+               content: bool, strict: bool, terse: bool, full_titles: bool, scope: str | None, as_json: bool):
     """Alias for mx search."""
     ctx.invoke(search, query=query, tags=tags, mode=mode, limit=limit, min_score=min_score,
                content=content, strict=strict, terse=terse, full_titles=full_titles, scope=scope, as_json=as_json)
@@ -3911,7 +3916,7 @@ def find_alias(ctx, query: str, tags: Optional[str], mode: str, limit: int, min_
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def recent_alias(ctx, days: int, limit: int, scope: Optional[str], as_json: bool):
+def recent_alias(ctx, days: int, limit: int, scope: str | None, as_json: bool):
     """Alias for mx whats-new."""
     ctx.invoke(whats_new, days=days, limit=limit, scope=scope, as_json=as_json)
 
@@ -3924,8 +3929,8 @@ def recent_alias(ctx, days: int, limit: int, scope: Optional[str], as_json: bool
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def ls_alias(ctx, tag: Optional[str], category: Optional[str], limit: int, full_titles: bool,
-             scope: Optional[str], as_json: bool):
+def ls_alias(ctx, tag: str | None, category: str | None, limit: int, full_titles: bool,
+             scope: str | None, as_json: bool):
     """Alias for mx list."""
     ctx.invoke(list_entries, tag=tag, category=category, limit=limit, full_titles=full_titles,
                scope=scope, as_json=as_json)

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from jinja2 import Environment, BaseLoader, select_autoescape
+from jinja2 import BaseLoader, Environment, select_autoescape
 
 if TYPE_CHECKING:
     from .generator import EntryData
@@ -64,7 +64,7 @@ def _safe(html: str) -> str:
     return Markup(html)
 
 
-def _build_file_tree(entries: list["EntryData"], current_path: str = "", base_url: str = "") -> str:
+def _build_file_tree(entries: list[EntryData], current_path: str = "", base_url: str = "") -> str:
     """Build HTML for the sidebar file tree navigation.
 
     Args:
@@ -76,8 +76,8 @@ def _build_file_tree(entries: list["EntryData"], current_path: str = "", base_ur
         HTML string for the tree structure
     """
     # Group entries by their top-level folder
-    folders: dict[str, list["EntryData"]] = {}
-    root_entries: list["EntryData"] = []
+    folders: dict[str, list[EntryData]] = {}
+    root_entries: list[EntryData] = []
 
     for entry in sorted(entries, key=lambda e: e.path.lower()):
         parts = entry.path.split("/")
@@ -126,7 +126,7 @@ def _build_file_tree(entries: list["EntryData"], current_path: str = "", base_ur
     return ''.join(html_parts)
 
 
-def _build_recent_list(entries: list["EntryData"], current_path: str = "", base_url: str = "", limit: int = 20) -> str:
+def _build_recent_list(entries: list[EntryData], current_path: str = "", base_url: str = "", limit: int = 20) -> str:
     """Build HTML for the recent entries list in sidebar.
 
     Args:
@@ -159,7 +159,7 @@ def _build_recent_list(entries: list["EntryData"], current_path: str = "", base_
     return ''.join(html_parts)
 
 
-def _build_tabbed_sidebar(entries: list["EntryData"], current_path: str = "", base_url: str = "") -> str:
+def _build_tabbed_sidebar(entries: list[EntryData], current_path: str = "", base_url: str = "") -> str:
     """Build HTML for the tabbed sidebar with Browse and Recent tabs.
 
     Args:
@@ -197,7 +197,7 @@ def _build_tabbed_sidebar(entries: list["EntryData"], current_path: str = "", ba
 def _build_link_panel(
     outlinks: list[str],
     backlinks: list[str],
-    entries_dict: dict[str, "EntryData"],
+    entries_dict: dict[str, EntryData],
     base_url: str,
 ) -> str:
     """Build HTML for the right panel with outlinks and backlinks.
@@ -508,11 +508,11 @@ def _get_env() -> Environment:
 
 
 def render_entry_page(
-    entry: "EntryData",
+    entry: EntryData,
     base_url: str,
     site_title: str = "Memex",
-    all_entries: list["EntryData"] | None = None,
-    entries_dict: dict[str, "EntryData"] | None = None,
+    all_entries: list[EntryData] | None = None,
+    entries_dict: dict[str, EntryData] | None = None,
 ) -> str:
     """Render a single entry page with full 3-column layout.
 
@@ -561,7 +561,7 @@ def render_entry_page(
 
 
 def render_index_page(
-    entries: list["EntryData"],
+    entries: list[EntryData],
     tags_index: dict[str, list[str]],
     base_url: str,
     site_title: str = "Memex",
@@ -623,10 +623,10 @@ def render_index_page(
 
 def render_tag_page(
     tag: str,
-    entries: list["EntryData"],
+    entries: list[EntryData],
     base_url: str,
     site_title: str = "Memex",
-    all_entries: list["EntryData"] | None = None,
+    all_entries: list[EntryData] | None = None,
 ) -> str:
     """Render a tag listing page with full 3-column layout.
 
@@ -678,7 +678,7 @@ def render_tag_page(
 def render_graph_page(
     base_url: str,
     site_title: str = "Memex",
-    all_entries: list["EntryData"] | None = None,
+    all_entries: list[EntryData] | None = None,
 ) -> str:
     """Render the graph visualization page with full 3-column layout.
 

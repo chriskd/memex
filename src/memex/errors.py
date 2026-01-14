@@ -151,7 +151,7 @@ class MemexError(Exception):
         title: str,
         similar_entries: list[str],
         suggestion: str = "Use --force or mx update",
-    ) -> "MemexError":
+    ) -> MemexError:
         """Create a DUPLICATE_DETECTED error with standard details."""
         return cls(
             code=ErrorCode.DUPLICATE_DETECTED,
@@ -163,7 +163,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def entry_not_found(cls, path: str, suggestion: str | None = None) -> "MemexError":
+    def entry_not_found(cls, path: str, suggestion: str | None = None) -> MemexError:
         """Create an ENTRY_NOT_FOUND error."""
         details = {}
         if suggestion:
@@ -175,7 +175,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def invalid_path(cls, path: str, reason: str) -> "MemexError":
+    def invalid_path(cls, path: str, reason: str) -> MemexError:
         """Create an INVALID_PATH error."""
         return cls(
             code=ErrorCode.INVALID_PATH,
@@ -184,7 +184,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def ambiguous_match(cls, query: str, matches: list[str]) -> "MemexError":
+    def ambiguous_match(cls, query: str, matches: list[str]) -> MemexError:
         """Create an AMBIGUOUS_MATCH error."""
         return cls(
             code=ErrorCode.AMBIGUOUS_MATCH,
@@ -196,7 +196,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def index_unavailable(cls, index_type: str = "full-text") -> "MemexError":
+    def index_unavailable(cls, index_type: str = "full-text") -> MemexError:
         """Create an INDEX_UNAVAILABLE error."""
         return cls(
             code=ErrorCode.INDEX_UNAVAILABLE,
@@ -205,7 +205,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def semantic_search_unavailable(cls) -> "MemexError":
+    def semantic_search_unavailable(cls) -> MemexError:
         """Create a SEMANTIC_SEARCH_UNAVAILABLE error."""
         return cls(
             code=ErrorCode.SEMANTIC_SEARCH_UNAVAILABLE,
@@ -217,7 +217,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def kb_not_configured(cls) -> "MemexError":
+    def kb_not_configured(cls) -> MemexError:
         """Create a KB_NOT_CONFIGURED error."""
         return cls(
             code=ErrorCode.KB_NOT_CONFIGURED,
@@ -228,7 +228,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def missing_required_field(cls, field: str, suggestion: str | None = None) -> "MemexError":
+    def missing_required_field(cls, field: str, suggestion: str | None = None) -> MemexError:
         """Create a MISSING_REQUIRED_FIELD error."""
         details = {"field": field}
         if suggestion:
@@ -240,7 +240,7 @@ class MemexError(Exception):
         )
 
     @classmethod
-    def validation_error(cls, message: str, details: dict[str, Any] | None = None) -> "MemexError":
+    def validation_error(cls, message: str, details: dict[str, Any] | None = None) -> MemexError:
         """Create a VALIDATION_ERROR for input validation failures."""
         return cls(
             code=ErrorCode.VALIDATION_ERROR,

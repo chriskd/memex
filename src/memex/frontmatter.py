@@ -4,7 +4,7 @@ This module provides functions to serialize EntryMetadata to YAML frontmatter.
 Extracted from core.py to reduce duplication in add_entry/update_entry.
 """
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import yaml
 
@@ -166,7 +166,7 @@ def create_new_metadata(
     return EntryMetadata(
         title=title,
         tags=tags,
-        created=datetime.now(timezone.utc),
+        created=datetime.now(UTC),
         updated=None,
         contributors=[contributor] if contributor else [],
         source_project=source_project,
@@ -223,7 +223,7 @@ def update_metadata_for_edit(
         description=metadata.description,
         tags=new_tags if new_tags is not None else list(metadata.tags),
         created=metadata.created,
-        updated=datetime.now(timezone.utc),
+        updated=datetime.now(UTC),
         contributors=contributors,
         aliases=list(metadata.aliases),
         status=metadata.status,

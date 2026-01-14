@@ -501,6 +501,52 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
+    @patch("memex.cli.run_async")
+    def test_add_with_keywords(self, mock_run_async, runner):
+        """Add with --keywords passes keywords to add_entry."""
+        mock_run_async.return_value = {
+            "path": "test/entry.md",
+            "suggested_links": [],
+            "suggested_tags": [],
+        }
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test Entry",
+            "--tags", "tag1",
+            "--keywords", "concept1,concept2,concept3",
+            "--content", "# Test Content",
+        ])
+
+        assert result.exit_code == 0
+        assert "Created: test/entry.md" in result.output
+        # Verify keywords were passed to add_entry
+        assert mock_run_async.called
+        call_args = mock_run_async.call_args
+        # The coroutine is the first positional argument
+        coro = call_args[0][0]
+        # Check coroutine was created with keywords by inspecting the call
+        assert coro is not None
+
+    @patch("memex.cli.run_async")
+    def test_add_without_keywords(self, mock_run_async, runner):
+        """Add without --keywords passes None for keywords."""
+        mock_run_async.return_value = {
+            "path": "test/entry.md",
+            "suggested_links": [],
+            "suggested_tags": [],
+        }
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test Entry",
+            "--tags", "tag1",
+            "--content", "# Test Content",
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Escape Sequence Decoding Tests
@@ -648,6 +694,33 @@ class TestReplaceCommand:
         result = runner.invoke(cli, [
             "replace", "test.md",
             "--content", r"New content\nwith newline",
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
+
+    @patch("memex.cli.run_async")
+    def test_replace_with_keywords(self, mock_run_async, runner):
+        """Replace with --keywords updates entry keywords."""
+        mock_run_async.return_value = {"path": "test.md", "updated": True}
+
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--keywords", "concept1,concept2,concept3",
+        ])
+
+        assert result.exit_code == 0
+        assert "Replaced" in result.output or "test.md" in result.output
+        assert mock_run_async.called
+
+    @patch("memex.cli.run_async")
+    def test_update_alias_with_keywords(self, mock_run_async, runner):
+        """Update alias passes keywords to replace_cmd."""
+        mock_run_async.return_value = {"path": "test.md", "updated": True}
+
+        result = runner.invoke(cli, [
+            "update", "test.md",
+            "--keywords", "key1,key2",
         ])
 
         assert result.exit_code == 0

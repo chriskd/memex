@@ -1,6 +1,6 @@
 """Pydantic models for the knowledge base."""
 
-from datetime import date, datetime
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field

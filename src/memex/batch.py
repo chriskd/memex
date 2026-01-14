@@ -20,7 +20,6 @@ from typing import Any
 from .errors import ErrorCode, MemexError
 from .models import BatchOperationResult, BatchResponse
 
-
 # Supported commands and their required arguments
 SUPPORTED_COMMANDS = {
     "add": {"required": ["title", "tags"], "positional": []},

@@ -44,8 +44,9 @@ class ChromaIndex:
         if self._collection is not None:
             return self._collection
 
-        import chromadb
         import shutil
+
+        import chromadb
 
         self._index_dir.mkdir(parents=True, exist_ok=True)
         self._client = chromadb.PersistentClient(path=str(self._index_dir))

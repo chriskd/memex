@@ -19,9 +19,9 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from .config import MAX_CONTEXT_SEARCH_DEPTH
-
 import yaml
+
+from .config import MAX_CONTEXT_SEARCH_DEPTH
 
 # KB config filename (marks a directory as a KB root)
 LOCAL_KB_CONFIG_FILENAME = ".kbconfig"

@@ -14,7 +14,7 @@ import os
 import re
 import shutil
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
@@ -33,7 +33,7 @@ def _ensure_aware(dt: datetime | None) -> datetime | None:
     if dt is None:
         return None
     if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
+        return dt.replace(tzinfo=UTC)
     return dt
 
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
@@ -48,8 +48,8 @@ from .config import (
     get_kb_root_by_scope,
 )
 from .context import KBContext, get_kb_context, get_kbconfig
-from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .evaluation import run_quality_checks
+from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
 from .indexer import HybridSearcher
 from .models import (
     AddEntryPreview,
@@ -63,7 +63,6 @@ from .models import (
     UpsertMatch,
 )
 from .parser import ParseError, extract_links, parse_entry, update_links_batch
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level state (lazy initialization)
@@ -811,6 +810,7 @@ async def add_entry(
     links: list[str] | None = None,
     kb_context: KBContext | None = None,
     scope: str | None = None,
+    keywords: list[str] | None = None,
 ) -> dict:
     """Create a new KB entry.
 
@@ -827,6 +827,7 @@ async def add_entry(
                    Used for default directory (primary) and tag suggestions (default_tags).
         scope: Optional scope for KB selection ("project" or "user").
                If not provided, uses auto-discovery (project KB if in project, else user KB).
+        keywords: Optional list of key concepts for semantic linking.
 
     Returns:
         Dict with 'path' of created file, 'suggested_links' to consider adding,
@@ -909,6 +910,7 @@ async def add_entry(
         model=get_llm_model(),
         git_branch=get_git_branch(),
         actor=get_actor_identity(),
+        keywords=keywords,
     )
     frontmatter = build_frontmatter(metadata)
 
@@ -1239,6 +1241,7 @@ async def update_entry(
     content: str | None = None,
     tags: list[str] | None = None,
     section_updates: dict[str, str] | None = None,
+    keywords: list[str] | None = None,
 ) -> dict:
     """Update an existing KB entry.
 
@@ -1247,6 +1250,7 @@ async def update_entry(
         content: New markdown content (without frontmatter).
         tags: Optional new list of tags. If provided, replaces existing tags.
         section_updates: Optional dict of section heading -> new content.
+        keywords: Optional new list of keywords. If provided, replaces existing keywords.
 
     Returns:
         Dict with 'path' of updated file, 'suggested_links' to consider adding,
@@ -1261,8 +1265,8 @@ async def update_entry(
     if not file_path.is_file():
         raise ValueError(f"Path is not a file: {path}")
 
-    if content is None and not section_updates and tags is None:
-        raise ValueError("Provide new content, section_updates, or tags")
+    if content is None and not section_updates and tags is None and keywords is None:
+        raise ValueError("Provide new content, section_updates, tags, or keywords")
 
     # Parse existing entry to get metadata
     try:
@@ -1283,6 +1287,7 @@ async def update_entry(
         model=get_llm_model(),
         git_branch=get_git_branch(),
         actor=get_actor_identity(),
+        keywords=keywords,
     )
     frontmatter = build_frontmatter(updated_metadata)
 
@@ -1345,7 +1350,7 @@ async def get_entry(path: str) -> KBEntry:
     Returns:
         KBEntry with metadata, content, links, and backlinks.
     """
-    from .config import resolve_scoped_path, parse_scoped_path
+    from .config import resolve_scoped_path
 
     # Resolve scoped paths (handles @project/ and @user/ prefixes)
     file_path = resolve_scoped_path(path)
@@ -1584,7 +1589,7 @@ async def whats_new(
     if not kb_roots:
         return []
 
-    cutoff_datetime = datetime.now(timezone.utc) - timedelta(days=days)
+    cutoff_datetime = datetime.now(UTC) - timedelta(days=days)
     candidates: list[dict] = []
 
     for scope_label, kb_root in kb_roots:
@@ -2230,7 +2235,7 @@ async def health(
     # Collect all entries and their metadata
     all_entries: dict[str, dict] = {}  # path -> {title, tags, created, updated, links}
     # Use timezone-aware datetime (UTC) for comparison
-    cutoff_datetime = datetime.now(timezone.utc) - timedelta(days=stale_days)
+    cutoff_datetime = datetime.now(UTC) - timedelta(days=stale_days)
 
     def make_aware(dt: datetime | None) -> datetime | None:
         """Ensure datetime is timezone-aware for comparison."""
@@ -2238,7 +2243,7 @@ async def health(
             return None
         if dt.tzinfo is None:
             # Assume naive datetimes are UTC
-            return dt.replace(tzinfo=timezone.utc)
+            return dt.replace(tzinfo=UTC)
         return dt
 
     for md_file in kb_root.rglob("*.md"):
@@ -2305,7 +2310,7 @@ async def health(
         for path_key, entry in all_entries.items():
             last_activity = make_aware(entry["updated"]) or make_aware(entry["created"])
             if last_activity and last_activity < cutoff_datetime:
-                days_old = (datetime.now(timezone.utc) - last_activity).days
+                days_old = (datetime.now(UTC) - last_activity).days
                 results["stale"].append({
                     "path": entry["path"],
                     "title": entry["title"],
