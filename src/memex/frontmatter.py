@@ -106,6 +106,17 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
     if metadata.beads_project:
         parts.append(f"beads_project: {_yaml_quote_if_needed(metadata.beads_project)}")
 
+    # A-Mem semantic linking fields
+    if metadata.keywords:
+        parts.append("keywords:")
+        parts.append(_format_yaml_list(metadata.keywords))
+    if metadata.semantic_links:
+        parts.append("semantic_links:")
+        for link in metadata.semantic_links:
+            parts.append(f"  - path: {_yaml_quote_if_needed(link.path)}")
+            parts.append(f"    score: {link.score}")
+            parts.append(f"    reason: {link.reason}")
+
     parts.append("---\n\n")
 
     return "\n".join(parts)
@@ -132,6 +143,7 @@ def create_new_metadata(
     model: str | None = None,
     git_branch: str | None = None,
     actor: str | None = None,
+    keywords: list[str] | None = None,
 ) -> EntryMetadata:
     """Create metadata for a new KB entry.
 
@@ -146,6 +158,7 @@ def create_new_metadata(
         model: LLM model identifier if created by an agent.
         git_branch: Current git branch.
         actor: Actor identity (agent name or human username).
+        keywords: LLM-extracted key concepts for semantic linking.
 
     Returns:
         EntryMetadata populated with creation metadata.
@@ -160,6 +173,7 @@ def create_new_metadata(
         model=model,
         git_branch=git_branch,
         last_edited_by=actor,
+        keywords=keywords or [],
     )
 
 
@@ -172,6 +186,8 @@ def update_metadata_for_edit(
     model: str | None = None,
     git_branch: str | None = None,
     actor: str | None = None,
+    keywords: list[str] | None = None,
+    semantic_links: list | None = None,
 ) -> EntryMetadata:
     """Create updated metadata for an existing entry.
 
@@ -182,10 +198,12 @@ def update_metadata_for_edit(
         metadata: Existing entry metadata.
         new_tags: Updated tags (or None to preserve existing).
         new_contributor: New contributor to add to contributors list.
-        edit_source: Project making the edit (added to edit_sources if different from source_project).
+        edit_source: Project making the edit (added to edit_sources if different).
         model: LLM model identifier for the edit.
         git_branch: Current git branch.
         actor: Actor making the edit.
+        keywords: Updated keywords (or None to preserve existing).
+        semantic_links: Updated semantic links (or None to preserve existing).
 
     Returns:
         New EntryMetadata with updated fields.
@@ -217,4 +235,9 @@ def update_metadata_for_edit(
         # Preserve beads fields for backwards compatibility
         beads_issues=list(metadata.beads_issues),
         beads_project=metadata.beads_project,
+        # A-Mem semantic linking fields
+        keywords=keywords if keywords is not None else list(metadata.keywords),
+        semantic_links=(
+            semantic_links if semantic_links is not None else list(metadata.semantic_links)
+        ),
     )

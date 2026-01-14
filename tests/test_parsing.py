@@ -21,7 +21,7 @@ import yaml
 
 from memex.core import slugify
 from memex.frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
-from memex.models import EntryMetadata
+from memex.models import EntryMetadata, SemanticLink
 from memex.parser.links import (
     _resolve_relative_link,
     extract_links,
@@ -168,6 +168,167 @@ class TestBuildFrontmatter:
         assert parsed["contributors"] == original.contributors
         assert parsed["aliases"] == original.aliases
 
+    def test_keywords_serialized_when_present(self):
+        """Keywords field is serialized as YAML list."""
+        metadata = EntryMetadata(
+            title="Entry with Keywords",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+            keywords=["python", "testing", "cli"],
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "keywords:" in result
+        assert "- python" in result
+        assert "- testing" in result
+        assert "- cli" in result
+
+    def test_keywords_omitted_when_empty(self):
+        """Keywords field is not included when empty."""
+        metadata = EntryMetadata(
+            title="No Keywords",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "keywords:" not in result
+
+    def test_semantic_links_serialized_when_present(self):
+        """Semantic links are serialized as structured YAML."""
+        metadata = EntryMetadata(
+            title="Entry with Links",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+            semantic_links=[
+                SemanticLink(path="guides/setup.md", score=0.85, reason="embedding_similarity"),
+                SemanticLink(path="reference/api.md", score=0.72, reason="shared_tags"),
+            ],
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "semantic_links:" in result
+        assert "path: guides/setup.md" in result
+        assert "score: 0.85" in result
+        assert "reason: embedding_similarity" in result
+        assert "path: reference/api.md" in result
+        assert "score: 0.72" in result
+        assert "reason: shared_tags" in result
+
+    def test_semantic_links_omitted_when_empty(self):
+        """Semantic links field is not included when empty."""
+        metadata = EntryMetadata(
+            title="No Links",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "semantic_links:" not in result
+
+    def test_keywords_and_semantic_links_roundtrip(self):
+        """Keywords and semantic links can be parsed back."""
+        original = EntryMetadata(
+            title="Full A-Mem Entry",
+            tags=["test"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+            keywords=["memory", "semantic"],
+            semantic_links=[
+                SemanticLink(path="other.md", score=0.9, reason="bidirectional"),
+            ],
+        )
+
+        fm = build_frontmatter(original)
+        yaml_content = fm.split("---")[1]
+        parsed = yaml.safe_load(yaml_content)
+
+        assert parsed["keywords"] == ["memory", "semantic"]
+        assert len(parsed["semantic_links"]) == 1
+        assert parsed["semantic_links"][0]["path"] == "other.md"
+        assert parsed["semantic_links"][0]["score"] == 0.9
+        assert parsed["semantic_links"][0]["reason"] == "bidirectional"
+
+
+class TestSemanticLink:
+    """Tests for SemanticLink model."""
+
+    def test_create_semantic_link(self):
+        """SemanticLink can be created with required fields."""
+        link = SemanticLink(
+            path="guides/installation.md",
+            score=0.87,
+            reason="embedding_similarity",
+        )
+
+        assert link.path == "guides/installation.md"
+        assert link.score == 0.87
+        assert link.reason == "embedding_similarity"
+
+    def test_semantic_link_serialization(self):
+        """SemanticLink serializes to dict correctly."""
+        link = SemanticLink(
+            path="test.md",
+            score=0.5,
+            reason="shared_tags",
+        )
+
+        data = link.model_dump()
+
+        assert data == {"path": "test.md", "score": 0.5, "reason": "shared_tags"}
+
+    def test_semantic_link_from_dict(self):
+        """SemanticLink can be created from dict (YAML deserialization)."""
+        data = {"path": "entry.md", "score": 0.75, "reason": "bidirectional"}
+
+        link = SemanticLink.model_validate(data)
+
+        assert link.path == "entry.md"
+        assert link.score == 0.75
+        assert link.reason == "bidirectional"
+
+
+class TestEntryMetadataSemanticFields:
+    """Tests for keywords and semantic_links fields on EntryMetadata."""
+
+    def test_default_empty_keywords(self):
+        """Keywords default to empty list."""
+        metadata = EntryMetadata(
+            title="Test",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+        )
+
+        assert metadata.keywords == []
+
+    def test_default_empty_semantic_links(self):
+        """Semantic links default to empty list."""
+        metadata = EntryMetadata(
+            title="Test",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+        )
+
+        assert metadata.semantic_links == []
+
+    def test_backwards_compatibility_without_new_fields(self):
+        """Existing entries without new fields load correctly."""
+        # Simulate parsing YAML without the new fields
+        yaml_data = {
+            "title": "Old Entry",
+            "tags": ["legacy"],
+            "created": datetime(2023, 6, 1, 0, 0, 0),
+        }
+
+        metadata = EntryMetadata.model_validate(yaml_data)
+
+        assert metadata.title == "Old Entry"
+        assert metadata.keywords == []
+        assert metadata.semantic_links == []
+
 
 class TestCreateNewMetadata:
     """Tests for create_new_metadata function."""
@@ -199,6 +360,22 @@ class TestCreateNewMetadata:
         assert metadata.model == "claude-opus-4"
         assert metadata.git_branch == "feature/new"
         assert metadata.last_edited_by == "ci-agent"
+
+    def test_populates_keywords_when_provided(self):
+        """Keywords field is populated when provided."""
+        metadata = create_new_metadata(
+            title="Entry",
+            tags=["test"],
+            keywords=["semantic", "memory", "graph"],
+        )
+
+        assert metadata.keywords == ["semantic", "memory", "graph"]
+
+    def test_keywords_default_to_empty(self):
+        """Keywords default to empty list when not provided."""
+        metadata = create_new_metadata(title="Entry", tags=["test"])
+
+        assert metadata.keywords == []
 
 
 class TestUpdateMetadataForEdit:
@@ -250,6 +427,48 @@ class TestUpdateMetadataForEdit:
         # Same as source_project should not be added
         updated2 = update_metadata_for_edit(base_metadata, edit_source="original-project")
         assert "original-project" not in updated2.edit_sources
+
+    def test_preserves_keywords_when_not_specified(self, base_metadata: EntryMetadata):
+        """Keywords are preserved when not explicitly updated."""
+        base_metadata.keywords = ["existing", "keywords"]
+
+        updated = update_metadata_for_edit(base_metadata)
+
+        assert updated.keywords == ["existing", "keywords"]
+
+    def test_updates_keywords_when_specified(self, base_metadata: EntryMetadata):
+        """Keywords are replaced when explicitly provided."""
+        base_metadata.keywords = ["old"]
+
+        updated = update_metadata_for_edit(base_metadata, keywords=["new", "keywords"])
+
+        assert updated.keywords == ["new", "keywords"]
+
+    def test_preserves_semantic_links_when_not_specified(self, base_metadata: EntryMetadata):
+        """Semantic links are preserved when not explicitly updated."""
+        base_metadata.semantic_links = [
+            SemanticLink(path="other.md", score=0.8, reason="embedding_similarity")
+        ]
+
+        updated = update_metadata_for_edit(base_metadata)
+
+        assert len(updated.semantic_links) == 1
+        assert updated.semantic_links[0].path == "other.md"
+
+    def test_updates_semantic_links_when_specified(self, base_metadata: EntryMetadata):
+        """Semantic links are replaced when explicitly provided."""
+        base_metadata.semantic_links = [
+            SemanticLink(path="old.md", score=0.5, reason="shared_tags")
+        ]
+        new_links = [
+            SemanticLink(path="new.md", score=0.9, reason="bidirectional")
+        ]
+
+        updated = update_metadata_for_edit(base_metadata, semantic_links=new_links)
+
+        assert len(updated.semantic_links) == 1
+        assert updated.semantic_links[0].path == "new.md"
+        assert updated.semantic_links[0].score == 0.9
 
 
 # ─────────────────────────────────────────────────────────────────────────────

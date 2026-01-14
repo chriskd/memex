@@ -6,6 +6,14 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class SemanticLink(BaseModel):
+    """A computed semantic relationship to another entry."""
+
+    path: str  # Target entry path
+    score: float  # Similarity score (0-1)
+    reason: str  # How discovered: 'embedding_similarity' | 'shared_tags' | 'bidirectional'
+
+
 class EntryMetadata(BaseModel):
     """Frontmatter metadata for a KB entry."""
 
@@ -26,6 +34,9 @@ class EntryMetadata(BaseModel):
     # Beads integration
     beads_issues: list[str] = Field(default_factory=list)  # e.g., ["project-id1", "project-id2"]
     beads_project: str | None = None  # Links to all issues in a beads project
+    # A-Mem semantic linking
+    keywords: list[str] = Field(default_factory=list)  # LLM-extracted key concepts
+    semantic_links: list[SemanticLink] = Field(default_factory=list)  # Computed relationships
 
 
 class DocumentChunk(BaseModel):
