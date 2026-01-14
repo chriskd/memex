@@ -2543,11 +2543,12 @@ def history(limit: int, rerun: Optional[int], clear: bool, as_json: bool):
             sys.exit(1)
 
         # Re-run the search using the search command logic
-        click.echo(f"Re-running: {entry.query}")
-        if entry.tags:
-            click.echo(f"  Tags: {', '.join(entry.tags)}")
-        click.echo(f"  Mode: {entry.mode}")
-        click.echo()
+        if not as_json:
+            click.echo(f"Re-running: {entry.query}")
+            if entry.tags:
+                click.echo(f"  Tags: {', '.join(entry.tags)}")
+            click.echo(f"  Mode: {entry.mode}")
+            click.echo()
 
         # Import and run search
         from .core import search as core_search
