@@ -42,6 +42,9 @@ from .config import (
     DUPLICATE_DETECTION_MIN_SCORE,
     LINK_SUGGESTION_MIN_SCORE,
     MAX_CONTENT_RESULTS,
+    SEMANTIC_LINK_ENABLED,
+    SEMANTIC_LINK_K,
+    SEMANTIC_LINK_MIN_SCORE,
     SIMILAR_ENTRY_TAG_WEIGHT,
     TAG_SUGGESTION_MIN_SCORE,
     get_kb_root,
@@ -60,6 +63,7 @@ from .models import (
     QualityReport,
     SearchResponse,
     SearchResult,
+    SemanticLink,
     UpsertMatch,
 )
 from .parser import ParseError, extract_links, parse_entry, update_links_batch
@@ -474,6 +478,150 @@ def compute_link_suggestions(
             break
 
     return suggestions
+
+
+def create_bidirectional_semantic_links(
+    entry_path: str,
+    title: str,
+    content: str,
+    tags: list[str],
+    k: int = SEMANTIC_LINK_K,
+    min_score: float = SEMANTIC_LINK_MIN_SCORE,
+) -> list[SemanticLink]:
+    """Find similar entries and create bidirectional semantic links.
+
+    This function:
+    1. Searches for similar entries by embedding similarity
+    2. Creates SemanticLink objects for the new entry (forward links)
+    3. Adds backlinks to neighbor entries
+    4. Re-indexes affected entries
+
+    Args:
+        entry_path: Relative path of the new/updated entry (e.g., "guides/python.md")
+        title: Title of the entry for search query
+        content: Content of the entry for search query
+        tags: Tags of the entry for context
+        k: Maximum number of neighbors to link to
+        min_score: Minimum similarity score threshold (0.0-1.0)
+
+    Returns:
+        List of SemanticLink objects for the new entry's semantic_links field.
+    """
+    if not SEMANTIC_LINK_ENABLED:
+        return []
+
+    kb_root = get_kb_root()
+    searcher = get_searcher()
+
+    # Normalize entry path for comparison
+    entry_key = entry_path[:-3] if entry_path.endswith(".md") else entry_path
+
+    # Search for similar entries using title and content
+    query = f"{title} {content[:500]}"
+    search_results = searcher.search(query, limit=k + 10, mode="semantic")
+
+    forward_links: list[SemanticLink] = []
+
+    for result in search_results:
+        # Skip self
+        result_key = result.path[:-3] if result.path.endswith(".md") else result.path
+        if result_key == entry_key or result.path == entry_path:
+            continue
+
+        # Skip results below threshold
+        if result.score < min_score:
+            continue
+
+        # Create forward link for the new entry
+        forward_link = SemanticLink(
+            path=result.path,
+            score=round(result.score, 3),
+            reason="embedding_similarity",
+        )
+        forward_links.append(forward_link)
+
+        # Create backlink on the neighbor entry
+        _add_backlink_to_neighbor(
+            kb_root=kb_root,
+            neighbor_path=result.path,
+            new_entry_path=entry_path,
+            score=result.score,
+            searcher=searcher,
+        )
+
+        if len(forward_links) >= k:
+            break
+
+    return forward_links
+
+
+def _add_backlink_to_neighbor(
+    kb_root: Path,
+    neighbor_path: str,
+    new_entry_path: str,
+    score: float,
+    searcher: HybridSearcher,
+) -> None:
+    """Add a semantic backlink to a neighbor entry.
+
+    This is a helper function that:
+    1. Parses the neighbor entry
+    2. Adds/updates the backlink in semantic_links
+    3. Saves the neighbor entry
+    4. Re-indexes the neighbor
+
+    Args:
+        kb_root: KB root directory
+        neighbor_path: Relative path to the neighbor entry
+        new_entry_path: Relative path to the new entry (for backlink)
+        score: Similarity score for the backlink
+        searcher: HybridSearcher instance for re-indexing
+    """
+    neighbor_file = kb_root / neighbor_path
+
+    if not neighbor_file.exists():
+        log.warning("Neighbor entry not found for backlinking: %s", neighbor_path)
+        return
+
+    try:
+        metadata, content, chunks = parse_entry(neighbor_file)
+    except ParseError as e:
+        log.warning("Failed to parse neighbor for backlinking %s: %s", neighbor_path, e)
+        return
+
+    # Check if backlink already exists
+    existing_paths = {link.path for link in metadata.semantic_links}
+    if new_entry_path in existing_paths:
+        # Backlink already exists, skip
+        return
+
+    # Add the backlink
+    backlink = SemanticLink(
+        path=new_entry_path,
+        score=round(score, 3),
+        reason="bidirectional",
+    )
+    updated_links = list(metadata.semantic_links) + [backlink]
+
+    # Update metadata with new semantic links
+    updated_metadata = update_metadata_for_edit(
+        metadata,
+        semantic_links=updated_links,
+    )
+
+    # Write updated file
+    frontmatter = build_frontmatter(updated_metadata)
+    neighbor_file.write_text(frontmatter + content, encoding="utf-8")
+
+    # Re-index the neighbor entry
+    try:
+        _, _, updated_chunks = parse_entry(neighbor_file)
+        if updated_chunks:
+            searcher.delete_document(neighbor_path)
+            normalized_chunks = normalize_chunks(updated_chunks, neighbor_path)
+            searcher.index_chunks(normalized_chunks)
+    except ParseError as e:
+        log.warning("Updated neighbor but failed to re-index %s: %s", neighbor_path, e)
 
 
 def get_tag_taxonomy() -> dict[str, int]:
@@ -932,6 +1080,31 @@ async def add_entry(
     except ParseError as e:
         log.warning("Created entry but failed to index %s: %s", rel_path, e)
 
+    # Auto-create bidirectional semantic links if enabled and no manual links provided
+    if semantic_links is None and SEMANTIC_LINK_ENABLED:
+        auto_links = create_bidirectional_semantic_links(
+            entry_path=rel_path,
+            title=title,
+            content=final_content,
+            tags=tags,
+        )
+        if auto_links:
+            # Re-save entry with auto-generated semantic links
+            try:
+                updated_metadata = metadata.model_copy(update={"semantic_links": auto_links})
+                updated_frontmatter = build_frontmatter(updated_metadata)
+                file_path.write_text(updated_frontmatter + final_content, encoding="utf-8")
+
+                # Re-index with updated metadata
+                _, _, updated_chunks = parse_entry(file_path)
+                if updated_chunks:
+                    searcher = get_searcher()
+                    searcher.delete_document(rel_path)
+                    normalized_chunks = normalize_chunks(updated_chunks, rel_path)
+                    searcher.index_chunks(normalized_chunks)
+            except (ParseError, OSError) as e:
+                log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
+
     # Compute link suggestions for the new entry
     existing_links = set(links) if links else set()
     suggested_links = compute_link_suggestions(
@@ -1321,6 +1494,35 @@ async def update_entry(
         log.warning("Updated entry but failed to re-index %s: %s", relative_path, e)
     except Exception as e:
         log.error("Unexpected error re-indexing %s: %s", relative_path, e)
+
+    # Auto-create bidirectional semantic links if enabled and no manual links provided
+    # Only run when content is updated (not just tags/keywords)
+    content_changed = content is not None or section_updates
+    if semantic_links is None and content_changed and SEMANTIC_LINK_ENABLED:
+        auto_links = create_bidirectional_semantic_links(
+            entry_path=relative_path,
+            title=updated_metadata.title,
+            content=new_content,
+            tags=new_tags,
+        )
+        if auto_links:
+            # Re-save entry with auto-generated semantic links
+            try:
+                final_metadata = updated_metadata.model_copy(update={"semantic_links": auto_links})
+                final_frontmatter = build_frontmatter(final_metadata)
+                file_path.write_text(final_frontmatter + new_content, encoding="utf-8")
+
+                # Re-index with updated metadata
+                _, _, final_chunks = parse_entry(file_path)
+                if final_chunks:
+                    searcher.delete_document(relative_path)
+                    normalized_chunks = normalize_chunks(final_chunks, relative_path)
+                    searcher.index_chunks(normalized_chunks)
+            except (ParseError, OSError) as e:
+                log.warning(
+                    "Failed to update entry with auto semantic links %s: %s",
+                    relative_path, e
+                )
 
     # Compute link suggestions based on updated content
     existing_links = set(extract_links(new_content))

@@ -1490,3 +1490,499 @@ Content with aware date.
         # May be empty or contain entries depending on test date
         # Main goal: no TypeError from date comparison
         assert isinstance(result, list)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Auto Semantic Links
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class SemanticLinkSearcher:
+    """Mock HybridSearcher that returns configurable similar entries."""
+
+    def __init__(self, results: list[SearchResult] | None = None):
+        self.results = results or []
+        self._indexed_chunks = []
+        self._deleted_docs = []
+
+    def search(self, query: str, limit: int = 10, mode: str = "hybrid", **kwargs):
+        return self.results[:limit]
+
+    def index_chunks(self, chunks):
+        self._indexed_chunks.extend(chunks)
+
+    def delete_document(self, path):
+        self._deleted_docs.append(path)
+
+    def reindex(self, kb_root):
+        pass
+
+    def status(self):
+        from memex.models import IndexStatus
+        return IndexStatus(whoosh_docs=0, chroma_docs=0, last_indexed=None, kb_files=0)
+
+
+class TestAutoSemanticLinks:
+    """Tests for bidirectional semantic link auto-creation."""
+
+    @pytest.mark.asyncio
+    async def test_add_entry_creates_semantic_links_when_enabled(self, tmp_kb, monkeypatch):
+        """add_entry creates semantic links when SEMANTIC_LINK_ENABLED is True."""
+        # Create an existing entry that will be a neighbor
+        _create_entry(
+            tmp_kb / "general" / "python-basics.md",
+            "Python Basics",
+            "Introduction to Python programming.",
+            tags=["python", "tutorial"],
+        )
+
+        # Create searcher that returns the existing entry as similar
+        similar_results = [
+            SearchResult(
+                path="general/python-basics.md",
+                title="Python Basics",
+                snippet="Introduction to Python",
+                score=0.75,
+                tags=["python", "tutorial"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Add a new entry about Python
+        result = await core.add_entry(
+            title="Advanced Python",
+            content="Advanced Python techniques and patterns.",
+            tags=["python", "advanced"],
+            category="general",
+        )
+
+        # Verify the new entry has semantic links in its file
+        new_entry_path = tmp_kb / result["path"]
+        content = new_entry_path.read_text()
+        assert "semantic_links:" in content
+        assert "general/python-basics.md" in content
+        assert "embedding_similarity" in content
+
+    @pytest.mark.asyncio
+    async def test_add_entry_creates_bidirectional_backlink(self, tmp_kb, monkeypatch):
+        """add_entry adds backlink to neighbor entry."""
+        # Create an existing entry that will be a neighbor
+        _create_entry(
+            tmp_kb / "general" / "rust-intro.md",
+            "Rust Introduction",
+            "Getting started with Rust programming.",
+            tags=["rust", "tutorial"],
+        )
+
+        # Create searcher that returns the existing entry as similar
+        similar_results = [
+            SearchResult(
+                path="general/rust-intro.md",
+                title="Rust Introduction",
+                snippet="Getting started with Rust",
+                score=0.70,
+                tags=["rust", "tutorial"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Add a new entry about Rust
+        result = await core.add_entry(
+            title="Rust Advanced",
+            content="Advanced Rust patterns and ownership.",
+            tags=["rust", "advanced"],
+            category="general",
+        )
+
+        # Verify the neighbor entry now has a backlink
+        neighbor_path = tmp_kb / "general" / "rust-intro.md"
+        neighbor_content = neighbor_path.read_text()
+        assert "semantic_links:" in neighbor_content
+        assert "general/rust-advanced.md" in neighbor_content
+        assert "bidirectional" in neighbor_content
+
+    @pytest.mark.asyncio
+    async def test_add_entry_skips_links_below_threshold(self, tmp_kb, monkeypatch):
+        """add_entry does not create links for results below min_score."""
+        # Create an existing entry
+        _create_entry(
+            tmp_kb / "general" / "unrelated.md",
+            "Unrelated Topic",
+            "Something completely different.",
+            tags=["other"],
+        )
+
+        # Searcher returns result below threshold
+        low_score_results = [
+            SearchResult(
+                path="general/unrelated.md",
+                title="Unrelated Topic",
+                snippet="Something different",
+                score=0.3,  # Below threshold
+                tags=["other"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=low_score_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)  # Threshold is 0.6
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Add a new entry
+        result = await core.add_entry(
+            title="New Entry",
+            content="Some content.",
+            tags=["test"],
+            category="general",
+        )
+
+        # Verify no semantic links were created (below threshold)
+        new_entry_path = tmp_kb / result["path"]
+        content = new_entry_path.read_text()
+        assert "semantic_links:" not in content
+
+    @pytest.mark.asyncio
+    async def test_add_entry_skips_self_linking(self, tmp_kb, monkeypatch):
+        """add_entry does not create link to itself."""
+        # Searcher returns the entry itself (edge case)
+        mock_searcher = SemanticLinkSearcher(results=[])  # Empty to avoid self-link
+
+        # Pre-configure searcher to return self when queried
+        def get_mock_searcher():
+            return mock_searcher
+
+        monkeypatch.setattr(core, "get_searcher", get_mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Add a new entry
+        result = await core.add_entry(
+            title="Self Reference Test",
+            content="Content about self referencing.",
+            tags=["test"],
+            category="general",
+        )
+
+        # Verify no semantic links (no results above threshold)
+        new_entry_path = tmp_kb / result["path"]
+        content = new_entry_path.read_text()
+        assert "semantic_links:" not in content
+
+    @pytest.mark.asyncio
+    async def test_add_entry_respects_disabled_setting(self, tmp_kb, monkeypatch):
+        """add_entry does not create links when SEMANTIC_LINK_ENABLED is False."""
+        # Create an existing entry
+        _create_entry(
+            tmp_kb / "general" / "existing.md",
+            "Existing Entry",
+            "Some existing content.",
+            tags=["test"],
+        )
+
+        # Searcher would return results, but feature is disabled
+        similar_results = [
+            SearchResult(
+                path="general/existing.md",
+                title="Existing Entry",
+                snippet="Some existing content",
+                score=0.9,
+                tags=["test"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", False)  # Disabled
+
+        # Add a new entry
+        result = await core.add_entry(
+            title="New Entry",
+            content="Content here.",
+            tags=["test"],
+            category="general",
+        )
+
+        # Verify no semantic links were created
+        new_entry_path = tmp_kb / result["path"]
+        content = new_entry_path.read_text()
+        assert "semantic_links:" not in content
+
+    @pytest.mark.asyncio
+    async def test_add_entry_with_manual_links_skips_auto(self, tmp_kb, monkeypatch):
+        """add_entry with manual semantic_links skips auto-creation."""
+        from memex.models import SemanticLink
+
+        # Create searcher that would return results
+        similar_results = [
+            SearchResult(
+                path="general/neighbor.md",
+                title="Neighbor",
+                snippet="Neighbor content",
+                score=0.8,
+                tags=["test"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+
+        # Manual semantic links provided
+        manual_links = [
+            SemanticLink(path="custom/path.md", score=0.95, reason="manual")
+        ]
+
+        # Add entry with manual links
+        result = await core.add_entry(
+            title="Manual Links Entry",
+            content="Content with manual links.",
+            tags=["test"],
+            category="general",
+            semantic_links=manual_links,
+        )
+
+        # Verify only manual links are present (not auto-generated)
+        new_entry_path = tmp_kb / result["path"]
+        content = new_entry_path.read_text()
+        assert "custom/path.md" in content
+        assert "manual" in content
+        # Auto links would have "embedding_similarity" reason
+        assert "embedding_similarity" not in content
+
+    @pytest.mark.asyncio
+    async def test_update_entry_creates_semantic_links_on_content_change(self, tmp_kb, monkeypatch):
+        """update_entry creates semantic links when content is updated."""
+        # Create two existing entries
+        _create_entry(
+            tmp_kb / "general" / "neighbor.md",
+            "Neighbor Entry",
+            "Related content about programming.",
+            tags=["programming"],
+        )
+        _create_entry(
+            tmp_kb / "general" / "target.md",
+            "Target Entry",
+            "Original content.",
+            tags=["test"],
+        )
+
+        # Searcher returns neighbor as similar
+        similar_results = [
+            SearchResult(
+                path="general/neighbor.md",
+                title="Neighbor Entry",
+                snippet="Related content",
+                score=0.72,
+                tags=["programming"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Update the target entry with new content
+        result = await core.update_entry(
+            path="general/target.md",
+            content="Updated content about programming topics.",
+        )
+
+        # Verify semantic links were created
+        target_path = tmp_kb / "general" / "target.md"
+        content = target_path.read_text()
+        assert "semantic_links:" in content
+        assert "general/neighbor.md" in content
+
+    @pytest.mark.asyncio
+    async def test_update_entry_skips_links_for_tags_only_update(self, tmp_kb, monkeypatch):
+        """update_entry does not create links when only tags are updated."""
+        # Create existing entries
+        _create_entry(
+            tmp_kb / "general" / "neighbor.md",
+            "Neighbor Entry",
+            "Related content.",
+            tags=["test"],
+        )
+        _create_entry(
+            tmp_kb / "general" / "target.md",
+            "Target Entry",
+            "Original content.",
+            tags=["test"],
+        )
+
+        # Searcher returns results
+        similar_results = [
+            SearchResult(
+                path="general/neighbor.md",
+                title="Neighbor Entry",
+                snippet="Related content",
+                score=0.75,
+                tags=["test"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+
+        # Update only tags (no content change)
+        result = await core.update_entry(
+            path="general/target.md",
+            tags=["test", "updated"],
+        )
+
+        # Verify no semantic links were created (tags-only update)
+        target_path = tmp_kb / "general" / "target.md"
+        content = target_path.read_text()
+        assert "semantic_links:" not in content
+
+    @pytest.mark.asyncio
+    async def test_backlink_not_duplicated_on_repeated_updates(self, tmp_kb, monkeypatch):
+        """Updating an entry twice does not duplicate backlinks on neighbors."""
+        # Create neighbor with existing backlink
+        neighbor_content = """---
+title: Neighbor Entry
+tags:
+  - test
+created: 2024-01-15
+semantic_links:
+  - path: general/target.md
+    score: 0.7
+    reason: bidirectional
+---
+
+Neighbor content.
+"""
+        neighbor_path = tmp_kb / "general" / "neighbor.md"
+        neighbor_path.parent.mkdir(parents=True, exist_ok=True)
+        neighbor_path.write_text(neighbor_content, encoding="utf-8")
+
+        # Create target entry
+        _create_entry(
+            tmp_kb / "general" / "target.md",
+            "Target Entry",
+            "Original content.",
+            tags=["test"],
+        )
+
+        # Searcher returns neighbor as similar
+        similar_results = [
+            SearchResult(
+                path="general/neighbor.md",
+                title="Neighbor Entry",
+                snippet="Neighbor content",
+                score=0.75,
+                tags=["test"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=similar_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        # Update target entry (would try to add backlink to neighbor)
+        await core.update_entry(
+            path="general/target.md",
+            content="Updated content.",
+        )
+
+        # Verify neighbor still has exactly one backlink to target (not duplicated)
+        neighbor_content_after = neighbor_path.read_text()
+        # Count occurrences of the target path in semantic_links
+        count = neighbor_content_after.count("general/target.md")
+        assert count == 1, f"Expected 1 backlink, found {count}"
+
+
+class TestCreateBidirectionalSemanticLinks:
+    """Unit tests for create_bidirectional_semantic_links function."""
+
+    def test_returns_empty_when_disabled(self, tmp_kb, monkeypatch):
+        """Returns empty list when SEMANTIC_LINK_ENABLED is False."""
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", False)
+
+        result = core.create_bidirectional_semantic_links(
+            entry_path="test/entry.md",
+            title="Test",
+            content="Content",
+            tags=["test"],
+        )
+
+        assert result == []
+
+    def test_skips_results_below_threshold(self, tmp_kb, monkeypatch):
+        """Results below min_score threshold are not linked."""
+        low_score_results = [
+            SearchResult(
+                path="low/score.md",
+                title="Low Score",
+                snippet="Low score content",
+                score=0.3,
+                tags=["test"],
+            )
+        ]
+        mock_searcher = SemanticLinkSearcher(results=low_score_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
+
+        result = core.create_bidirectional_semantic_links(
+            entry_path="test/entry.md",
+            title="Test",
+            content="Content",
+            tags=["test"],
+        )
+
+        assert result == []
+
+    def test_limits_to_k_results(self, tmp_kb, monkeypatch):
+        """Only returns up to k semantic links."""
+        # Create many high-score results
+        many_results = [
+            SearchResult(
+                path=f"entries/entry{i}.md",
+                title=f"Entry {i}",
+                snippet=f"Content {i}",
+                score=0.9 - (i * 0.01),
+                tags=["test"],
+            )
+            for i in range(10)
+        ]
+
+        # Create the entry files so backlinks can be added
+        for i in range(10):
+            _create_entry(
+                tmp_kb / "entries" / f"entry{i}.md",
+                f"Entry {i}",
+                f"Content {i}",
+                tags=["test"],
+            )
+
+        mock_searcher = SemanticLinkSearcher(results=many_results)
+        monkeypatch.setattr(core, "get_searcher", lambda: mock_searcher)
+        monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
+
+        # Pass k=3 explicitly (monkeypatching SEMANTIC_LINK_K doesn't affect defaults)
+        result = core.create_bidirectional_semantic_links(
+            entry_path="test/entry.md",
+            title="Test",
+            content="Content",
+            tags=["test"],
+            k=3,  # Limit to 3
+            min_score=0.5,
+        )
+
+        assert len(result) == 3
+        # Verify they are the top 3 (highest scores)
+        assert result[0].path == "entries/entry0.md"
+        assert result[1].path == "entries/entry1.md"
+        assert result[2].path == "entries/entry2.md"

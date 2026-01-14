@@ -403,3 +403,20 @@ DUPLICATE_DETECTION_MIN_SCORE = 0.75
 
 # Maximum number of potential duplicates to return
 DUPLICATE_DETECTION_LIMIT = 3
+
+
+# =============================================================================
+# Auto Semantic Links
+# =============================================================================
+
+# Enable automatic bidirectional semantic link creation on entry add/update.
+# When enabled, new entries will be linked to similar existing entries.
+SEMANTIC_LINK_ENABLED = True
+
+# Minimum similarity score for creating semantic links (0.0-1.0).
+# 0.6 = moderate similarity, filters out weak connections.
+SEMANTIC_LINK_MIN_SCORE = 0.6
+
+# Maximum number of semantic links to create per entry.
+# Higher values create denser link graphs but may add noise.
+SEMANTIC_LINK_K = 5
