@@ -144,6 +144,7 @@ def create_new_metadata(
     git_branch: str | None = None,
     actor: str | None = None,
     keywords: list[str] | None = None,
+    semantic_links: list | None = None,
 ) -> EntryMetadata:
     """Create metadata for a new KB entry.
 
@@ -159,6 +160,7 @@ def create_new_metadata(
         git_branch: Current git branch.
         actor: Actor identity (agent name or human username).
         keywords: LLM-extracted key concepts for semantic linking.
+        semantic_links: List of SemanticLink objects for manual linking.
 
     Returns:
         EntryMetadata populated with creation metadata.
@@ -174,6 +176,7 @@ def create_new_metadata(
         git_branch=git_branch,
         last_edited_by=actor,
         keywords=keywords or [],
+        semantic_links=semantic_links or [],
     )
 
 

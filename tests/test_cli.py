@@ -547,6 +547,68 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
+    @patch("memex.cli.run_async")
+    def test_add_with_semantic_links(self, mock_run_async, runner):
+        """Add with --semantic-links passes parsed links to add_entry."""
+        mock_run_async.return_value = {
+            "path": "test/entry.md",
+            "suggested_links": [],
+            "suggested_tags": [],
+        }
+
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test Entry",
+            "--tags", "tag1",
+            "--content", "Content",
+            "--semantic-links", '[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]',
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
+        assert "Created" in result.output
+
+    def test_add_semantic_links_invalid_json(self, runner):
+        """Add fails with helpful error for invalid JSON."""
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test",
+            "--tags", "tag1",
+            "--content", "Content",
+            "--semantic-links", "not valid json",
+        ])
+
+        assert result.exit_code == 1
+        assert "not valid JSON" in result.output
+
+    def test_add_semantic_links_not_array(self, runner):
+        """Add fails when --semantic-links is not an array."""
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test",
+            "--tags", "tag1",
+            "--content", "Content",
+            "--semantic-links", '{"path": "foo.md", "score": 0.5, "reason": "test"}',
+        ])
+
+        assert result.exit_code == 1
+        assert "must be a JSON array" in result.output
+
+    def test_add_semantic_links_missing_fields(self, runner):
+        """Add fails when semantic link object is missing required fields."""
+        result = runner.invoke(cli, [
+            "add",
+            "--title", "Test",
+            "--tags", "tag1",
+            "--content", "Content",
+            "--semantic-links", '[{"path": "foo.md"}]',
+        ])
+
+        assert result.exit_code == 1
+        assert "missing required fields" in result.output
+        assert "score" in result.output
+        assert "reason" in result.output
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Escape Sequence Decoding Tests
@@ -725,6 +787,51 @@ class TestReplaceCommand:
 
         assert result.exit_code == 0
         assert mock_run_async.called
+
+    @patch("memex.cli.run_async")
+    def test_replace_with_semantic_links(self, mock_run_async, runner):
+        """Replace with --semantic-links passes parsed links to update_entry."""
+        mock_run_async.return_value = {"path": "test.md", "updated": True}
+
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--semantic-links", '[{"path": "ref/related.md", "score": 0.9, "reason": "manual"}]',
+        ])
+
+        assert result.exit_code == 0
+        assert mock_run_async.called
+        assert "Replaced" in result.output
+
+    def test_replace_semantic_links_invalid_json(self, runner):
+        """Replace fails with helpful error for invalid JSON."""
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--semantic-links", "not valid json",
+        ])
+
+        assert result.exit_code == 1
+        assert "not valid JSON" in result.output
+
+    def test_replace_semantic_links_not_array(self, runner):
+        """Replace fails when --semantic-links is not an array."""
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--semantic-links", '{"path": "foo.md", "score": 0.5, "reason": "test"}',
+        ])
+
+        assert result.exit_code == 1
+        assert "must be a JSON array" in result.output
+
+    def test_replace_semantic_links_missing_fields(self, runner):
+        """Replace fails when semantic link object is missing required fields."""
+        result = runner.invoke(cli, [
+            "replace", "test.md",
+            "--semantic-links", '[{"path": "foo.md", "score": 0.5}]',
+        ])
+
+        assert result.exit_code == 1
+        assert "missing required fields" in result.output
+        assert "reason" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────

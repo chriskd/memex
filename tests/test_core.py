@@ -502,15 +502,15 @@ class TestUpdateEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_update_entry_requires_content_sections_tags_or_keywords(self, tmp_kb):
-        """update_entry requires either content, section_updates, tags, or keywords."""
+    async def test_update_entry_requires_content_sections_tags_keywords_or_semantic_links(self, tmp_kb):
+        """update_entry requires either content, section_updates, tags, keywords, or semantic_links."""
         _create_entry(
             tmp_kb / "general" / "test.md",
             "Test",
             "Content",
         )
 
-        with pytest.raises(ValueError, match="content, section_updates, tags, or keywords"):
+        with pytest.raises(ValueError, match="content, section_updates, tags, keywords, or semantic_links"):
             await core.update_entry(path="general/test.md")
 
     @pytest.mark.asyncio

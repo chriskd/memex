@@ -811,6 +811,7 @@ async def add_entry(
     kb_context: KBContext | None = None,
     scope: str | None = None,
     keywords: list[str] | None = None,
+    semantic_links: list | None = None,
 ) -> dict:
     """Create a new KB entry.
 
@@ -828,6 +829,7 @@ async def add_entry(
         scope: Optional scope for KB selection ("project" or "user").
                If not provided, uses auto-discovery (project KB if in project, else user KB).
         keywords: Optional list of key concepts for semantic linking.
+        semantic_links: Optional list of SemanticLink objects for manual linking.
 
     Returns:
         Dict with 'path' of created file, 'suggested_links' to consider adding,
@@ -911,6 +913,7 @@ async def add_entry(
         git_branch=get_git_branch(),
         actor=get_actor_identity(),
         keywords=keywords,
+        semantic_links=semantic_links,
     )
     frontmatter = build_frontmatter(metadata)
 
@@ -1242,6 +1245,7 @@ async def update_entry(
     tags: list[str] | None = None,
     section_updates: dict[str, str] | None = None,
     keywords: list[str] | None = None,
+    semantic_links: list | None = None,
 ) -> dict:
     """Update an existing KB entry.
 
@@ -1251,6 +1255,7 @@ async def update_entry(
         tags: Optional new list of tags. If provided, replaces existing tags.
         section_updates: Optional dict of section heading -> new content.
         keywords: Optional new list of keywords. If provided, replaces existing keywords.
+        semantic_links: Optional list of SemanticLink objects. If provided, replaces existing.
 
     Returns:
         Dict with 'path' of updated file, 'suggested_links' to consider adding,
@@ -1265,8 +1270,8 @@ async def update_entry(
     if not file_path.is_file():
         raise ValueError(f"Path is not a file: {path}")
 
-    if content is None and not section_updates and tags is None and keywords is None:
-        raise ValueError("Provide new content, section_updates, tags, or keywords")
+    if content is None and not section_updates and tags is None and keywords is None and semantic_links is None:
+        raise ValueError("Provide new content, section_updates, tags, keywords, or semantic_links")
 
     # Parse existing entry to get metadata
     try:
@@ -1288,6 +1293,7 @@ async def update_entry(
         git_branch=get_git_branch(),
         actor=get_actor_identity(),
         keywords=keywords,
+        semantic_links=semantic_links,
     )
     frontmatter = build_frontmatter(updated_metadata)
 

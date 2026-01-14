@@ -1170,6 +1170,7 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope (default: auto-detect)")
 @click.option("--keywords", help="Key concepts for semantic linking (comma-separated)")
+@click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
     title: str,
@@ -1180,6 +1181,7 @@ def add(
     stdin: bool,
     scope: str | None,
     keywords: str | None,
+    semantic_links_json: str | None,
     as_json: bool,
 ):
     """Create a new knowledge base entry.
@@ -1189,6 +1191,8 @@ def add(
       mx add --title="My Entry" --tags="foo,bar" --content="# Content here"
       mx add --title="My Entry" --tags="foo,bar" --file=content.md
       cat content.md | mx add --title="My Entry" --tags="foo,bar" --stdin
+      mx add --title="My Entry" --tags="foo" --content="..." \\
+        --semantic-links='[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]'
 
     \b
     Scope Selection:
@@ -1202,10 +1206,18 @@ def add(
       user:    Personal notes, experiments, drafts
 
     \b
+    Semantic Links:
+      --semantic-links accepts a JSON array of link objects with:
+        path:   Target entry path (required)
+        score:  Similarity score 0-1 (required)
+        reason: How link was discovered (required)
+
+    \b
     See also:
       mx append - Append content to existing entry (or create new)
     """
     from .core import add_entry
+    from .models import SemanticLink
 
     # Validate mutual exclusivity of content sources
     sources = sum([bool(content), bool(file_path), stdin])
@@ -1228,8 +1240,46 @@ def add(
     tag_list = [t.strip() for t in tags.split(",")]
     keyword_list = [k.strip() for k in keywords.split(",")] if keywords else None
 
+    # Parse semantic links JSON if provided
+    semantic_links: list[SemanticLink] | None = None
+    if semantic_links_json:
+        try:
+            links_data = json.loads(semantic_links_json)
+            if not isinstance(links_data, list):
+                click.echo("Error: --semantic-links must be a JSON array", err=True)
+                sys.exit(1)
+            semantic_links = []
+            for i, link_data in enumerate(links_data):
+                if not isinstance(link_data, dict):
+                    click.echo(f"Error: --semantic-links[{i}] must be a JSON object", err=True)
+                    sys.exit(1)
+                missing = [f for f in ("path", "score", "reason") if f not in link_data]
+                if missing:
+                    click.echo(f"Error: --semantic-links[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    sys.exit(1)
+                try:
+                    semantic_links.append(SemanticLink(
+                        path=link_data["path"],
+                        score=float(link_data["score"]),
+                        reason=link_data["reason"],
+                    ))
+                except (ValueError, TypeError) as e:
+                    click.echo(f"Error: --semantic-links[{i}] invalid: {e}", err=True)
+                    sys.exit(1)
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
+            sys.exit(1)
+
     try:
-        result = run_async(add_entry(title=title, content=content, tags=tag_list, category=category, scope=scope, keywords=keyword_list))
+        result = run_async(add_entry(
+            title=title,
+            content=content,
+            tags=tag_list,
+            category=category,
+            scope=scope,
+            keywords=keyword_list,
+            semantic_links=semantic_links,
+        ))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1361,6 +1411,7 @@ def append(
 @click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
 @click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
+@click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def replace_cmd(
     path: str,
@@ -1370,6 +1421,7 @@ def replace_cmd(
     keywords: str | None,
     find_flag: str | None,
     replace_flag: str | None,
+    semantic_links_json: str | None,
     as_json: bool,
 ):
     """Replace content or tags in a knowledge base entry.
@@ -1381,6 +1433,14 @@ def replace_cmd(
       mx replace path/entry.md --tags="new,tags"
       mx replace path/entry.md --content="New content here"
       mx replace path/entry.md --file=updated-content.md
+      mx replace path/entry.md --semantic-links='[{"path": "ref/related.md", "score": 0.9, "reason": "manual"}]'
+
+    \b
+    Semantic Links:
+      --semantic-links accepts a JSON array of link objects with:
+        path:   Target entry path (required)
+        score:  Similarity score 0-1 (required)
+        reason: How link was discovered (required)
 
     \b
     See also:
@@ -1389,6 +1449,7 @@ def replace_cmd(
     """
     from .cli_intent import detect_update_intent_mismatch
     from .core import update_entry
+    from .models import SemanticLink
 
     # Check for intent mismatch (wrong command based on flags)
     mismatch = detect_update_intent_mismatch(
@@ -1409,8 +1470,44 @@ def replace_cmd(
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
     keyword_list = [k.strip() for k in keywords.split(",")] if keywords else None
 
+    # Parse semantic links JSON if provided
+    semantic_links: list[SemanticLink] | None = None
+    if semantic_links_json:
+        try:
+            links_data = json.loads(semantic_links_json)
+            if not isinstance(links_data, list):
+                click.echo("Error: --semantic-links must be a JSON array", err=True)
+                sys.exit(1)
+            semantic_links = []
+            for i, link_data in enumerate(links_data):
+                if not isinstance(link_data, dict):
+                    click.echo(f"Error: --semantic-links[{i}] must be a JSON object", err=True)
+                    sys.exit(1)
+                missing = [f for f in ("path", "score", "reason") if f not in link_data]
+                if missing:
+                    click.echo(f"Error: --semantic-links[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    sys.exit(1)
+                try:
+                    semantic_links.append(SemanticLink(
+                        path=link_data["path"],
+                        score=float(link_data["score"]),
+                        reason=link_data["reason"],
+                    ))
+                except (ValueError, TypeError) as e:
+                    click.echo(f"Error: --semantic-links[{i}] invalid: {e}", err=True)
+                    sys.exit(1)
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
+            sys.exit(1)
+
     try:
-        result = run_async(update_entry(path=path, content=content, tags=tag_list, keywords=keyword_list))
+        result = run_async(update_entry(
+            path=path,
+            content=content,
+            tags=tag_list,
+            keywords=keyword_list,
+            semantic_links=semantic_links,
+        ))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1428,11 +1525,21 @@ def replace_cmd(
 @click.option("--content", help="New content")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
+@click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def update_alias(ctx, path, tags, content, file_path, keywords, as_json):
+def update_alias(ctx, path, tags, content, file_path, keywords, semantic_links_json, as_json):
     """(Deprecated: use 'mx replace' instead)"""
-    ctx.invoke(replace_cmd, path=path, tags=tags, content=content, file_path=file_path, keywords=keywords, as_json=as_json)
+    ctx.invoke(
+        replace_cmd,
+        path=path,
+        tags=tags,
+        content=content,
+        file_path=file_path,
+        keywords=keywords,
+        semantic_links_json=semantic_links_json,
+        as_json=as_json,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
