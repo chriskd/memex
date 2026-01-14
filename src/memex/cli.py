@@ -951,9 +951,27 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--include-neighbors", is_flag=True, help="Include semantically linked entries")
+@click.option("--neighbor-depth", type=click.IntRange(min=1, max=5), default=1,
+              help="Max hops for neighbor traversal (default 1)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: int, min_score: float | None, content: bool, strict: bool, terse: bool, full_titles: bool, scope: str | None, as_json: bool):
+def search(
+    ctx: click.Context,
+    query: str,
+    tags: str | None,
+    mode: str,
+    limit: int,
+    min_score: float | None,
+    content: bool,
+    strict: bool,
+    terse: bool,
+    full_titles: bool,
+    scope: str | None,
+    include_neighbors: bool,
+    neighbor_depth: int,
+    as_json: bool,
+):
     """Search the knowledge base.
 
     Scores are normalized to 0.0-1.0 (higher = better match):
@@ -974,6 +992,10 @@ def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: i
     The --strict flag prevents semantic search from returning low-confidence results
     for unrelated queries (e.g., gibberish). Useful when you need precise matches.
 
+    The --include-neighbors flag enables graph-aware search by including entries
+    that are semantically linked to the direct matches. Use --neighbor-depth to
+    control how many hops to traverse (default 1).
+
     \b
     Examples:
       mx search "deployment"
@@ -982,6 +1004,8 @@ def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: i
       mx search "config" --min-score=0.5          # Only confident results
       mx search "query" --strict                  # No semantic fallback
       mx search "query" --scope=project           # Project KB only
+      mx search "query" --include-neighbors       # Include linked entries
+      mx search "query" --include-neighbors --neighbor-depth=2
 
     \b
     See also:
@@ -989,6 +1013,7 @@ def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: i
       mx list - List entries with optional filters
     """
     from .config import ConfigurationError, get_kb_root
+    from .core import expand_search_with_neighbors
     from .core import search as core_search
 
     try:
@@ -1026,50 +1051,115 @@ def search(ctx: click.Context, query: str, tags: str | None, mode: str, limit: i
     if min_score is not None:
         filtered_results = [r for r in result.results if r.score >= min_score]
 
-    if as_json:
-        results_data = []
-        for r in filtered_results:
-            item = {
-                "path": r.path,
-                "title": r.title,
-                "score": r.score,
-                "confidence": _score_confidence(r.score),
-            }
-            if content and r.content:
-                item["content"] = r.content
-            else:
-                item["snippet"] = r.snippet
-            results_data.append(item)
-        output(results_data, as_json=True)
-    elif terse:
-        for r in filtered_results:
-            click.echo(r.path)
-    else:
-        if not filtered_results:
-            if min_score is not None and result.results:
-                click.echo(f"No results above score threshold {min_score:.2f}. ({len(result.results)} results filtered out)")
-            else:
-                click.echo("No results found.")
-            return
+    # Expand with neighbors if requested
+    if include_neighbors:
+        expanded_results = run_async(expand_search_with_neighbors(
+            results=filtered_results,
+            depth=neighbor_depth,
+            include_content=content,
+        ))
 
-        rows = [
-            {"path": r.path, "title": r.title, "score": f"{r.score:.2f}", "conf": _score_confidence_short(r.score)}
-            for r in filtered_results
-        ]
-        title_width = 10000 if full_titles else 30
-        click.echo(format_table(rows, ["path", "title", "score", "conf"], {"path": 40, "title": title_width}))
-
-        # Show full content below table when --content flag is used
-        if content:
-            click.echo("\n" + "=" * 60)
-            for r in filtered_results:
-                click.echo(f"\n## {r.path}")
-                click.echo("-" * 40)
-                if r.content:
-                    click.echo(r.content)
+        if as_json:
+            # JSON output with is_neighbor and linked_from fields
+            results_data = []
+            for item in expanded_results:
+                result_item = {
+                    "path": item["path"],
+                    "title": item["title"],
+                    "score": item["score"],
+                    "confidence": _score_confidence(item["score"]),
+                    "is_neighbor": item["is_neighbor"],
+                }
+                if item["is_neighbor"]:
+                    result_item["linked_from"] = item.get("linked_from")
+                if content and item.get("content"):
+                    result_item["content"] = item["content"]
                 else:
-                    click.echo(r.snippet)
-                click.echo()
+                    result_item["snippet"] = item.get("snippet", "")
+                results_data.append(result_item)
+            output({"results": results_data}, as_json=True)
+        elif terse:
+            for item in expanded_results:
+                prefix = "[N] " if item["is_neighbor"] else ""
+                click.echo(f"{prefix}{item['path']}")
+        else:
+            if not expanded_results:
+                click.echo("No results found.")
+                return
+
+            rows = []
+            for item in expanded_results:
+                neighbor_mark = "*" if item["is_neighbor"] else ""
+                rows.append({
+                    "path": item["path"],
+                    "title": item["title"],
+                    "score": f"{item['score']:.2f}",
+                    "conf": _score_confidence_short(item["score"]),
+                    "nbr": neighbor_mark,
+                })
+            title_width = 10000 if full_titles else 30
+            columns = ["path", "title", "score", "conf", "nbr"]
+            widths = {"path": 40, "title": title_width}
+            click.echo(format_table(rows, columns, widths))
+
+            # Show full content below table when --content flag is used
+            if content:
+                click.echo("\n" + "=" * 60)
+                for item in expanded_results:
+                    neighbor_label = " [neighbor]" if item["is_neighbor"] else ""
+                    click.echo(f"\n## {item['path']}{neighbor_label}")
+                    click.echo("-" * 40)
+                    if item.get("content"):
+                        click.echo(item["content"])
+                    else:
+                        click.echo(item.get("snippet", ""))
+                    click.echo()
+    else:
+        # Original output without neighbor expansion
+        if as_json:
+            results_data = []
+            for r in filtered_results:
+                item = {
+                    "path": r.path,
+                    "title": r.title,
+                    "score": r.score,
+                    "confidence": _score_confidence(r.score),
+                }
+                if content and r.content:
+                    item["content"] = r.content
+                else:
+                    item["snippet"] = r.snippet
+                results_data.append(item)
+            output(results_data, as_json=True)
+        elif terse:
+            for r in filtered_results:
+                click.echo(r.path)
+        else:
+            if not filtered_results:
+                if min_score is not None and result.results:
+                    click.echo(f"No results above score threshold {min_score:.2f}. ({len(result.results)} results filtered out)")
+                else:
+                    click.echo("No results found.")
+                return
+
+            rows = [
+                {"path": r.path, "title": r.title, "score": f"{r.score:.2f}", "conf": _score_confidence_short(r.score)}
+                for r in filtered_results
+            ]
+            title_width = 10000 if full_titles else 30
+            click.echo(format_table(rows, ["path", "title", "score", "conf"], {"path": 40, "title": title_width}))
+
+            # Show full content below table when --content flag is used
+            if content:
+                click.echo("\n" + "=" * 60)
+                for r in filtered_results:
+                    click.echo(f"\n## {r.path}")
+                    click.echo("-" * 40)
+                    if r.content:
+                        click.echo(r.content)
+                    else:
+                        click.echo(r.snippet)
+                    click.echo()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
