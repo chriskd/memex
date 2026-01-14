@@ -795,6 +795,121 @@ async def search(
     return SearchResponse(results=results, warnings=warnings)
 
 
+async def expand_search_with_neighbors(
+    results: list[SearchResult],
+    depth: int = 1,
+    include_content: bool = False,
+) -> list[dict]:
+    """Expand search results to include semantically linked entries (neighbors).
+
+    For each search result, reads its semantic_links from metadata and fetches
+    those linked entries. Performs graph traversal up to the specified depth.
+
+    Args:
+        results: Initial search results to expand.
+        depth: Number of hops to traverse (default 1). A depth of 1 means
+               only direct neighbors are included. A depth of 2 includes
+               neighbors of neighbors, etc.
+        include_content: If True, include full document content in results.
+
+    Returns:
+        List of dicts with search result data plus is_neighbor and linked_from fields.
+        Direct matches have is_neighbor=False, neighbors have is_neighbor=True
+        and linked_from set to the path that linked to them.
+    """
+    from .config import resolve_scoped_path
+
+    # Build output list - start with direct matches
+    output: list[dict] = []
+    seen_paths: set[str] = set()
+
+    # Track which paths link to which for the linked_from field
+    # Format: {neighbor_path: first_linker_path}
+    linked_from_map: dict[str, str] = {}
+
+    # Queue for BFS traversal: (path, current_depth, score, linked_from_path)
+    queue: list[tuple[str, int, float, str | None]] = []
+
+    # Add initial results
+    for r in results:
+        if r.path not in seen_paths:
+            seen_paths.add(r.path)
+            item: dict = {
+                "path": r.path,
+                "title": r.title,
+                "score": r.score,
+                "is_neighbor": False,
+            }
+            if include_content and r.content:
+                item["content"] = r.content
+            else:
+                item["snippet"] = r.snippet
+            output.append(item)
+            # Enqueue for neighbor discovery
+            queue.append((r.path, 0, r.score, None))
+
+    # BFS traversal up to specified depth
+    while queue:
+        current_path, current_depth, parent_score, _ = queue.pop(0)
+
+        if current_depth >= depth:
+            continue
+
+        # Read the entry to get its semantic_links
+        try:
+            file_path = resolve_scoped_path(current_path)
+            if not file_path.exists():
+                continue
+
+            metadata, content, _ = parse_entry(file_path)
+            semantic_links = metadata.semantic_links
+
+            for link in semantic_links:
+                neighbor_path = link.path
+                if neighbor_path not in seen_paths:
+                    seen_paths.add(neighbor_path)
+
+                    # Track who linked to this neighbor (first one wins)
+                    if neighbor_path not in linked_from_map:
+                        linked_from_map[neighbor_path] = current_path
+
+                    # Try to read the neighbor entry for title/snippet
+                    try:
+                        neighbor_file = resolve_scoped_path(neighbor_path)
+                        if neighbor_file.exists():
+                            neighbor_meta, neighbor_content, _ = parse_entry(neighbor_file)
+
+                            # Generate snippet from content
+                            snippet = neighbor_content[:200].strip()
+                            if len(neighbor_content) > 200:
+                                snippet += "..."
+
+                            neighbor_item: dict = {
+                                "path": neighbor_path,
+                                "title": neighbor_meta.title,
+                                "score": link.score,
+                                "is_neighbor": True,
+                                "linked_from": linked_from_map[neighbor_path],
+                            }
+                            if include_content:
+                                neighbor_item["content"] = neighbor_content
+                            else:
+                                neighbor_item["snippet"] = snippet
+                            output.append(neighbor_item)
+
+                            # Add to queue for further traversal
+                            queue.append((neighbor_path, current_depth + 1, link.score, current_path))
+                    except (ValueError, ParseError) as e:
+                        log.debug("Could not read neighbor entry %s: %s", neighbor_path, e)
+                        continue
+
+        except (ValueError, ParseError) as e:
+            log.debug("Could not read entry for neighbor expansion %s: %s", current_path, e)
+            continue
+
+    return output
+
+
 async def quality(limit: int = 5, cutoff: int = 3) -> QualityReport:
     """Evaluate MCP search accuracy."""
     searcher = get_searcher()
