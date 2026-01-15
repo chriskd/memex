@@ -259,8 +259,8 @@ Running `a-mem-init` multiple times should be safe:
 |-------|--------|-------|
 | Phase 1: Inventory & Validation | ✅ Complete | `amem_init_inventory()` in core.py, CLI options, 20 tests |
 | Phase 2: Keyword Extraction | ✅ Complete | `extract_keywords_llm()` in llm.py, `amem_init_extract_keywords()` in core.py, 16 new tests |
-| Phase 3: Semantic Linking | 🔲 Planned | Chronological processing with date filtering |
-| Phase 4: Evolution Queue | 🔲 Planned | Queue items for `mx evolve` |
+| Phase 3: Semantic Linking | ✅ Complete | `amem_init_link_entries()` in core.py, chronological processing, 16 new tests |
+| Phase 4: Evolution Queue | ✅ Complete | Integrated with Phase 3, uses `queue_evolution()` |
 
 ### Phase 1 Implementation Details
 
@@ -283,6 +283,21 @@ Running `a-mem-init` multiple times should be safe:
   - Triggers re-indexing after keyword addition
   - Handles errors gracefully, continues processing remaining entries
   - JSON output includes `phase2` object with detailed results
+
+### Phase 3 & 4 Implementation Details
+
+- **Core function**: `amem_init_link_entries()` in `src/memex/core.py`
+- **Models**: `LinkingPhaseEntry`, `LinkingPhaseResult` in `src/memex/models.py`
+- **CLI integration**: Phase 3 runs automatically after Phase 1/2 when not `--dry-run`
+- **Tests**: 16 new tests in `tests/test_amem_init.py` (52 total)
+- **Features**:
+  - Processes entries chronologically (oldest first)
+  - Only links to entries created BEFORE current entry (Option A from spec)
+  - Creates bidirectional links (forward + backlinks)
+  - Queues evolution items via `queue_evolution()` (Phase 4 integration)
+  - Idempotent: re-running doesn't create duplicate links
+  - Skips entries without keywords
+  - JSON output includes `phase3` object with detailed results
 
 ## Related
 
