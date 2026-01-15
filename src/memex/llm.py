@@ -396,7 +396,8 @@ async def analyze_evolution(
     if not neighbors:
         return EvolutionDecision(should_evolve=False)
 
-    client = _get_openai_client()
+    client, provider = _get_client()
+    resolved_model = resolve_model(model, provider)
 
     # Build neighbor descriptions for the prompt
     neighbor_sections = []
@@ -452,14 +453,23 @@ If should_evolve is false, neighbor_updates should be empty.
 Total neighbors: {len(neighbors)}"""
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
+        # Make provider-appropriate API call
+        if provider == "anthropic":
+            response = await client.messages.create(
+                model=resolved_model,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text
+        else:
+            response = await client.chat.completions.create(
+                model=resolved_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            raw = response.choices[0].message.content or "{}"
 
-        raw = response.choices[0].message.content or "{}"
         parsed = _extract_first_json_object(raw)
 
         should_evolve = parsed.get("should_evolve", False)
@@ -752,7 +762,8 @@ async def analyze_for_strengthen(
             suggested_links=[],
         )
 
-    client = _get_openai_client()
+    client, provider = _get_client()
+    resolved_model = resolve_model(model, provider)
 
     # Build neighbor descriptions
     neighbor_sections = []
@@ -794,14 +805,23 @@ Respond with JSON:
 "suggested_links": ["path1", "path2"]}}"""
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
+        # Make provider-appropriate API call
+        if provider == "anthropic":
+            response = await client.messages.create(
+                model=resolved_model,
+                max_tokens=500,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            content = response.content[0].text
+        else:
+            response = await client.chat.completions.create(
+                model=resolved_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            content = response.choices[0].message.content or ""
 
-        content = response.choices[0].message.content or ""
         result = _extract_first_json_object(content)
 
         should_strengthen = result.get("should_strengthen", False)
