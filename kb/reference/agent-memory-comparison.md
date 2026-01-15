@@ -6,13 +6,19 @@ tags:
   - basic-memory
   - claude-mem
 created: 2026-01-13T01:25:36.081714+00:00
-updated: 2026-01-14T23:36:11.361035+00:00
+updated: 2026-01-15T00:56:26.823073+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
 semantic_links:
   - path: a-mem-parity/a-mem-parity-analysis.md
     score: 0.701
+    reason: bidirectional
+  - path: a-mem-parity/memory-evolution-queue-architecture.md
+    score: 0.606
+    reason: bidirectional
+  - path: reference/memory-evolution-queue-architecture.md
+    score: 0.629
     reason: bidirectional
 ---
 
