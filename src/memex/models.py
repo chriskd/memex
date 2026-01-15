@@ -17,6 +17,38 @@ class EvolutionRecord(BaseModel):
     new_description: str | None = None  # Description after (if changed)
 
 
+class NeighborUpdate(BaseModel):
+    """Update suggestion for a single neighbor entry during evolution.
+
+    Represents the LLM's suggested changes for one neighbor entry.
+    Part of the EvolutionDecision response structure (A-Mem parity).
+    """
+
+    path: str  # Path to the neighbor entry
+    new_keywords: list[str] = Field(default_factory=list)  # Updated keyword list (replaces existing)
+    new_context: str = ""  # Updated context/description (one sentence)
+    relationship: str = ""  # One-sentence description of relationship to new entry
+
+
+class EvolutionDecision(BaseModel):
+    """LLM decision about whether and how to evolve neighbors.
+
+    Mirrors A-Mem's evolution response structure where the LLM explicitly
+    decides whether evolution should happen, not just the score threshold.
+
+    Fields:
+        should_evolve: LLM's explicit decision (not just score threshold)
+        actions: What to do - 'update_keywords', 'update_context', 'add_links'
+        neighbor_updates: Per-neighbor update suggestions
+        suggested_connections: New link paths to add (for 'add_links' action)
+    """
+
+    should_evolve: bool  # LLM decision: should this entry trigger evolution?
+    actions: list[str] = Field(default_factory=list)  # Actions: update_keywords, update_context, add_links
+    neighbor_updates: list[NeighborUpdate] = Field(default_factory=list)  # Per-neighbor updates
+    suggested_connections: list[str] = Field(default_factory=list)  # New links to add
+
+
 class SemanticLink(BaseModel):
     """A computed semantic relationship to another entry."""
 

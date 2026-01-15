@@ -366,6 +366,171 @@ Respond with JSON array, one object per neighbor in order:
     return suggestions
 
 
+async def analyze_evolution(
+    new_entry_title: str,
+    new_entry_content: str,
+    new_entry_keywords: list[str],
+    neighbors: list[NeighborInfo],
+    model: str,
+) -> "EvolutionDecision":
+    """Analyze whether a new entry should trigger evolution of its neighbors.
+
+    Mirrors A-Mem's evolution decision: LLM explicitly decides whether
+    evolution should happen, not just based on similarity score.
+
+    Args:
+        new_entry_title: Title of the newly added entry.
+        new_entry_content: Content of the new entry.
+        new_entry_keywords: Keywords of the new entry.
+        neighbors: List of neighbor entries to potentially evolve.
+        model: OpenRouter model ID to use.
+
+    Returns:
+        EvolutionDecision with should_evolve flag and per-neighbor updates.
+
+    Raises:
+        LLMConfigurationError: If API key not configured.
+    """
+    from .models import EvolutionDecision, NeighborUpdate
+
+    if not neighbors:
+        return EvolutionDecision(should_evolve=False)
+
+    client = _get_openai_client()
+
+    # Build neighbor descriptions for the prompt
+    neighbor_sections = []
+    for i, n in enumerate(neighbors):
+        kw_str = ", ".join(n.keywords) if n.keywords else "none"
+        section = f"""NEIGHBOR {i + 1} (path: {n.path}, similarity: {n.score:.2f}):
+Title: {n.title}
+Current keywords: {kw_str}
+Content preview: {n.content[:400]}"""
+        neighbor_sections.append(section)
+
+    new_kw_str = ", ".join(new_entry_keywords) if new_entry_keywords else "none"
+
+    # A-Mem style prompt with explicit should_evolve decision
+    prompt = f"""You are a memory evolution agent analyzing relationships between KB entries.
+
+NEW ENTRY:
+Title: {new_entry_title}
+Keywords: {new_kw_str}
+Content: {new_entry_content[:600]}
+
+NEIGHBORS (semantically similar entries):
+{chr(10).join(neighbor_sections)}
+
+Analyze this new entry and its neighbors. Determine:
+
+1. Should any evolution happen? Consider:
+   - Is there a meaningful semantic relationship worth capturing?
+   - Would updating neighbors add genuine value (not just noise)?
+   - Are the connections strong enough to warrant keyword/context updates?
+
+2. If evolving, for EACH neighbor provide:
+   - Complete new keyword list (keep relevant existing, add new if meaningful)
+   - Updated context (one sentence describing the entry's role)
+   - Brief relationship description
+
+Respond with JSON:
+{{
+    "should_evolve": true/false,
+    "actions": ["update_keywords", "update_context"],
+    "neighbor_updates": [
+        {{
+            "path": "neighbor_path",
+            "new_keywords": ["kw1", "kw2", ...],
+            "new_context": "Updated context sentence",
+            "relationship": "How this relates to the new entry"
+        }}
+    ],
+    "suggested_connections": []
+}}
+
+If should_evolve is false, neighbor_updates should be empty.
+Total neighbors: {len(neighbors)}"""
+
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+
+        raw = response.choices[0].message.content or "{}"
+        parsed = _extract_first_json_object(raw)
+
+        should_evolve = parsed.get("should_evolve", False)
+        if not isinstance(should_evolve, bool):
+            should_evolve = bool(should_evolve)
+
+        actions = parsed.get("actions", [])
+        if not isinstance(actions, list):
+            actions = []
+
+        suggested_connections = parsed.get("suggested_connections", [])
+        if not isinstance(suggested_connections, list):
+            suggested_connections = []
+
+        # Parse neighbor updates
+        neighbor_updates = []
+        raw_updates = parsed.get("neighbor_updates", [])
+        if isinstance(raw_updates, list):
+            for i, n in enumerate(neighbors):
+                if i < len(raw_updates) and isinstance(raw_updates[i], dict):
+                    r = raw_updates[i]
+                    new_keywords = r.get("new_keywords", [])
+                    if not isinstance(new_keywords, list):
+                        new_keywords = list(n.keywords)
+                    else:
+                        new_keywords = [
+                            str(kw).strip().lower() for kw in new_keywords if kw
+                        ]
+                        if not new_keywords:
+                            new_keywords = list(n.keywords)
+
+                    new_context = r.get("new_context", "")
+                    if not isinstance(new_context, str):
+                        new_context = ""
+
+                    relationship = r.get("relationship", "")
+                    if not isinstance(relationship, str):
+                        relationship = ""
+
+                    neighbor_updates.append(
+                        NeighborUpdate(
+                            path=n.path,
+                            new_keywords=new_keywords,
+                            new_context=new_context.strip(),
+                            relationship=relationship.strip(),
+                        )
+                    )
+                elif should_evolve:
+                    # If should_evolve but missing update, preserve existing
+                    neighbor_updates.append(
+                        NeighborUpdate(
+                            path=n.path,
+                            new_keywords=list(n.keywords),
+                        )
+                    )
+
+        return EvolutionDecision(
+            should_evolve=should_evolve,
+            actions=actions,
+            neighbor_updates=neighbor_updates,
+            suggested_connections=suggested_connections,
+        )
+
+    except (json.JSONDecodeError, IndexError, AttributeError) as e:
+        log.warning("Failed to parse evolution decision: %s", e)
+        return EvolutionDecision(should_evolve=False)
+    except Exception as e:
+        log.warning("LLM API error during evolution analysis: %s", e)
+        return EvolutionDecision(should_evolve=False)
+
+
 def _extract_first_json_object(text: str) -> dict:
     """Extract the first valid JSON object from text.
 

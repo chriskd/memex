@@ -15,6 +15,90 @@ from memex.llm import (
     evolve_neighbors_batched,
     evolve_single_neighbor,
 )
+from memex.models import EvolutionDecision, NeighborUpdate
+
+
+class TestEvolutionDecisionModel:
+    """Tests for EvolutionDecision and NeighborUpdate Pydantic models."""
+
+    def test_neighbor_update_minimal(self):
+        """NeighborUpdate requires only path."""
+        update = NeighborUpdate(path="test/entry.md")
+        assert update.path == "test/entry.md"
+        assert update.new_keywords == []
+        assert update.new_context == ""
+        assert update.relationship == ""
+
+    def test_neighbor_update_full(self):
+        """NeighborUpdate accepts all fields."""
+        update = NeighborUpdate(
+            path="guides/api.md",
+            new_keywords=["rest", "api", "authentication"],
+            new_context="Guide for REST API integration",
+            relationship="Related to authentication concepts",
+        )
+        assert update.path == "guides/api.md"
+        assert update.new_keywords == ["rest", "api", "authentication"]
+        assert update.new_context == "Guide for REST API integration"
+        assert update.relationship == "Related to authentication concepts"
+
+    def test_evolution_decision_should_not_evolve(self):
+        """EvolutionDecision with should_evolve=False."""
+        decision = EvolutionDecision(should_evolve=False)
+        assert decision.should_evolve is False
+        assert decision.actions == []
+        assert decision.neighbor_updates == []
+        assert decision.suggested_connections == []
+
+    def test_evolution_decision_should_evolve_with_updates(self):
+        """EvolutionDecision with updates when should_evolve=True."""
+        decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords", "update_context"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="docs/overview.md",
+                    new_keywords=["overview", "architecture"],
+                    new_context="High-level system overview",
+                ),
+                NeighborUpdate(
+                    path="docs/api.md",
+                    new_keywords=["api", "endpoints"],
+                ),
+            ],
+            suggested_connections=["related/topic.md"],
+        )
+        assert decision.should_evolve is True
+        assert "update_keywords" in decision.actions
+        assert len(decision.neighbor_updates) == 2
+        assert decision.neighbor_updates[0].path == "docs/overview.md"
+        assert decision.suggested_connections == ["related/topic.md"]
+
+    def test_evolution_decision_from_dict(self):
+        """EvolutionDecision can be created from dict (LLM JSON response)."""
+        # Simulates what we'd get from parsing LLM JSON response
+        llm_response = {
+            "should_evolve": True,
+            "actions": ["update_keywords"],
+            "neighbor_updates": [
+                {
+                    "path": "test/neighbor.md",
+                    "new_keywords": ["keyword1", "keyword2"],
+                    "new_context": "Updated context",
+                    "relationship": "Strongly related",
+                }
+            ],
+            "suggested_connections": [],
+        }
+        decision = EvolutionDecision(**llm_response)
+        assert decision.should_evolve is True
+        assert len(decision.neighbor_updates) == 1
+        assert decision.neighbor_updates[0].new_keywords == ["keyword1", "keyword2"]
+
+    def test_evolution_decision_validation_requires_should_evolve(self):
+        """EvolutionDecision requires should_evolve field."""
+        with pytest.raises(Exception):  # Pydantic ValidationError
+            EvolutionDecision()  # Missing required field
 
 
 class TestMemoryEvolutionConfig:
@@ -481,18 +565,24 @@ Content about existing concepts.
         """Processing applies LLM suggestions to neighbors (replacement semantics)."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        # Mock the LLM to return complete new keyword list (use proper dataclass)
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept", "new-keyword"],  # Complete replacement list
-            relationship="Related to new concepts",
-            new_context="",  # No description update
+        # Mock the LLM to return EvolutionDecision with should_evolve=True
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "new-keyword"],
+                    new_context="",
+                    relationship="Related to new concepts",
+                )
+            ],
         )
 
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+        with patch("memex.llm.analyze_evolution", mock_analyze):
             from memex.evolution_queue import QueueItem
             from datetime import datetime, UTC
 
@@ -518,18 +608,24 @@ Content about existing concepts.
         """Processing applies LLM-suggested description (new_context) to neighbors."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        # Mock the LLM to return new keywords AND new_context
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept", "evolved-keyword"],
-            relationship="Related to new concepts",
-            new_context="A comprehensive guide to existing concepts and their evolution.",
+        # Mock the LLM to return EvolutionDecision with new_context
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords", "update_context"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "evolved-keyword"],
+                    new_context="A comprehensive guide to existing concepts and their evolution.",
+                    relationship="Related to new concepts",
+                )
+            ],
         )
 
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+        with patch("memex.llm.analyze_evolution", mock_analyze):
             from memex.evolution_queue import QueueItem
             from datetime import datetime, UTC
 
@@ -569,17 +665,23 @@ Content about existing concepts.
 """)
 
         # Mock the LLM to return new keywords but EMPTY new_context
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept", "another-keyword"],
-            relationship="Related",
-            new_context="",  # Empty - should preserve existing description
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "another-keyword"],
+                    new_context="",  # Empty - should preserve existing description
+                    relationship="Related",
+                )
+            ],
         )
 
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+        with patch("memex.llm.analyze_evolution", mock_analyze):
             from memex.evolution_queue import QueueItem
             from datetime import datetime, UTC
 
@@ -605,17 +707,22 @@ Content about existing concepts.
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
         # Mock the LLM to return SAME keywords but NEW context
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept"],  # Same as existing
-            relationship="",
-            new_context="New semantic description for this entry.",
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_context"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept"],  # Same as existing
+                    new_context="New semantic description for this entry.",
+                )
+            ],
         )
 
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+        with patch("memex.llm.analyze_evolution", mock_analyze):
             from memex.evolution_queue import QueueItem
             from datetime import datetime, UTC
 
@@ -636,217 +743,146 @@ Content about existing concepts.
         neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
         assert "description: New semantic description for this entry" in neighbor_content
 
-
-class TestShouldEvolve:
-    """Tests for LLM-decided should_evolve behavior."""
-
     @pytest.mark.asyncio
-    async def test_should_evolve_false_skips_update(self, monkeypatch):
-        """should_evolve=false from LLM response skips the neighbor update."""
+    async def test_process_evolution_records_history(self, tmp_kb, monkeypatch):
+        """Evolution records history with before/after values."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content=json.dumps({
-                        "should_evolve": False,
-                        "new_keywords": ["python", "testing"],
-                        "relationship": "Weakly related",
-                        "new_context": "Some context",
-                    })
+        # Mock the LLM to return new keywords and description
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords", "update_context"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "evolved-keyword"],
+                    new_context="Updated description from evolution.",
                 )
-            )
-        ]
+            ],
+        )
 
-        mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
-            result = await evolve_single_neighbor(
-                new_entry_title="Test Entry",
-                new_entry_content="Content about testing",
-                new_entry_keywords=["testing"],
-                neighbor_path="guides/python.md",
-                neighbor_title="Python Guide",
-                neighbor_content="Guide about Python programming",
-                neighbor_keywords=["python"],
-                link_score=0.75,
-                model="test-model",
-            )
+        with patch("memex.llm.analyze_evolution", mock_analyze):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
 
-        assert result.should_evolve is False
-        # Keywords are still returned (caller decides whether to apply)
-        assert result.new_keywords == ["python", "testing"]
+            items = [QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )]
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Verify history was recorded
+        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert "evolution_history:" in neighbor_content
+        assert "trigger_entry: test/new.md" in neighbor_content
+        assert "previous_keywords:" in neighbor_content
+        assert "old-concept" in neighbor_content
+        assert "new_keywords:" in neighbor_content
+        assert "evolved-keyword" in neighbor_content
+        assert "new_description: Updated description from evolution" in neighbor_content
 
     @pytest.mark.asyncio
-    async def test_should_evolve_true_proceeds(self, monkeypatch):
-        """should_evolve=true from LLM response proceeds with update."""
+    async def test_evolution_history_accumulates(self, tmp_kb, monkeypatch):
+        """Multiple evolutions accumulate in history."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content=json.dumps({
-                        "should_evolve": True,
-                        "new_keywords": ["python", "testing"],
-                        "relationship": "Strongly related",
-                        "new_context": "Updated context",
-                    })
+        # First evolution
+        mock_decision1 = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "keyword-from-first"],
                 )
-            )
-        ]
+            ],
+        )
 
-        mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+        async def mock_analyze1(*args, **kwargs):
+            return mock_decision1
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
-            result = await evolve_single_neighbor(
-                new_entry_title="Test Entry",
-                new_entry_content="Content about testing",
-                new_entry_keywords=["testing"],
-                neighbor_path="guides/python.md",
-                neighbor_title="Python Guide",
-                neighbor_content="Guide about Python programming",
-                neighbor_keywords=["python"],
-                link_score=0.75,
-                model="test-model",
-            )
+        with patch("memex.llm.analyze_evolution", mock_analyze1):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
 
-        assert result.should_evolve is True
-        assert result.new_keywords == ["python", "testing"]
-        assert result.new_context == "Updated context"
+            items = [QueueItem(
+                new_entry="test/first-trigger.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )]
 
-    @pytest.mark.asyncio
-    async def test_missing_should_evolve_defaults_to_true(self, monkeypatch):
-        """Missing should_evolve in response defaults to True for backwards compatibility."""
-        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-
-        # Response without should_evolve field (legacy format)
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content=json.dumps({
-                        "new_keywords": ["python", "testing"],
-                        "relationship": "Related to testing",
-                    })
-                )
-            )
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
-            result = await evolve_single_neighbor(
-                new_entry_title="Test Entry",
-                new_entry_content="Content about testing",
-                new_entry_keywords=["testing"],
-                neighbor_path="guides/python.md",
-                neighbor_title="Python Guide",
-                neighbor_content="Guide about Python programming",
-                neighbor_keywords=["python"],
-                link_score=0.75,
-                model="test-model",
-            )
-
-        # Default True for backwards compatibility
-        assert result.should_evolve is True
-        assert result.new_keywords == ["python", "testing"]
-
-    @pytest.mark.asyncio
-    async def test_batched_should_evolve_parsing(self, monkeypatch):
-        """evolve_neighbors_batched correctly parses should_evolve for each neighbor."""
-        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-
-        mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(
-                message=MagicMock(
-                    content=json.dumps([
-                        {
-                            "path": "a.md",
-                            "should_evolve": True,
-                            "new_keywords": ["kw1"],
-                            "relationship": "Strong",
-                            "new_context": "Context A",
-                        },
-                        {
-                            "path": "b.md",
-                            "should_evolve": False,
-                            "new_keywords": ["kw2"],
-                            "relationship": "Weak",
-                            "new_context": "Context B",
-                        },
-                    ])
-                )
-            )
-        ]
-
-        mock_client = AsyncMock()
-        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
-
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
-            neighbors = [
-                NeighborInfo(
-                    path="a.md", title="A", content="Content A", keywords=["existing_a"], score=0.8
-                ),
-                NeighborInfo(
-                    path="b.md", title="B", content="Content B", keywords=["existing_b"], score=0.75
-                ),
-            ]
-
-            results = await evolve_neighbors_batched(
-                new_entry_title="New",
-                new_entry_content="Content",
-                new_entry_keywords=[],
-                neighbors=neighbors,
-                model="test-model",
-            )
-
-        assert len(results) == 2
-        assert results[0].should_evolve is True
-        assert results[1].should_evolve is False
-
-
-class TestProcessEvolutionShouldEvolve:
-    """Integration tests for should_evolve in process_evolution_items."""
-
-    @pytest.fixture
-    def tmp_kb(self, tmp_path, monkeypatch):
-        """Create a temporary KB directory with sample entries."""
-        kb_path = tmp_path / "kb"
-        kb_path.mkdir()
-        (kb_path / ".kbconfig").write_text("""
-kb_path: .
-memory_evolution:
-  enabled: true
-  model: test-model
-  min_score: 0.7
-""")
-        (kb_path / ".indices").mkdir()
-        (kb_path / "test").mkdir()
-
-        # Create a new entry
-        (kb_path / "test" / "new.md").write_text("""---
-title: New Entry
+            # Create the trigger entry first
+            (tmp_kb / "test" / "first-trigger.md").write_text("""---
+title: First Trigger
 tags: [testing]
-keywords: [new-concept]
-created: 2024-01-15T10:00:00+00:00
+keywords: [first-trigger-kw]
+created: 2024-01-16T10:00:00+00:00
 ---
 
-# New Entry
-
-Content about new concepts.
+# First Trigger
 """)
 
-        # Create a neighbor entry
-        (kb_path / "test" / "neighbor.md").write_text("""---
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Second evolution
+        mock_decision2 = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["old-concept", "keyword-from-first", "keyword-from-second"],
+                )
+            ],
+        )
+
+        async def mock_analyze2(*args, **kwargs):
+            return mock_decision2
+
+        with patch("memex.llm.analyze_evolution", mock_analyze2):
+            items = [QueueItem(
+                new_entry="test/second-trigger.md",
+                neighbor="test/neighbor.md",
+                score=0.9,
+                queued_at=datetime.now(UTC),
+            )]
+
+            # Create the second trigger entry
+            (tmp_kb / "test" / "second-trigger.md").write_text("""---
+title: Second Trigger
+tags: [testing]
+keywords: [second-trigger-kw]
+created: 2024-01-17T10:00:00+00:00
+---
+
+# Second Trigger
+""")
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Verify both history records exist
+        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert "trigger_entry: test/first-trigger.md" in neighbor_content
+        assert "trigger_entry: test/second-trigger.md" in neighbor_content
+
+    @pytest.mark.asyncio
+    async def test_evolution_history_correct_before_after_values(self, tmp_kb, monkeypatch):
+        """History records correct before and after values for keywords."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Set up neighbor with specific initial keywords
+        (tmp_kb / "test" / "neighbor.md").write_text("""---
 title: Neighbor Entry
+description: Original description
 tags: [existing]
-keywords: [old-concept]
+keywords: [alpha, beta]
 created: 2024-01-14T10:00:00+00:00
 ---
 
@@ -855,83 +891,82 @@ created: 2024-01-14T10:00:00+00:00
 Content about existing concepts.
 """)
 
-        monkeypatch.setenv("MEMEX_SKIP_PROJECT_KB", "")
-        monkeypatch.chdir(kb_path)
+        mock_decision = EvolutionDecision(
+            should_evolve=True,
+            actions=["update_keywords", "update_context"],
+            neighbor_updates=[
+                NeighborUpdate(
+                    path="test/neighbor.md",
+                    new_keywords=["alpha", "beta", "gamma"],  # Added gamma
+                    new_context="Enhanced description.",
+                )
+            ],
+        )
 
-        return kb_path
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
+
+        with patch("memex.llm.analyze_evolution", mock_analyze):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
+
+            items = [QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.85,
+                queued_at=datetime.now(UTC),
+            )]
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Parse the result to verify history contents
+        from memex.parser import parse_entry
+
+        metadata, _, _ = parse_entry(tmp_kb / "test" / "neighbor.md")
+        assert len(metadata.evolution_history) == 1
+
+        record = metadata.evolution_history[0]
+        assert record.trigger_entry == "test/new.md"
+        assert set(record.previous_keywords) == {"alpha", "beta"}
+        assert set(record.new_keywords) == {"alpha", "beta", "gamma"}
+        assert record.previous_description == "Original description"
+        assert record.new_description == "Enhanced description."
 
     @pytest.mark.asyncio
-    async def test_should_evolve_false_skips_file_update(self, tmp_kb, monkeypatch):
-        """should_evolve=false skips updating the neighbor file."""
+    async def test_process_evolution_respects_should_evolve_false(self, tmp_kb, monkeypatch):
+        """When LLM returns should_evolve=False, no evolution happens (A-Mem parity)."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Save original neighbor content for comparison
+        original_content = (tmp_kb / "test" / "neighbor.md").read_text()
 
         # Mock the LLM to return should_evolve=False
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept", "new-keyword"],
-            relationship="Related",
-            new_context="New description",
-            should_evolve=False,  # LLM says don't evolve
+        mock_decision = EvolutionDecision(
+            should_evolve=False,  # LLM decided NOT to evolve
+            actions=[],
+            neighbor_updates=[],
         )
 
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
+        async def mock_analyze(*args, **kwargs):
+            return mock_decision
 
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+        with patch("memex.llm.analyze_evolution", mock_analyze):
             from memex.evolution_queue import QueueItem
             from datetime import datetime, UTC
 
             items = [QueueItem(
                 new_entry="test/new.md",
                 neighbor="test/neighbor.md",
-                score=0.8,
+                score=0.8,  # High score, but LLM says no
                 queued_at=datetime.now(UTC),
             )]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
-        assert result.processed == 1  # Counted as processed
-        assert result.keywords_added == 0  # But no keywords added
+        # Should report 0 processed since LLM said not to evolve
+        assert result.processed == 0
+        assert result.keywords_added == 0
 
-        # Verify neighbor was NOT updated
-        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
-        assert "new-keyword" not in neighbor_content
-        assert "New description" not in neighbor_content
-        assert "old-concept" in neighbor_content  # Original preserved
-
-    @pytest.mark.asyncio
-    async def test_should_evolve_true_updates_file(self, tmp_kb, monkeypatch):
-        """should_evolve=true proceeds with updating the neighbor file."""
-        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-
-        # Mock the LLM to return should_evolve=True
-        mock_suggestion = EvolutionSuggestion(
-            neighbor_path="test/neighbor.md",
-            new_keywords=["old-concept", "new-keyword"],
-            relationship="Related",
-            new_context="",  # No description change
-            should_evolve=True,  # LLM says evolve
-        )
-
-        async def mock_evolve(*args, **kwargs):
-            return [mock_suggestion]
-
-        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
-
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
-
-            result = await core.process_evolution_items(items, tmp_kb)
-
-        assert result.processed == 1
-        assert result.keywords_added == 1  # One new keyword
-
-        # Verify neighbor WAS updated
-        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
-        assert "new-keyword" in neighbor_content
+        # Neighbor should be unchanged
+        current_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert current_content == original_content
