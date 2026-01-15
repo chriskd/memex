@@ -14,6 +14,7 @@ import os
 import re
 import shutil
 import subprocess
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
@@ -49,6 +50,7 @@ from .config import (
     TAG_SUGGESTION_MIN_SCORE,
     get_kb_root,
     get_kb_root_by_scope,
+    get_memory_evolution_config,
 )
 from .context import KBContext, get_kb_context, get_kbconfig
 from .evaluation import run_quality_checks
@@ -480,6 +482,21 @@ def compute_link_suggestions(
     return suggestions
 
 
+@dataclass
+class LinkingResult:
+    """Result of creating bidirectional semantic links.
+
+    Contains both the forward links for the new entry and
+    the list of neighbors that may need evolution.
+    """
+
+    forward_links: list[SemanticLink]
+    """Links to add to the new entry's semantic_links field."""
+
+    neighbors_for_evolution: list[tuple[str, float]]
+    """List of (neighbor_path, score) tuples for memory evolution."""
+
+
 def create_bidirectional_semantic_links(
     entry_path: str,
     title: str,
@@ -487,7 +504,7 @@ def create_bidirectional_semantic_links(
     tags: list[str],
     k: int = SEMANTIC_LINK_K,
     min_score: float = SEMANTIC_LINK_MIN_SCORE,
-) -> list[SemanticLink]:
+) -> LinkingResult:
     """Find similar entries and create bidirectional semantic links.
 
     This function:
@@ -495,6 +512,7 @@ def create_bidirectional_semantic_links(
     2. Creates SemanticLink objects for the new entry (forward links)
     3. Adds backlinks to neighbor entries
     4. Re-indexes affected entries
+    5. Collects neighbors for potential memory evolution
 
     Args:
         entry_path: Relative path of the new/updated entry (e.g., "guides/python.md")
@@ -505,10 +523,10 @@ def create_bidirectional_semantic_links(
         min_score: Minimum similarity score threshold (0.0-1.0)
 
     Returns:
-        List of SemanticLink objects for the new entry's semantic_links field.
+        LinkingResult with forward links and neighbors for evolution.
     """
     if not SEMANTIC_LINK_ENABLED:
-        return []
+        return LinkingResult(forward_links=[], neighbors_for_evolution=[])
 
     kb_root = get_kb_root()
     searcher = get_searcher()
@@ -521,6 +539,7 @@ def create_bidirectional_semantic_links(
     search_results = searcher.search(query, limit=k + 10, mode="semantic")
 
     forward_links: list[SemanticLink] = []
+    neighbors_for_evolution: list[tuple[str, float]] = []
 
     for result in search_results:
         # Skip self
@@ -549,10 +568,16 @@ def create_bidirectional_semantic_links(
             searcher=searcher,
         )
 
+        # Collect for potential evolution
+        neighbors_for_evolution.append((result.path, result.score))
+
         if len(forward_links) >= k:
             break
 
-    return forward_links
+    return LinkingResult(
+        forward_links=forward_links,
+        neighbors_for_evolution=neighbors_for_evolution,
+    )
 
 
 def _add_backlink_to_neighbor(
@@ -622,6 +647,132 @@ def _add_backlink_to_neighbor(
             searcher.index_chunks(normalized_chunks)
     except ParseError as e:
         log.warning("Updated neighbor but failed to re-index %s: %s", neighbor_path, e)
+
+
+async def _evolve_neighbors(
+    new_entry_title: str,
+    new_entry_content: str,
+    new_entry_keywords: list[str],
+    neighbors_to_evolve: list[tuple[str, float]],  # (path, score) pairs
+    kb_root: Path,
+    searcher: HybridSearcher,
+) -> None:
+    """Apply LLM-driven memory evolution to neighbor entries.
+
+    This is the A-Mem style evolution where neighbors' keywords/context
+    are updated based on their relationship to the new entry.
+
+    Args:
+        new_entry_title: Title of the newly added entry.
+        new_entry_content: Content of the new entry.
+        new_entry_keywords: Keywords of the new entry.
+        neighbors_to_evolve: List of (neighbor_path, similarity_score) tuples.
+        kb_root: KB root directory.
+        searcher: HybridSearcher for re-indexing.
+    """
+    config = get_memory_evolution_config()
+    if not config.enabled or not neighbors_to_evolve:
+        return
+
+    # Import here to avoid circular imports and only when needed
+    try:
+        from .llm import NeighborInfo, evolve_neighbors_batched
+    except ImportError as e:
+        log.warning("Memory evolution requires openai package: %s", e)
+        return
+
+    # Collect neighbor info for evolution
+    neighbors_info: list[NeighborInfo] = []
+    for neighbor_path, score in neighbors_to_evolve:
+        if score < config.min_score:
+            continue
+
+        neighbor_file = kb_root / neighbor_path
+        if not neighbor_file.exists():
+            continue
+
+        try:
+            metadata, content, _ = parse_entry(neighbor_file)
+            neighbors_info.append(
+                NeighborInfo(
+                    path=neighbor_path,
+                    title=metadata.title,
+                    content=content,
+                    keywords=list(metadata.keywords),
+                    score=score,
+                )
+            )
+        except ParseError as e:
+            log.warning("Failed to parse neighbor for evolution %s: %s", neighbor_path, e)
+            continue
+
+    if not neighbors_info:
+        return
+
+    # Get evolution suggestions from LLM
+    try:
+        suggestions = await evolve_neighbors_batched(
+            new_entry_title=new_entry_title,
+            new_entry_content=new_entry_content,
+            new_entry_keywords=new_entry_keywords,
+            neighbors=neighbors_info,
+            model=config.model,
+            max_keywords=config.max_keywords_per_neighbor,
+        )
+    except Exception as e:
+        log.warning("LLM evolution failed: %s", e)
+        return
+
+    # Apply suggestions to neighbors
+    for suggestion in suggestions:
+        if not suggestion.add_keywords:
+            continue  # No keywords to add
+
+        neighbor_file = kb_root / suggestion.neighbor_path
+        if not neighbor_file.exists():
+            continue
+
+        try:
+            metadata, content, _ = parse_entry(neighbor_file)
+
+            # Merge new keywords with existing
+            existing_keywords = set(metadata.keywords)
+            new_keywords = [kw for kw in suggestion.add_keywords if kw not in existing_keywords]
+
+            if not new_keywords:
+                continue  # All keywords already exist
+
+            updated_keywords = list(metadata.keywords) + new_keywords
+            log.info(
+                "Evolving %s: adding keywords %s",
+                suggestion.neighbor_path,
+                new_keywords,
+            )
+
+            # Update metadata with new keywords
+            updated_metadata = update_metadata_for_edit(
+                metadata,
+                keywords=updated_keywords,
+            )
+
+            # Write updated file
+            frontmatter = build_frontmatter(updated_metadata)
+            neighbor_file.write_text(frontmatter + content, encoding="utf-8")
+
+            # Re-index the evolved entry
+            try:
+                _, _, updated_chunks = parse_entry(neighbor_file)
+                if updated_chunks:
+                    searcher.delete_document(suggestion.neighbor_path)
+                    normalized_chunks = normalize_chunks(updated_chunks, suggestion.neighbor_path)
+                    searcher.index_chunks(normalized_chunks)
+            except ParseError as e:
+                log.warning("Evolved neighbor but failed to re-index %s: %s", suggestion.neighbor_path, e)
+
+        except ParseError as e:
+            log.warning("Failed to apply evolution to %s: %s", suggestion.neighbor_path, e)
+        except OSError as e:
+            log.warning("Failed to write evolved neighbor %s: %s", suggestion.neighbor_path, e)
 
 
 def get_tag_taxonomy() -> dict[str, int]:
@@ -1197,16 +1348,16 @@ async def add_entry(
 
     # Auto-create bidirectional semantic links if enabled and no manual links provided
     if semantic_links is None and SEMANTIC_LINK_ENABLED:
-        auto_links = create_bidirectional_semantic_links(
+        linking_result = create_bidirectional_semantic_links(
             entry_path=rel_path,
             title=title,
             content=final_content,
             tags=tags,
         )
-        if auto_links:
+        if linking_result.forward_links:
             # Re-save entry with auto-generated semantic links
             try:
-                updated_metadata = metadata.model_copy(update={"semantic_links": auto_links})
+                updated_metadata = metadata.model_copy(update={"semantic_links": linking_result.forward_links})
                 updated_frontmatter = build_frontmatter(updated_metadata)
                 file_path.write_text(updated_frontmatter + final_content, encoding="utf-8")
 
@@ -1219,6 +1370,17 @@ async def add_entry(
                     searcher.index_chunks(normalized_chunks)
             except (ParseError, OSError) as e:
                 log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
+
+        # Trigger memory evolution for linked neighbors (async, non-blocking)
+        if linking_result.neighbors_for_evolution:
+            await _evolve_neighbors(
+                new_entry_title=title,
+                new_entry_content=final_content,
+                new_entry_keywords=keywords or [],
+                neighbors_to_evolve=linking_result.neighbors_for_evolution,
+                kb_root=kb_root,
+                searcher=get_searcher(),
+            )
 
     # Compute link suggestions for the new entry
     existing_links = set(links) if links else set()
@@ -1617,16 +1779,16 @@ async def update_entry(
     # Only run when content is updated (not just tags/keywords)
     content_changed = content is not None or section_updates
     if semantic_links is None and content_changed and SEMANTIC_LINK_ENABLED:
-        auto_links = create_bidirectional_semantic_links(
+        linking_result = create_bidirectional_semantic_links(
             entry_path=relative_path,
             title=updated_metadata.title,
             content=new_content,
             tags=new_tags,
         )
-        if auto_links:
+        if linking_result.forward_links:
             # Re-save entry with auto-generated semantic links
             try:
-                final_metadata = updated_metadata.model_copy(update={"semantic_links": auto_links})
+                final_metadata = updated_metadata.model_copy(update={"semantic_links": linking_result.forward_links})
                 final_frontmatter = build_frontmatter(final_metadata)
                 file_path.write_text(final_frontmatter + new_content, encoding="utf-8")
 
@@ -1641,6 +1803,17 @@ async def update_entry(
                     "Failed to update entry with auto semantic links %s: %s",
                     relative_path, e
                 )
+
+        # Trigger memory evolution for linked neighbors
+        if linking_result.neighbors_for_evolution:
+            await _evolve_neighbors(
+                new_entry_title=updated_metadata.title,
+                new_entry_content=new_content,
+                new_entry_keywords=keywords or list(metadata.keywords),
+                neighbors_to_evolve=linking_result.neighbors_for_evolution,
+                kb_root=kb_root,
+                searcher=searcher,
+            )
 
     # Compute link suggestions based on updated content
     existing_links = set(extract_links(new_content))

@@ -1906,7 +1906,7 @@ class TestCreateBidirectionalSemanticLinks:
     """Unit tests for create_bidirectional_semantic_links function."""
 
     def test_returns_empty_when_disabled(self, tmp_kb, monkeypatch):
-        """Returns empty list when SEMANTIC_LINK_ENABLED is False."""
+        """Returns empty LinkingResult when SEMANTIC_LINK_ENABLED is False."""
         monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", False)
 
         result = core.create_bidirectional_semantic_links(
@@ -1916,7 +1916,8 @@ class TestCreateBidirectionalSemanticLinks:
             tags=["test"],
         )
 
-        assert result == []
+        assert result.forward_links == []
+        assert result.neighbors_for_evolution == []
 
     def test_skips_results_below_threshold(self, tmp_kb, monkeypatch):
         """Results below min_score threshold are not linked."""
@@ -1942,7 +1943,8 @@ class TestCreateBidirectionalSemanticLinks:
             tags=["test"],
         )
 
-        assert result == []
+        assert result.forward_links == []
+        assert result.neighbors_for_evolution == []
 
     def test_limits_to_k_results(self, tmp_kb, monkeypatch):
         """Only returns up to k semantic links."""
@@ -1981,8 +1983,13 @@ class TestCreateBidirectionalSemanticLinks:
             min_score=0.5,
         )
 
-        assert len(result) == 3
+        assert len(result.forward_links) == 3
         # Verify they are the top 3 (highest scores)
-        assert result[0].path == "entries/entry0.md"
-        assert result[1].path == "entries/entry1.md"
-        assert result[2].path == "entries/entry2.md"
+        assert result.forward_links[0].path == "entries/entry0.md"
+        assert result.forward_links[1].path == "entries/entry1.md"
+        assert result.forward_links[2].path == "entries/entry2.md"
+        # Also verify neighbors_for_evolution
+        assert len(result.neighbors_for_evolution) == 3
+        assert result.neighbors_for_evolution[0] == ("entries/entry0.md", 0.9)
+        assert result.neighbors_for_evolution[1] == ("entries/entry1.md", 0.89)
+        assert result.neighbors_for_evolution[2] == ("entries/entry2.md", 0.88)

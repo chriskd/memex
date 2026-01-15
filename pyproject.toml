@@ -14,6 +14,7 @@ dependencies = [
     "click>=8.1.0",
     "anthropic>=0.40.0",  # For memory capture LLM calls
     "pyyaml>=6.0.0",  # For .kbcontext parsing
+    "openai>=1.0.0",  # For memory evolution via OpenRouter
 ]
 
 [project.scripts]

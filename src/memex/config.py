@@ -5,6 +5,7 @@ Magic numbers are documented here rather than scattered throughout the codebase.
 """
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -420,3 +421,77 @@ SEMANTIC_LINK_MIN_SCORE = 0.6
 # Maximum number of semantic links to create per entry.
 # Higher values create denser link graphs but may add noise.
 SEMANTIC_LINK_K = 5
+
+# Minimum similarity score for triggering memory evolution on neighbors.
+# Higher than SEMANTIC_LINK_MIN_SCORE to focus evolution on strong connections.
+MEMORY_EVOLUTION_MIN_SCORE = 0.7
+
+
+# =============================================================================
+# Memory Evolution (A-Mem style)
+# =============================================================================
+
+@dataclass
+class MemoryEvolutionConfig:
+    """Configuration for LLM-driven memory evolution.
+
+    When a new entry is added and links to neighbors, the LLM analyzes
+    the relationship and suggests keyword/context updates for neighbors.
+    This makes the knowledge graph "learn" from new connections.
+    """
+
+    enabled: bool = False
+    """Whether memory evolution is active. Requires OPENROUTER_API_KEY."""
+
+    model: str = "anthropic/claude-3-5-haiku"
+    """OpenRouter model ID for evolution analysis."""
+
+    min_score: float = MEMORY_EVOLUTION_MIN_SCORE
+    """Minimum similarity score to trigger evolution (0.0-1.0)."""
+
+    max_keywords_per_neighbor: int = 3
+    """Maximum keywords to add to a neighbor per evolution."""
+
+    batch_neighbors: bool = True
+    """Batch multiple neighbors into single LLM call when possible."""
+
+
+def get_memory_evolution_config() -> MemoryEvolutionConfig:
+    """Load memory evolution config from .kbconfig.
+
+    Config is loaded from the project .kbconfig file's memory_evolution section.
+    Returns default (disabled) config if not configured or KB not found.
+
+    Example .kbconfig:
+        memory_evolution:
+          enabled: true
+          model: anthropic/claude-3-5-haiku
+          min_score: 0.7
+
+    Returns:
+        MemoryEvolutionConfig with loaded or default values.
+    """
+    import yaml
+
+    try:
+        project_config = _discover_project_config()
+        if not project_config:
+            return MemoryEvolutionConfig()
+
+        config_path, _ = project_config
+        content = config_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content) or {}
+
+        evolution_data = data.get("memory_evolution", {})
+        if not evolution_data:
+            return MemoryEvolutionConfig()
+
+        return MemoryEvolutionConfig(
+            enabled=evolution_data.get("enabled", False),
+            model=evolution_data.get("model", "anthropic/claude-3-5-haiku"),
+            min_score=evolution_data.get("min_score", MEMORY_EVOLUTION_MIN_SCORE),
+            max_keywords_per_neighbor=evolution_data.get("max_keywords_per_neighbor", 3),
+            batch_neighbors=evolution_data.get("batch_neighbors", True),
+        )
+    except (OSError, yaml.YAMLError):
+        return MemoryEvolutionConfig()
