@@ -312,6 +312,63 @@ Respond with JSON array, one object per neighbor in order:
     return suggestions
 
 
+def _extract_first_json_object(text: str) -> dict:
+    """Extract the first valid JSON object from text.
+
+    Some models return extra content after the JSON object even with
+    response_format=json_object. This function finds and parses just
+    the first complete JSON object.
+
+    Args:
+        text: Raw text that may contain JSON plus extra content.
+
+    Returns:
+        Parsed dict from the first JSON object.
+
+    Raises:
+        json.JSONDecodeError: If no valid JSON object found.
+    """
+    # Try parsing the whole thing first (common case)
+    text = text.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Find the first { and try to match the closing }
+    start = text.find("{")
+    if start == -1:
+        raise json.JSONDecodeError("No JSON object found", text, 0)
+
+    # Count braces to find matching close
+    depth = 0
+    in_string = False
+    escape_next = False
+
+    for i, char in enumerate(text[start:], start):
+        if escape_next:
+            escape_next = False
+            continue
+        if char == "\\":
+            escape_next = True
+            continue
+        if char == '"' and not escape_next:
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                # Found complete object
+                return json.loads(text[start : i + 1])
+
+    # No complete object found
+    raise json.JSONDecodeError("Incomplete JSON object", text, len(text))
+
+
 @dataclass
 class KeywordExtractionResult:
     """Result of LLM keyword extraction for an entry."""
@@ -371,9 +428,12 @@ Return JSON: {{"keywords": ["keyword1", "keyword2", ...]}}"""
             messages=[{"role": "user", "content": prompt}],
             response_format={"type": "json_object"},
             temperature=0.3,
+            max_tokens=256,  # Keywords only need minimal tokens
         )
 
-        result = json.loads(response.choices[0].message.content)
+        content = response.choices[0].message.content or ""
+        # Some models return extra data after JSON - extract first valid object
+        result = _extract_first_json_object(content)
         keywords = result.get("keywords", [])
 
         # Validate and sanitize
