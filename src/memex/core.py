@@ -69,6 +69,8 @@ from .models import (
     KBEntry,
     KeywordExtractionEntry,
     KeywordExtractionPhaseResult,
+    LinkingPhaseEntry,
+    LinkingPhaseResult,
     PotentialDuplicate,
     QualityReport,
     SearchResponse,
@@ -4025,6 +4027,239 @@ async def amem_init_extract_keywords(
         entries_processed=len(needs_llm),
         entries_updated=entries_updated,
         entries_failed=entries_failed,
+        results=results,
+        errors=errors,
+    )
+
+
+async def amem_init_link_entries(
+    inventory: InitInventoryResult,
+    k: int = SEMANTIC_LINK_K,
+    min_score: float = SEMANTIC_LINK_MIN_SCORE,
+    queue_evolution_items: bool = True,
+) -> LinkingPhaseResult:
+    """Phase 3: Create bidirectional semantic links chronologically.
+
+    Processes entries in chronological order (oldest first), creating semantic
+    links only to entries that were "created before" the current entry. This
+    simulates incremental A-Mem as if entries were added over time.
+
+    For each entry:
+    1. Search for similar entries using semantic search
+    2. Filter results to only include entries with created < current.created
+    3. Create bidirectional links (forward on current, backlinks on neighbors)
+    4. Queue neighbor pairs for evolution (Phase 4 integration)
+
+    Args:
+        inventory: Result from amem_init_inventory() with entries sorted by created.
+        k: Maximum number of neighbors to link per entry.
+        min_score: Minimum similarity score threshold (0.0-1.0).
+        queue_evolution_items: Whether to queue items for mx evolve.
+
+    Returns:
+        LinkingPhaseResult with per-entry results and statistics.
+
+    Example:
+        >>> inventory = await amem_init_inventory(missing_keywords="skip")
+        >>> result = await amem_init_link_entries(inventory)
+        >>> print(f"Created {result.total_links_created} links")
+    """
+    from .evolution_queue import queue_evolution
+
+    if not SEMANTIC_LINK_ENABLED:
+        return LinkingPhaseResult(
+            entries_processed=0,
+            entries_linked=0,
+            entries_skipped=len(inventory.entries),
+            total_links_created=0,
+            total_evolution_items=0,
+            errors=["Semantic linking is disabled (SEMANTIC_LINK_ENABLED=False)"],
+        )
+
+    # Get entries that can be processed (ready status, have keywords)
+    processable = [
+        e for e in inventory.entries
+        if e.keyword_status == "ready" and e.has_keywords
+    ]
+
+    if not processable:
+        return LinkingPhaseResult(
+            entries_processed=0,
+            entries_linked=0,
+            entries_skipped=len(inventory.entries),
+            total_links_created=0,
+            total_evolution_items=0,
+        )
+
+    kb_root = get_kb_root()
+    searcher = get_searcher()
+
+    # Build a map of path -> created timestamp for filtering
+    # Use all entries from inventory, not just processable
+    path_to_created: dict[str, datetime] = {}
+    for entry in inventory.entries:
+        # Store with both display path and normalized path for lookup
+        path_to_created[entry.path] = entry.created
+        # Also store without @scope/ prefix
+        if entry.path.startswith("@"):
+            parts = entry.path.split("/", 1)
+            if len(parts) > 1:
+                path_to_created[parts[1]] = entry.created
+
+    results: list[LinkingPhaseEntry] = []
+    errors: list[str] = []
+    total_links = 0
+    total_evolution = 0
+    entries_linked = 0
+    skipped_count = len(inventory.entries) - len(processable)
+
+    for entry in processable:
+        if not entry.absolute_path:
+            errors.append(f"{entry.path}: no absolute path available")
+            skipped_count += 1
+            continue
+
+        # Read entry content
+        try:
+            file_path = Path(entry.absolute_path)
+            metadata, content, _ = parse_entry(file_path)
+        except Exception as e:
+            errors.append(f"{entry.path}: failed to read - {e}")
+            skipped_count += 1
+            continue
+
+        # Get relative path for linking
+        rel_path = entry.path
+        if rel_path.startswith("@"):
+            parts = rel_path.split("/", 1)
+            rel_path = parts[1] if len(parts) > 1 else rel_path
+
+        # Normalize entry path for comparison
+        entry_key = rel_path[:-3] if rel_path.endswith(".md") else rel_path
+
+        # Search for similar entries - get extra to allow for date filtering
+        query = f"{metadata.title} {content[:500]}"
+        search_results = searcher.search(query, limit=k * 3, mode="semantic")
+
+        # Filter results:
+        # 1. Not self
+        # 2. Score >= threshold
+        # 3. Created BEFORE current entry (the chronological constraint)
+        forward_links: list[SemanticLink] = []
+        neighbors_for_evolution: list[tuple[str, float]] = []
+
+        for result in search_results:
+            # Skip self
+            result_key = result.path[:-3] if result.path.endswith(".md") else result.path
+            if result_key == entry_key or result.path == rel_path:
+                continue
+
+            # Skip results below threshold
+            if result.score < min_score:
+                continue
+
+            # CRITICAL: Only link to entries created BEFORE this entry
+            result_created = path_to_created.get(result.path)
+            if result_created is None:
+                # Try to get created from search result
+                result_created = result.created
+            if result_created is None:
+                # Can't determine date, skip to be safe
+                continue
+
+            # Ensure both are timezone-aware for comparison
+            entry_created = _ensure_aware(entry.created)
+            result_created = _ensure_aware(result_created)
+
+            if entry_created and result_created:
+                if result_created >= entry_created:
+                    # Neighbor is newer or same age, skip
+                    continue
+
+            # Create forward link for current entry
+            forward_link = SemanticLink(
+                path=result.path,
+                score=round(result.score, 3),
+                reason="embedding_similarity",
+            )
+            forward_links.append(forward_link)
+
+            # Create backlink on the neighbor entry
+            _add_backlink_to_neighbor(
+                kb_root=kb_root,
+                neighbor_path=result.path,
+                new_entry_path=rel_path,
+                score=result.score,
+                searcher=searcher,
+            )
+
+            # Collect for potential evolution
+            neighbors_for_evolution.append((result.path, result.score))
+
+            if len(forward_links) >= k:
+                break
+
+        # Update current entry with forward links if any new ones
+        if forward_links:
+            try:
+                # Merge with existing links
+                existing_paths = {link.path for link in metadata.semantic_links}
+                new_links = [lnk for lnk in forward_links if lnk.path not in existing_paths]
+
+                if new_links:
+                    all_links = list(metadata.semantic_links) + new_links
+                    await update_entry(
+                        path=rel_path,
+                        semantic_links=[lnk.model_dump() for lnk in all_links],
+                    )
+
+                    # Queue evolution items
+                    evolution_count = 0
+                    if queue_evolution_items and neighbors_for_evolution:
+                        evolution_count = queue_evolution(
+                            new_entry_path=rel_path,
+                            neighbors=neighbors_for_evolution,
+                            kb_root=kb_root,
+                        )
+                        total_evolution += evolution_count
+
+                    total_links += len(new_links)
+                    entries_linked += 1
+
+                    results.append(LinkingPhaseEntry(
+                        path=entry.path,
+                        title=entry.title,
+                        links_created=len(new_links),
+                        evolution_items_queued=evolution_count,
+                        neighbors=[lnk.path for lnk in new_links],
+                    ))
+                else:
+                    # All links already existed
+                    results.append(LinkingPhaseEntry(
+                        path=entry.path,
+                        title=entry.title,
+                        links_created=0,
+                        evolution_items_queued=0,
+                        neighbors=[],
+                    ))
+            except Exception as e:
+                errors.append(f"{entry.path}: failed to update links - {e}")
+        else:
+            # No matching neighbors found
+            results.append(LinkingPhaseEntry(
+                path=entry.path,
+                title=entry.title,
+                links_created=0,
+                evolution_items_queued=0,
+                neighbors=[],
+            ))
+
+    return LinkingPhaseResult(
+        entries_processed=len(processable),
+        entries_linked=entries_linked,
+        entries_skipped=skipped_count,
+        total_links_created=total_links,
+        total_evolution_items=total_evolution,
         results=results,
         errors=errors,
     )

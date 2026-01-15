@@ -250,3 +250,25 @@ class KeywordExtractionPhaseResult(BaseModel):
     entries_failed: int  # Entries that failed extraction
     results: list[KeywordExtractionEntry] = Field(default_factory=list)  # Per-entry results
     errors: list[str] = Field(default_factory=list)  # General errors
+
+
+class LinkingPhaseEntry(BaseModel):
+    """Result of linking for a single entry."""
+
+    path: str  # Entry path
+    title: str  # Entry title
+    links_created: int  # Number of forward links created
+    evolution_items_queued: int  # Number of evolution queue items
+    neighbors: list[str] = Field(default_factory=list)  # Paths of linked neighbors
+
+
+class LinkingPhaseResult(BaseModel):
+    """Result of Phase 3: Semantic Linking."""
+
+    entries_processed: int  # Total entries processed
+    entries_linked: int  # Entries that got at least one link
+    entries_skipped: int  # Entries skipped (missing keywords, etc.)
+    total_links_created: int  # Total bidirectional link pairs created
+    total_evolution_items: int  # Total items queued for evolution
+    results: list[LinkingPhaseEntry] = Field(default_factory=list)  # Per-entry results
+    errors: list[str] = Field(default_factory=list)  # General errors
