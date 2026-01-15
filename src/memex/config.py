@@ -506,3 +506,63 @@ def get_memory_evolution_config() -> MemoryEvolutionConfig:
         )
     except (OSError, yaml.YAMLError):
         return MemoryEvolutionConfig()
+
+
+# =============================================================================
+# A-Mem Strict Mode
+# =============================================================================
+
+
+class AMEMStrictError(ValueError):
+    """Raised when A-Mem strict mode is enabled but keywords are missing."""
+
+    pass
+
+
+AMEM_STRICT_ERROR_MESSAGE = """\
+A-Mem strict mode is enabled but --keywords was not provided.
+
+To fix this, add keywords that capture key concepts in your entry:
+
+    mx add --title="Your Title" \\
+           --tags="tag1,tag2" \\
+           --keywords="concept1,concept2,concept3" \\
+           --content="..."
+
+Keywords should be:
+  • Key concepts mentioned in the content (e.g., "REST", "caching")
+  • Related terms not explicitly mentioned (e.g., "API design")
+  • Domain-specific terminology (e.g., "microservices")
+
+Typically 3-7 keywords work well. They improve search relevance
+and semantic linking accuracy.
+
+To disable this check: set amem_strict: false in .kbconfig"""
+
+
+def is_amem_strict_enabled() -> bool:
+    """Check if A-Mem strict mode is enabled in .kbconfig.
+
+    When enabled, add_entry() and update_entry() will fail if keywords
+    are not provided, helping LLMs remember to populate this field.
+
+    Example .kbconfig:
+        amem_strict: true
+
+    Returns:
+        True if amem_strict is enabled, False otherwise.
+    """
+    import yaml
+
+    try:
+        project_config = _discover_project_config()
+        if not project_config:
+            return False
+
+        config_path, _ = project_config
+        content = config_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content) or {}
+
+        return bool(data.get("amem_strict", False))
+    except (OSError, yaml.YAMLError):
+        return False

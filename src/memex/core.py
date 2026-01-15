@@ -39,6 +39,8 @@ def _ensure_aware(dt: datetime | None) -> datetime | None:
 
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import (
+    AMEM_STRICT_ERROR_MESSAGE,
+    AMEMStrictError,
     DUPLICATE_DETECTION_LIMIT,
     DUPLICATE_DETECTION_MIN_SCORE,
     LINK_SUGGESTION_MIN_SCORE,
@@ -51,6 +53,7 @@ from .config import (
     get_kb_root,
     get_kb_root_by_scope,
     get_memory_evolution_config,
+    is_amem_strict_enabled,
 )
 from .context import KBContext, get_kb_context, get_kbconfig
 from .evaluation import run_quality_checks
@@ -1381,6 +1384,10 @@ async def add_entry(
     if not tags:
         raise ValueError("At least one tag is required")
 
+    # Check A-Mem strict mode - require keywords if enabled
+    if is_amem_strict_enabled() and not keywords:
+        raise AMEMStrictError(AMEM_STRICT_ERROR_MESSAGE)
+
     # Generate slug and path
     slug = slugify(title)
     if not slug:
@@ -1816,6 +1823,15 @@ async def update_entry(
     new_tags = tags if tags is not None else list(metadata.tags)
     if not new_tags:
         raise ValueError("At least one tag is required")
+
+    # Check A-Mem strict mode - require keywords when content changes
+    # Only enforced if neither existing entry nor update provides keywords
+    content_changing = content is not None or section_updates is not None
+    has_existing_keywords = bool(metadata.keywords)
+    has_new_keywords = bool(keywords)
+    needs_keywords = content_changing and not has_existing_keywords and not has_new_keywords
+    if is_amem_strict_enabled() and needs_keywords:
+        raise AMEMStrictError(AMEM_STRICT_ERROR_MESSAGE)
 
     updated_metadata = update_metadata_for_edit(
         metadata,
