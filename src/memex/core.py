@@ -62,6 +62,7 @@ from .indexer import HybridSearcher
 from .models import (
     AddEntryPreview,
     DocumentChunk,
+    EvolutionRecord,
     IndexStatus,
     IngestResult,
     InitInventoryEntry,
@@ -839,11 +840,23 @@ async def process_evolution_items(
                     f" description: {new_description}" if description_changed else "",
                 )
 
+                # Record evolution history for auditing/debugging
+                evolution_record = EvolutionRecord(
+                    timestamp=datetime.now(UTC),
+                    trigger_entry=new_entry_path,
+                    previous_keywords=list(metadata.keywords) if keywords_changed else [],
+                    new_keywords=suggestion.new_keywords if keywords_changed else [],
+                    previous_description=metadata.description if description_changed else None,
+                    new_description=new_description,
+                )
+                updated_history = list(metadata.evolution_history) + [evolution_record]
+
                 # Update metadata with new keywords and/or description
                 updated_metadata = update_metadata_for_edit(
                     metadata,
                     keywords=updated_keywords,
                     description=new_description,
+                    evolution_history=updated_history,
                 )
 
                 # Write updated file

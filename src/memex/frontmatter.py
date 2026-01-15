@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 import yaml
 
-from .models import EntryMetadata
+from .models import EntryMetadata, EvolutionRecord
 
 
 def _yaml_quote_if_needed(value: str) -> str:
@@ -117,6 +117,27 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
             parts.append(f"    score: {link.score}")
             parts.append(f"    reason: {link.reason}")
 
+    # Evolution history (how this entry has been updated over time)
+    if metadata.evolution_history:
+        parts.append("evolution_history:")
+        for record in metadata.evolution_history:
+            parts.append(f"  - timestamp: {record.timestamp.isoformat()}")
+            parts.append(f"    trigger_entry: {_yaml_quote_if_needed(record.trigger_entry)}")
+            if record.previous_keywords:
+                parts.append("    previous_keywords:")
+                for kw in record.previous_keywords:
+                    parts.append(f"      - {_yaml_quote_if_needed(kw)}")
+            if record.new_keywords:
+                parts.append("    new_keywords:")
+                for kw in record.new_keywords:
+                    parts.append(f"      - {_yaml_quote_if_needed(kw)}")
+            if record.previous_description is not None:
+                prev_desc = _yaml_quote_if_needed(record.previous_description)
+                parts.append(f"    previous_description: {prev_desc}")
+            if record.new_description is not None:
+                new_desc = _yaml_quote_if_needed(record.new_description)
+                parts.append(f"    new_description: {new_desc}")
+
     parts.append("---\n\n")
 
     return "\n".join(parts)
@@ -192,6 +213,7 @@ def update_metadata_for_edit(
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
     description: str | None = None,
+    evolution_history: list[EvolutionRecord] | None = None,
 ) -> EntryMetadata:
     """Create updated metadata for an existing entry.
 
@@ -209,6 +231,7 @@ def update_metadata_for_edit(
         keywords: Updated keywords (or None to preserve existing).
         semantic_links: Updated semantic links (or None to preserve existing).
         description: Updated description (or None to preserve existing).
+        evolution_history: Updated evolution history (or None to preserve existing).
 
     Returns:
         New EntryMetadata with updated fields.
@@ -244,5 +267,8 @@ def update_metadata_for_edit(
         keywords=keywords if keywords is not None else list(metadata.keywords),
         semantic_links=(
             semantic_links if semantic_links is not None else list(metadata.semantic_links)
+        ),
+        evolution_history=(
+            evolution_history if evolution_history is not None else list(metadata.evolution_history)
         ),
     )
