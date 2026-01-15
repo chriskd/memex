@@ -3157,8 +3157,8 @@ def a_mem_init(
     Phases:
       1. Inventory & Validation - Lists entries, validates keywords
       2. Keyword Extraction - Uses LLM to extract keywords (when mode=llm)
-      3. Semantic Linking - Creates bidirectional links (planned)
-      4. Evolution Queue - Queues items for mx evolve (planned)
+      3. Semantic Linking - Creates bidirectional links chronologically
+      4. Evolution Queue - Queues items for mx evolve (integrated with Phase 3)
 
     \b
     Examples:
@@ -3238,6 +3238,31 @@ def a_mem_init(
             except LLMConfigurationError as e:
                 json_output["phase2_error"] = str(e)
 
+        # Run Phase 3: Semantic Linking for JSON output if not dry run
+        if not dry_run and result.with_keywords > 0:
+            from .core import amem_init_link_entries
+
+            phase3_result = run_async(amem_init_link_entries(result))
+            json_output["phase"] = "semantic_linking"
+            json_output["phase3"] = {
+                "entries_processed": phase3_result.entries_processed,
+                "entries_linked": phase3_result.entries_linked,
+                "entries_skipped": phase3_result.entries_skipped,
+                "total_links_created": phase3_result.total_links_created,
+                "total_evolution_items": phase3_result.total_evolution_items,
+                "results": [
+                    {
+                        "path": r.path,
+                        "title": r.title,
+                        "links_created": r.links_created,
+                        "evolution_items_queued": r.evolution_items_queued,
+                        "neighbors": r.neighbors,
+                    }
+                    for r in phase3_result.results
+                ],
+                "errors": phase3_result.errors,
+            }
+
         output(json_output, as_json=True)
         return
 
@@ -3312,10 +3337,36 @@ def a_mem_init(
                 click.echo(f"\n❌ LLM configuration error: {e}")
                 raise SystemExit(1)
 
-        # Summary
-        if result.total_count > 0:
-            ready_count = result.with_keywords + result.skipped_count
-            click.echo(f"\n{ready_count} entries ready for semantic linking (Phase 3)")
+        # Phase 3: Semantic Linking
+        if result.with_keywords > 0:
+            click.echo("\nPhase 3: Semantic Linking")
+            click.echo(f"  Entries to process: {result.with_keywords}")
+
+            from .core import amem_init_link_entries
+
+            phase3_result = run_async(amem_init_link_entries(result))
+            click.echo(f"  Processed:          {phase3_result.entries_processed} (chronological order)")
+            click.echo(f"  Links created:      {phase3_result.total_links_created} bidirectional pairs")
+            click.echo(f"  Entries with links: {phase3_result.entries_linked}")
+
+            if phase3_result.errors:
+                click.echo(f"  Errors:             {len(phase3_result.errors)}")
+                for error in phase3_result.errors[:3]:
+                    click.echo(f"    • {error}")
+                if len(phase3_result.errors) > 3:
+                    click.echo(f"    ... and {len(phase3_result.errors) - 3} more errors")
+
+            # Phase 4 summary (integrated with Phase 3)
+            click.echo("\nPhase 4: Evolution Queue")
+            click.echo(f"  Items queued:       {phase3_result.total_evolution_items}")
+
+            # Final summary
+            click.echo("\n✓ A-Mem initialization complete")
+            if phase3_result.total_evolution_items > 0:
+                click.echo("\nNext step: Run `mx evolve` to process the evolution queue.")
+        else:
+            # No entries with keywords to link
+            click.echo("\n⚠ No entries with keywords available for semantic linking")
             if result.needs_llm_count > 0:
                 click.echo(f"{result.needs_llm_count} entries still missing keywords")
 
