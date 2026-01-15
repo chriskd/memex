@@ -3184,7 +3184,7 @@ def a_mem_init(
 
     # JSON output mode
     if as_json:
-        output({
+        json_output: dict = {
             "phase": "inventory",
             "dry_run": dry_run,
             "total_count": result.total_count,
@@ -3205,7 +3205,39 @@ def a_mem_init(
                 for e in result.entries
             ],
             "errors": result.errors,
-        }, as_json=True)
+        }
+
+        # Run Phase 2 for JSON output if needed and not dry run
+        if not dry_run and result.needs_llm_count > 0:
+            from .core import amem_init_extract_keywords
+            from .llm import LLMConfigurationError
+
+            try:
+                phase2_result = run_async(amem_init_extract_keywords(result))
+                json_output["phase"] = "keyword_extraction"
+                json_output["phase2"] = {
+                    "entries_processed": phase2_result.entries_processed,
+                    "entries_updated": phase2_result.entries_updated,
+                    "entries_failed": phase2_result.entries_failed,
+                    "results": [
+                        {
+                            "path": r.path,
+                            "title": r.title,
+                            "keywords": r.keywords,
+                            "success": r.success,
+                            "error": r.error,
+                        }
+                        for r in phase2_result.results
+                    ],
+                    "errors": phase2_result.errors,
+                }
+                # Update summary counts
+                json_output["with_keywords"] = result.with_keywords + phase2_result.entries_updated
+                json_output["needs_llm_count"] = phase2_result.entries_failed
+            except LLMConfigurationError as e:
+                json_output["phase2_error"] = str(e)
+
+        output(json_output, as_json=True)
         return
 
     # Human-readable output
@@ -3248,13 +3280,43 @@ def a_mem_init(
 
         click.echo("\nRun without --dry-run to execute.")
     elif not dry_run:
-        # Phase 1 complete - future phases will be added here
+        # Phase 1 complete
         click.echo("\n✓ Inventory complete")
+
+        # Phase 2: LLM keyword extraction (if needed)
+        if result.needs_llm_count > 0:
+            click.echo("\nPhase 2: Keyword Extraction")
+            click.echo(f"  Entries to process: {result.needs_llm_count}")
+
+            from .core import amem_init_extract_keywords
+            from .llm import LLMConfigurationError
+
+            try:
+                phase2_result = run_async(amem_init_extract_keywords(result))
+                click.echo(f"  Updated:           {phase2_result.entries_updated}")
+                if phase2_result.entries_failed > 0:
+                    click.echo(f"  Failed:            {phase2_result.entries_failed}")
+                    for error in phase2_result.errors[:5]:
+                        click.echo(f"    • {error}")
+                    if len(phase2_result.errors) > 5:
+                        click.echo(f"    ... and {len(phase2_result.errors) - 5} more errors")
+
+                # Update counts for final summary
+                result = result.model_copy(update={
+                    "with_keywords": result.with_keywords + phase2_result.entries_updated,
+                    "needs_llm_count": phase2_result.entries_failed,
+                })
+
+            except LLMConfigurationError as e:
+                click.echo(f"\n❌ LLM configuration error: {e}")
+                raise SystemExit(1)
+
+        # Summary
         if result.total_count > 0:
             ready_count = result.with_keywords + result.skipped_count
             click.echo(f"\n{ready_count} entries ready for semantic linking (Phase 3)")
             if result.needs_llm_count > 0:
-                click.echo(f"{result.needs_llm_count} entries queued for keyword extraction (Phase 2)")
+                click.echo(f"{result.needs_llm_count} entries still missing keywords")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

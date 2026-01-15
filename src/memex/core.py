@@ -67,6 +67,8 @@ from .models import (
     InitInventoryEntry,
     InitInventoryResult,
     KBEntry,
+    KeywordExtractionEntry,
+    KeywordExtractionPhaseResult,
     PotentialDuplicate,
     QualityReport,
     SearchResponse,
@@ -3876,6 +3878,154 @@ async def amem_init_inventory(
         skipped_count=skipped_count,
         needs_llm_count=needs_llm_count,
         missing_keyword_mode=missing_keywords,
+        errors=errors,
+    )
+
+
+async def amem_init_extract_keywords(
+    inventory: InitInventoryResult,
+    model: str | None = None,
+) -> KeywordExtractionPhaseResult:
+    """Phase 2: Extract keywords for entries marked as needs_llm.
+
+    Processes entries from Phase 1 inventory that are missing keywords,
+    using LLM to extract domain-specific keywords and updating frontmatter.
+
+    Args:
+        inventory: Result from amem_init_inventory() with entries marked needs_llm.
+        model: OpenRouter model ID. If None, uses config from memory_evolution.model.
+
+    Returns:
+        KeywordExtractionPhaseResult with per-entry results and statistics.
+
+    Example:
+        >>> inventory = await amem_init_inventory(missing_keywords="llm")
+        >>> result = await amem_init_extract_keywords(inventory)
+        >>> print(f"Updated {result.entries_updated} entries with keywords")
+    """
+    from .llm import LLMConfigurationError, extract_keywords_llm
+
+    # Get entries that need LLM keyword extraction
+    needs_llm = [e for e in inventory.entries if e.keyword_status == "needs_llm"]
+
+    if not needs_llm:
+        return KeywordExtractionPhaseResult(
+            entries_processed=0,
+            entries_updated=0,
+            entries_failed=0,
+        )
+
+    # Get model from config if not specified
+    if model is None:
+        config = get_memory_evolution_config()
+        model = config.model
+
+    results: list[KeywordExtractionEntry] = []
+    errors: list[str] = []
+    entries_updated = 0
+    entries_failed = 0
+
+    for entry in needs_llm:
+        if not entry.absolute_path:
+            errors.append(f"{entry.path}: no absolute path available")
+            entries_failed += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=[],
+                success=False,
+                error="No absolute path available",
+            ))
+            continue
+
+        # Read entry content
+        try:
+            file_path = Path(entry.absolute_path)
+            _, content, _ = parse_entry(file_path)
+        except Exception as e:
+            error_msg = f"Failed to read entry: {e}"
+            errors.append(f"{entry.path}: {error_msg}")
+            entries_failed += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=[],
+                success=False,
+                error=error_msg,
+            ))
+            continue
+
+        # Extract keywords using LLM
+        try:
+            extraction_result = await extract_keywords_llm(
+                content=content,
+                title=entry.title,
+                model=model,
+            )
+        except LLMConfigurationError:
+            # Configuration error - fail fast
+            raise
+        except Exception as e:
+            error_msg = f"LLM error: {e}"
+            errors.append(f"{entry.path}: {error_msg}")
+            entries_failed += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=[],
+                success=False,
+                error=error_msg,
+            ))
+            continue
+
+        if not extraction_result.success:
+            errors.append(f"{entry.path}: {extraction_result.error}")
+            entries_failed += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=[],
+                success=False,
+                error=extraction_result.error,
+            ))
+            continue
+
+        # Update entry with extracted keywords
+        # Get the relative path without scope prefix for update_entry
+        rel_path = entry.path
+        if rel_path.startswith("@"):
+            # Remove @scope/ prefix
+            rel_path = rel_path.split("/", 1)[1] if "/" in rel_path else rel_path
+
+        try:
+            await update_entry(
+                path=rel_path,
+                keywords=extraction_result.keywords,
+            )
+            entries_updated += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=extraction_result.keywords,
+                success=True,
+            ))
+        except Exception as e:
+            error_msg = f"Failed to update entry: {e}"
+            errors.append(f"{entry.path}: {error_msg}")
+            entries_failed += 1
+            results.append(KeywordExtractionEntry(
+                path=entry.path,
+                title=entry.title,
+                keywords=extraction_result.keywords,
+                success=False,
+                error=error_msg,
+            ))
+
+    return KeywordExtractionPhaseResult(
+        entries_processed=len(needs_llm),
+        entries_updated=entries_updated,
+        entries_failed=entries_failed,
+        results=results,
         errors=errors,
     )
 

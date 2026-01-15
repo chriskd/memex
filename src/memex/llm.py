@@ -310,3 +310,102 @@ Respond with JSON array, one object per neighbor in order:
         )
 
     return suggestions
+
+
+@dataclass
+class KeywordExtractionResult:
+    """Result of LLM keyword extraction for an entry."""
+
+    keywords: list[str]
+    """Extracted keywords (3-6 typically)."""
+
+    success: bool
+    """Whether extraction succeeded."""
+
+    error: str | None = None
+    """Error message if extraction failed."""
+
+
+async def extract_keywords_llm(
+    content: str,
+    title: str,
+    model: str,
+    min_keywords: int = 3,
+    max_keywords: int = 6,
+) -> KeywordExtractionResult:
+    """Extract keywords from content using LLM.
+
+    Args:
+        content: The entry content to analyze.
+        title: Entry title for context.
+        model: OpenRouter model ID to use.
+        min_keywords: Minimum keywords to extract.
+        max_keywords: Maximum keywords to extract.
+
+    Returns:
+        KeywordExtractionResult with extracted keywords or error info.
+
+    Raises:
+        LLMConfigurationError: If API key not configured.
+    """
+    client = _get_openai_client()
+
+    # Truncate content to avoid excessive tokens
+    content_preview = content[:2000] if len(content) > 2000 else content
+
+    prompt = f"""Extract {min_keywords}-{max_keywords} keywords from this content.
+Keywords should be:
+- Domain-specific concepts (not generic words)
+- Key entities, technologies, or patterns mentioned
+- Related concepts that aid discoverability
+
+Title: {title}
+Content:
+{content_preview}
+
+Return JSON: {{"keywords": ["keyword1", "keyword2", ...]}}"""
+
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+
+        result = json.loads(response.choices[0].message.content)
+        keywords = result.get("keywords", [])
+
+        # Validate and sanitize
+        if not isinstance(keywords, list):
+            keywords = []
+        keywords = [str(kw).strip().lower() for kw in keywords if kw]
+        keywords = [kw for kw in keywords if kw]  # Remove empty strings
+        keywords = keywords[:max_keywords]
+
+        if not keywords:
+            return KeywordExtractionResult(
+                keywords=[],
+                success=False,
+                error="LLM returned no keywords",
+            )
+
+        return KeywordExtractionResult(
+            keywords=keywords,
+            success=True,
+        )
+
+    except json.JSONDecodeError as e:
+        log.warning("Failed to parse LLM keyword response: %s", e)
+        return KeywordExtractionResult(
+            keywords=[],
+            success=False,
+            error=f"JSON parse error: {e}",
+        )
+    except Exception as e:
+        log.warning("LLM API error during keyword extraction: %s", e)
+        return KeywordExtractionResult(
+            keywords=[],
+            success=False,
+            error=str(e),
+        )
