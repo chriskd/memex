@@ -1472,6 +1472,94 @@ _log = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Ingest Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("--title", help="Override title (default: extract from H1 or filename)")
+@click.option("--tag", "--tags", "tags", help="Tags (comma-separated, default: untagged)")
+@click.option("--directory", help="Target directory within KB")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope")
+@click.option("--dry-run", is_flag=True, help="Show what would be done without making changes")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def ingest(
+    file: str,
+    title: Optional[str],
+    tags: Optional[str],
+    directory: Optional[str],
+    scope: Optional[str],
+    dry_run: bool,
+    as_json: bool,
+):
+    """Ingest a markdown file into the knowledge base.
+
+    Takes an existing markdown file, prepends frontmatter if missing,
+    and moves it to the KB directory if it's not already there.
+
+    \b
+    Examples:
+      mx ingest notes.md                          # Ingest with auto-detected title/tags
+      mx ingest draft.md --title="My Entry"       # Override title
+      mx ingest doc.md --tags="api,docs"          # Set tags
+      mx ingest doc.md --directory="guides"       # Place in guides/
+      mx ingest doc.md --dry-run                  # Preview changes
+
+    \b
+    Behavior:
+      - If file has frontmatter: preserves existing metadata
+      - If file lacks frontmatter: prepends with auto-detected title
+      - If file is outside KB: moves it into KB directory
+      - If file is inside KB: updates in place
+
+    \b
+    Scope Selection:
+      --scope=project  Ingest to project KB (./kb/)
+      --scope=user     Ingest to user KB (~/.memex/kb/)
+      (default)        Auto-detect based on current directory
+    """
+    from .core import ingest_file
+
+    tag_list = [t.strip() for t in tags.split(",")] if tags else None
+
+    try:
+        result = run_async(ingest_file(
+            file_path=file,
+            title=title,
+            tags=tag_list,
+            directory=directory,
+            scope=scope,
+            dry_run=dry_run,
+        ))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        output(result.model_dump(), as_json=True)
+    else:
+        if dry_run:
+            click.echo("[dry-run] Would ingest:")
+        else:
+            click.echo("Ingested:")
+
+        click.echo(f"  Path: {result.path}")
+        click.echo(f"  Title: {result.title}")
+        click.echo(f"  Tags: {', '.join(result.tags)}")
+
+        if result.moved:
+            click.echo(f"  Moved from: {result.original_path}")
+        if result.frontmatter_added:
+            click.echo("  Frontmatter: added")
+
+        if result.suggested_tags:
+            click.echo("\nSuggested tags to add:")
+            for tag in result.suggested_tags[:5]:
+                click.echo(f"  - {tag['tag']} ({tag['reason']})")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Append Command
 # ─────────────────────────────────────────────────────────────────────────────
 

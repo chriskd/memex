@@ -192,3 +192,16 @@ class BatchResponse(BaseModel):
     succeeded: int  # Number that succeeded
     failed: int  # Number that failed
     results: list[BatchOperationResult]  # Per-operation results
+
+
+class IngestResult(BaseModel):
+    """Result of ingesting a markdown file into the KB."""
+
+    path: str  # Relative path within the KB
+    absolute_path: str  # Absolute path on disk
+    moved: bool  # Whether the file was moved from external location
+    frontmatter_added: bool  # Whether frontmatter was prepended
+    original_path: str | None = None  # Original path if moved
+    title: str  # Entry title (extracted or provided)
+    tags: list[str]  # Tags applied
+    suggested_tags: list[dict] = Field(default_factory=list)  # Tag suggestions

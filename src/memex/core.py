@@ -63,6 +63,7 @@ from .models import (
     AddEntryPreview,
     DocumentChunk,
     IndexStatus,
+    IngestResult,
     KBEntry,
     PotentialDuplicate,
     QualityReport,
@@ -1631,6 +1632,223 @@ async def preview_add_entry(
         content=final_content,
         potential_duplicates=potential_duplicates,
         warning=warning,
+    )
+
+
+async def ingest_file(
+    file_path: str | Path,
+    title: str | None = None,
+    tags: list[str] | None = None,
+    directory: str | None = None,
+    scope: str | None = None,
+    dry_run: bool = False,
+) -> IngestResult:
+    """Ingest a markdown file into the knowledge base.
+
+    Takes an existing markdown file, prepends frontmatter if missing,
+    and moves it to the KB directory if it's not already there.
+
+    Args:
+        file_path: Path to the markdown file to ingest.
+        title: Optional title override. If not provided, extracted from first H1 or filename.
+        tags: Optional tags. If not provided, defaults to empty list with suggestions.
+        directory: Target directory within KB. If not provided, uses context.primary.
+        scope: KB scope ("project" or "user"). If not provided, auto-detects.
+        dry_run: If True, show what would be done without making changes.
+
+    Returns:
+        IngestResult with path, moved status, frontmatter_added status.
+
+    Raises:
+        FileNotFoundError: If the file doesn't exist.
+        ValueError: If the file is not a markdown file or validation fails.
+    """
+    import frontmatter as fm
+
+    source_path = Path(file_path).resolve()
+
+    # Validate file exists and is markdown
+    if not source_path.exists():
+        raise FileNotFoundError(f"File not found: {file_path}")
+    if not source_path.is_file():
+        raise ValueError(f"Path is not a file: {file_path}")
+    if source_path.suffix.lower() not in ('.md', '.markdown'):
+        raise ValueError(f"File must be markdown (.md or .markdown): {file_path}")
+
+    # Determine KB root
+    if scope:
+        kb_root = get_kb_root_by_scope(scope)
+    else:
+        kb_root = get_kb_root()
+
+    kb_root = kb_root.resolve()
+
+    # Load file and check for existing frontmatter
+    raw_content = source_path.read_text(encoding='utf-8')
+    post = fm.loads(raw_content)
+    has_frontmatter = bool(post.metadata)
+
+    # Extract or derive title
+    if title:
+        entry_title = title
+    elif has_frontmatter and post.metadata.get('title'):
+        entry_title = post.metadata['title']
+    else:
+        # Try to extract from first H1 heading
+        h1_match = re.match(r'^#\s+(.+)$', post.content.strip(), re.MULTILINE)
+        if h1_match:
+            entry_title = h1_match.group(1).strip()
+        else:
+            # Fall back to filename without extension
+            entry_title = source_path.stem.replace('-', ' ').replace('_', ' ').title()
+
+    # Determine tags
+    if tags:
+        entry_tags = tags
+    elif has_frontmatter and post.metadata.get('tags'):
+        existing_tags = post.metadata['tags']
+        entry_tags = existing_tags if isinstance(existing_tags, list) else [existing_tags]
+    else:
+        # Default to empty list - tags will be suggested
+        entry_tags = []
+
+    # Check if file is already within KB
+    try:
+        source_path.relative_to(kb_root)
+        is_in_kb = True
+    except ValueError:
+        is_in_kb = False
+
+    # Determine target location
+    if is_in_kb:
+        # File is already in KB, keep it in place
+        target_path = source_path
+        rel_dir = str(source_path.parent.relative_to(kb_root))
+    else:
+        # File needs to be moved into KB
+        kb_context = get_kb_context()
+
+        if directory:
+            abs_dir, normalized_dir = validate_nested_path(directory)
+            target_dir = abs_dir
+            rel_dir = normalized_dir
+        elif kb_context and kb_context.primary:
+            abs_dir, normalized_dir = validate_nested_path(kb_context.primary)
+            target_dir = abs_dir
+            rel_dir = normalized_dir
+        else:
+            # Default to root of KB
+            target_dir = kb_root
+            rel_dir = ""
+
+        # Generate slug for filename if moving
+        slug = slugify(entry_title)
+        if not slug:
+            slug = source_path.stem  # Fall back to original filename
+
+        target_path = target_dir / f"{slug}.md"
+
+        # Check for collision
+        if target_path.exists() and target_path != source_path:
+            raise ValueError(f"Target file already exists: {target_path.relative_to(kb_root)}")
+
+    # Compute relative path within KB
+    rel_path = str(target_path.relative_to(kb_root))
+
+    # Build frontmatter if needed
+    frontmatter_added = False
+    if not has_frontmatter or not entry_tags:
+        # Need to add or update frontmatter
+        metadata = create_new_metadata(
+            title=entry_title,
+            tags=entry_tags if entry_tags else ["untagged"],  # Require at least one tag
+            source_project=get_current_project(),
+            contributor=get_current_contributor(),
+            model=get_llm_model(),
+            git_branch=get_git_branch(),
+            actor=get_actor_identity(),
+        )
+
+        # If there was existing frontmatter with extra fields, preserve them
+        if has_frontmatter:
+            # Preserve fields that create_new_metadata doesn't set
+            if post.metadata.get('description'):
+                metadata.description = post.metadata['description']
+            if post.metadata.get('aliases'):
+                metadata.aliases = post.metadata['aliases']
+            if post.metadata.get('status'):
+                metadata.status = post.metadata['status']
+            # Preserve original created date if present
+            if post.metadata.get('created'):
+                try:
+                    from datetime import datetime
+                    created = post.metadata['created']
+                    if isinstance(created, datetime):
+                        metadata.created = created
+                except Exception:
+                    pass
+
+        new_frontmatter = build_frontmatter(metadata)
+        new_content = new_frontmatter + post.content
+        frontmatter_added = not has_frontmatter
+    else:
+        new_content = raw_content
+
+    # Compute tag suggestions
+    suggested_tags = []
+    if entry_tags == ["untagged"] or not entry_tags:
+        suggested_tags = compute_tag_suggestions(
+            title=entry_title,
+            content=post.content,
+            existing_tags=entry_tags,
+            limit=5,
+            min_score=0.3,
+        )
+
+    if dry_run:
+        return IngestResult(
+            path=rel_path,
+            absolute_path=str(target_path),
+            moved=not is_in_kb,
+            frontmatter_added=frontmatter_added,
+            original_path=str(source_path) if not is_in_kb else None,
+            title=entry_title,
+            tags=entry_tags if entry_tags else ["untagged"],
+            suggested_tags=suggested_tags,
+        )
+
+    # Write the file
+    if not is_in_kb:
+        # Create target directory if needed
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    target_path.write_text(new_content, encoding='utf-8')
+
+    # If moved, delete original
+    if not is_in_kb and source_path.exists() and source_path != target_path:
+        source_path.unlink()
+
+    # Rebuild backlink cache and index
+    rebuild_backlink_cache(kb_root)
+
+    try:
+        _, _, chunks = parse_entry(target_path)
+        searcher = get_searcher()
+        if chunks:
+            normalized_chunks = normalize_chunks(chunks, rel_path)
+            searcher.index_chunks(normalized_chunks)
+    except ParseError as e:
+        log.warning("Ingested file but failed to index %s: %s", rel_path, e)
+
+    return IngestResult(
+        path=rel_path,
+        absolute_path=str(target_path),
+        moved=not is_in_kb,
+        frontmatter_added=frontmatter_added,
+        original_path=str(source_path) if not is_in_kb else None,
+        title=entry_title,
+        tags=entry_tags if entry_tags else ["untagged"],
+        suggested_tags=suggested_tags,
     )
 
 
