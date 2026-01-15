@@ -438,6 +438,9 @@ class MemoryEvolutionConfig:
     When a new entry is added and links to neighbors, the LLM analyzes
     the relationship and suggests keyword/context updates for neighbors.
     This makes the knowledge graph "learn" from new connections.
+
+    Evolution is queued (non-blocking) and processed by `mx evolve`.
+    Auto-triggers can spawn background evolution processing.
     """
 
     enabled: bool = False
@@ -454,6 +457,12 @@ class MemoryEvolutionConfig:
 
     batch_neighbors: bool = True
     """Batch multiple neighbors into single LLM call when possible."""
+
+    auto_probability: float = 0.0
+    """Probability (0.0-1.0) to spawn background `mx evolve` after add."""
+
+    auto_queue_threshold: int = 0
+    """Spawn background `mx evolve` when queue exceeds this size (0=disabled)."""
 
 
 def get_memory_evolution_config() -> MemoryEvolutionConfig:
@@ -492,6 +501,8 @@ def get_memory_evolution_config() -> MemoryEvolutionConfig:
             min_score=evolution_data.get("min_score", MEMORY_EVOLUTION_MIN_SCORE),
             max_keywords_per_neighbor=evolution_data.get("max_keywords_per_neighbor", 3),
             batch_neighbors=evolution_data.get("batch_neighbors", True),
+            auto_probability=evolution_data.get("auto_probability", 0.0),
+            auto_queue_threshold=evolution_data.get("auto_queue_threshold", 0),
         )
     except (OSError, yaml.YAMLError):
         return MemoryEvolutionConfig()

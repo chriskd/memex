@@ -649,130 +649,213 @@ def _add_backlink_to_neighbor(
         log.warning("Updated neighbor but failed to re-index %s: %s", neighbor_path, e)
 
 
-async def _evolve_neighbors(
-    new_entry_title: str,
-    new_entry_content: str,
-    new_entry_keywords: list[str],
-    neighbors_to_evolve: list[tuple[str, float]],  # (path, score) pairs
+def _queue_evolution(
+    new_entry_path: str,
+    neighbors_to_evolve: list[tuple[str, float]],
     kb_root: Path,
-    searcher: HybridSearcher,
-) -> None:
-    """Apply LLM-driven memory evolution to neighbor entries.
+) -> int:
+    """Queue evolution work for later processing.
 
-    This is the A-Mem style evolution where neighbors' keywords/context
-    are updated based on their relationship to the new entry.
+    This replaces inline evolution - work is queued and processed by `mx evolve`.
 
     Args:
-        new_entry_title: Title of the newly added entry.
-        new_entry_content: Content of the new entry.
-        new_entry_keywords: Keywords of the new entry.
-        neighbors_to_evolve: List of (neighbor_path, similarity_score) tuples.
+        new_entry_path: Path to the newly added entry.
+        neighbors_to_evolve: List of (neighbor_path, score) tuples.
         kb_root: KB root directory.
-        searcher: HybridSearcher for re-indexing.
+
+    Returns:
+        Number of items queued.
     """
     config = get_memory_evolution_config()
     if not config.enabled or not neighbors_to_evolve:
-        return
+        return 0
 
-    # Import here to avoid circular imports and only when needed
+    # Filter by min_score before queuing
+    filtered = [(path, score) for path, score in neighbors_to_evolve if score >= config.min_score]
+    if not filtered:
+        return 0
+
+    from .evolution_queue import queue_evolution
+    return queue_evolution(new_entry_path, filtered, kb_root)
+
+
+@dataclass
+class EvolutionResult:
+    """Result of processing evolution queue items."""
+
+    processed: int
+    """Number of items processed."""
+
+    keywords_added: int
+    """Total keywords added across all neighbors."""
+
+    errors: int
+    """Number of errors encountered."""
+
+
+async def process_evolution_items(
+    items: list,  # list[QueueItem] - avoid circular import
+    kb_root: Path | None = None,
+) -> EvolutionResult:
+    """Process queued evolution items.
+
+    Groups items by new_entry and processes each batch.
+    Called by `mx evolve` command.
+
+    Args:
+        items: List of QueueItem objects to process.
+        kb_root: KB root directory. If None, auto-discovers.
+
+    Returns:
+        EvolutionResult with processing statistics.
+    """
+    from .evolution_queue import QueueItem
+
+    if kb_root is None:
+        kb_root = get_kb_root()
+
+    config = get_memory_evolution_config()
+    if not config.enabled:
+        log.warning("Memory evolution is disabled in config")
+        return EvolutionResult(processed=0, keywords_added=0, errors=0)
+
+    # Import LLM module
     try:
         from .llm import NeighborInfo, evolve_neighbors_batched
     except ImportError as e:
         log.warning("Memory evolution requires openai package: %s", e)
-        return
+        return EvolutionResult(processed=0, keywords_added=0, errors=0)
 
-    # Collect neighbor info for evolution
-    neighbors_info: list[NeighborInfo] = []
-    for neighbor_path, score in neighbors_to_evolve:
-        if score < config.min_score:
-            continue
+    # Group items by new_entry for batched processing
+    from collections import defaultdict
+    groups: dict[str, list[QueueItem]] = defaultdict(list)
+    for item in items:
+        groups[item.new_entry].append(item)
 
-        neighbor_file = kb_root / neighbor_path
-        if not neighbor_file.exists():
+    searcher = get_searcher()
+    total_processed = 0
+    total_keywords = 0
+    total_errors = 0
+
+    for new_entry_path, group_items in groups.items():
+        # Read new entry info
+        new_entry_file = kb_root / new_entry_path
+        if not new_entry_file.exists():
+            log.warning("New entry not found, skipping: %s", new_entry_path)
+            total_errors += len(group_items)
             continue
 
         try:
-            metadata, content, _ = parse_entry(neighbor_file)
-            neighbors_info.append(
-                NeighborInfo(
-                    path=neighbor_path,
-                    title=metadata.title,
-                    content=content,
-                    keywords=list(metadata.keywords),
-                    score=score,
-                )
-            )
+            new_metadata, new_content, _ = parse_entry(new_entry_file)
         except ParseError as e:
-            log.warning("Failed to parse neighbor for evolution %s: %s", neighbor_path, e)
+            log.warning("Failed to parse new entry %s: %s", new_entry_path, e)
+            total_errors += len(group_items)
             continue
 
-    if not neighbors_info:
-        return
+        # Collect neighbor info for this batch
+        neighbors_info: list[NeighborInfo] = []
+        for item in group_items:
+            neighbor_file = kb_root / item.neighbor
+            if not neighbor_file.exists():
+                log.warning("Neighbor not found: %s", item.neighbor)
+                total_errors += 1
+                continue
 
-    # Get evolution suggestions from LLM
-    try:
-        suggestions = await evolve_neighbors_batched(
-            new_entry_title=new_entry_title,
-            new_entry_content=new_entry_content,
-            new_entry_keywords=new_entry_keywords,
-            neighbors=neighbors_info,
-            model=config.model,
-            max_keywords=config.max_keywords_per_neighbor,
-        )
-    except Exception as e:
-        log.warning("LLM evolution failed: %s", e)
-        return
-
-    # Apply suggestions to neighbors
-    for suggestion in suggestions:
-        if not suggestion.add_keywords:
-            continue  # No keywords to add
-
-        neighbor_file = kb_root / suggestion.neighbor_path
-        if not neighbor_file.exists():
-            continue
-
-        try:
-            metadata, content, _ = parse_entry(neighbor_file)
-
-            # Merge new keywords with existing
-            existing_keywords = set(metadata.keywords)
-            new_keywords = [kw for kw in suggestion.add_keywords if kw not in existing_keywords]
-
-            if not new_keywords:
-                continue  # All keywords already exist
-
-            updated_keywords = list(metadata.keywords) + new_keywords
-            log.info(
-                "Evolving %s: adding keywords %s",
-                suggestion.neighbor_path,
-                new_keywords,
-            )
-
-            # Update metadata with new keywords
-            updated_metadata = update_metadata_for_edit(
-                metadata,
-                keywords=updated_keywords,
-            )
-
-            # Write updated file
-            frontmatter = build_frontmatter(updated_metadata)
-            neighbor_file.write_text(frontmatter + content, encoding="utf-8")
-
-            # Re-index the evolved entry
             try:
-                _, _, updated_chunks = parse_entry(neighbor_file)
-                if updated_chunks:
-                    searcher.delete_document(suggestion.neighbor_path)
-                    normalized_chunks = normalize_chunks(updated_chunks, suggestion.neighbor_path)
-                    searcher.index_chunks(normalized_chunks)
+                metadata, content, _ = parse_entry(neighbor_file)
+                neighbors_info.append(
+                    NeighborInfo(
+                        path=item.neighbor,
+                        title=metadata.title,
+                        content=content,
+                        keywords=list(metadata.keywords),
+                        score=item.score,
+                    )
+                )
             except ParseError as e:
-                log.warning("Evolved neighbor but failed to re-index %s: %s", suggestion.neighbor_path, e)
+                log.warning("Failed to parse neighbor %s: %s", item.neighbor, e)
+                total_errors += 1
+                continue
 
-        except ParseError as e:
-            log.warning("Failed to apply evolution to %s: %s", suggestion.neighbor_path, e)
-        except OSError as e:
-            log.warning("Failed to write evolved neighbor %s: %s", suggestion.neighbor_path, e)
+        if not neighbors_info:
+            continue
+
+        # Get evolution suggestions from LLM
+        try:
+            suggestions = await evolve_neighbors_batched(
+                new_entry_title=new_metadata.title,
+                new_entry_content=new_content,
+                new_entry_keywords=list(new_metadata.keywords),
+                neighbors=neighbors_info,
+                model=config.model,
+                max_keywords=config.max_keywords_per_neighbor,
+            )
+        except Exception as e:
+            log.warning("LLM evolution failed for %s: %s", new_entry_path, e)
+            total_errors += len(neighbors_info)
+            continue
+
+        # Apply suggestions to neighbors
+        for suggestion in suggestions:
+            total_processed += 1
+
+            if not suggestion.add_keywords:
+                continue  # No keywords to add
+
+            neighbor_file = kb_root / suggestion.neighbor_path
+            if not neighbor_file.exists():
+                continue
+
+            try:
+                metadata, content, _ = parse_entry(neighbor_file)
+
+                # Merge new keywords with existing
+                existing_keywords = set(metadata.keywords)
+                new_keywords = [kw for kw in suggestion.add_keywords if kw not in existing_keywords]
+
+                if not new_keywords:
+                    continue  # All keywords already exist
+
+                updated_keywords = list(metadata.keywords) + new_keywords
+                total_keywords += len(new_keywords)
+                log.info(
+                    "Evolving %s: adding keywords %s",
+                    suggestion.neighbor_path,
+                    new_keywords,
+                )
+
+                # Update metadata with new keywords
+                updated_metadata = update_metadata_for_edit(
+                    metadata,
+                    keywords=updated_keywords,
+                )
+
+                # Write updated file
+                frontmatter = build_frontmatter(updated_metadata)
+                neighbor_file.write_text(frontmatter + content, encoding="utf-8")
+
+                # Re-index the evolved entry
+                try:
+                    _, _, updated_chunks = parse_entry(neighbor_file)
+                    if updated_chunks:
+                        searcher.delete_document(suggestion.neighbor_path)
+                        normalized_chunks = normalize_chunks(updated_chunks, suggestion.neighbor_path)
+                        searcher.index_chunks(normalized_chunks)
+                except ParseError as e:
+                    log.warning("Evolved neighbor but failed to re-index %s: %s", suggestion.neighbor_path, e)
+
+            except ParseError as e:
+                log.warning("Failed to apply evolution to %s: %s", suggestion.neighbor_path, e)
+                total_errors += 1
+            except OSError as e:
+                log.warning("Failed to write evolved neighbor %s: %s", suggestion.neighbor_path, e)
+                total_errors += 1
+
+    return EvolutionResult(
+        processed=total_processed,
+        keywords_added=total_keywords,
+        errors=total_errors,
+    )
 
 
 def get_tag_taxonomy() -> dict[str, int]:
@@ -1371,15 +1454,12 @@ async def add_entry(
             except (ParseError, OSError) as e:
                 log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
 
-        # Trigger memory evolution for linked neighbors (async, non-blocking)
+        # Queue memory evolution for linked neighbors (non-blocking)
         if linking_result.neighbors_for_evolution:
-            await _evolve_neighbors(
-                new_entry_title=title,
-                new_entry_content=final_content,
-                new_entry_keywords=keywords or [],
+            _queue_evolution(
+                new_entry_path=rel_path,
                 neighbors_to_evolve=linking_result.neighbors_for_evolution,
                 kb_root=kb_root,
-                searcher=get_searcher(),
             )
 
     # Compute link suggestions for the new entry
@@ -1804,15 +1884,12 @@ async def update_entry(
                     relative_path, e
                 )
 
-        # Trigger memory evolution for linked neighbors
+        # Queue memory evolution for linked neighbors (non-blocking)
         if linking_result.neighbors_for_evolution:
-            await _evolve_neighbors(
-                new_entry_title=updated_metadata.title,
-                new_entry_content=new_content,
-                new_entry_keywords=keywords or list(metadata.keywords),
+            _queue_evolution(
+                new_entry_path=relative_path,
                 neighbors_to_evolve=linking_result.neighbors_for_evolution,
                 kb_root=kb_root,
-                searcher=searcher,
             )
 
     # Compute link suggestions based on updated content

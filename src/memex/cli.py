@@ -15,11 +15,12 @@ Usage:
 import asyncio
 import difflib
 import json
+import logging
 import os
 import sys
-from pathlib import Path
 from collections.abc import Sequence
-from typing import Any, Literal, NoReturn, Optional, cast
+from pathlib import Path
+from typing import Any, Literal, NoReturn, cast
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -343,7 +344,7 @@ class JsonErrorGroup(click.Group):
             return super().main(
                 args, prog_name, complete_var, standalone_mode, **extra
             )
-        except SystemExit as e:
+        except SystemExit:
             # Click calls sys.exit() on errors; re-raise to preserve exit code
             raise
         except ClickException as e:
@@ -1413,6 +1414,61 @@ def add(
             click.echo("\nSuggested tags:")
             for tag in result['suggested_tags'][:5]:
                 click.echo(f"  - {tag['tag']} ({tag['reason']})")
+
+    # Check auto-triggers for background evolution processing
+    _maybe_trigger_evolution()
+
+
+def _maybe_trigger_evolution() -> None:
+    """Check auto-triggers and spawn background `mx evolve` if conditions met.
+
+    Checks:
+    1. auto_probability: Random chance to spawn evolution
+    2. auto_queue_threshold: Spawn if queue exceeds threshold
+    """
+    import random
+    import subprocess
+
+    from .config import get_memory_evolution_config
+    from .evolution_queue import queue_stats
+
+    config = get_memory_evolution_config()
+    if not config.enabled:
+        return
+
+    should_trigger = False
+
+    # Check probability trigger
+    if config.auto_probability > 0:
+        if random.random() < config.auto_probability:
+            should_trigger = True
+            _log.debug("Auto-trigger: probability %.2f triggered", config.auto_probability)
+
+    # Check queue threshold trigger
+    if not should_trigger and config.auto_queue_threshold > 0:
+        stats = queue_stats()
+        if stats.count > config.auto_queue_threshold:
+            should_trigger = True
+            _log.debug(
+                "Auto-trigger: queue size %d exceeds threshold %d",
+                stats.count, config.auto_queue_threshold
+            )
+
+    if should_trigger:
+        # Spawn background process
+        try:
+            subprocess.Popen(
+                ["mx", "evolve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,  # Detach from parent process group
+            )
+            _log.debug("Spawned background mx evolve")
+        except Exception as e:
+            _log.warning("Failed to spawn background evolution: %s", e)
+
+
+_log = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2853,6 +2909,126 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
         click.echo(f"      {time_str} | {entry.mode} | {result_str}{tag_str}")
 
     click.echo("\nTip: Use 'mx history --rerun N' to re-execute a search")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evolve Command (Memory Evolution Queue Processing)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option("--dry-run", is_flag=True, help="Show what would be evolved without processing")
+@click.option("--limit", type=int, default=None, help="Process up to N items from queue")
+@click.option("--status", is_flag=True, help="Show queue status without processing")
+@click.option("--clear", is_flag=True, help="Clear the evolution queue")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json: bool):
+    """Process queued memory evolution.
+
+    Memory evolution queues work during `mx add` and `mx update` operations.
+    This command processes the queue, calling the LLM to analyze relationships
+    and update neighbor keywords.
+
+    \b
+    Examples:
+      mx evolve              # Process all queued items
+      mx evolve --status     # Show queue statistics
+      mx evolve --dry-run    # Show what would be evolved
+      mx evolve --limit 10   # Process up to 10 items
+      mx evolve --clear      # Clear all queued items
+
+    \b
+    The queue is stored at: {kb_root}/.indices/evolution_queue.jsonl
+    Each item represents a neighbor that may receive keyword updates.
+    """
+    from .core import process_evolution_items
+    from .evolution_queue import clear_queue, queue_stats, read_queue, remove_from_queue
+
+    if status:
+        stats = queue_stats()
+        if as_json:
+            output({
+                "count": stats.count,
+                "oldest_at": stats.oldest_at.isoformat() if stats.oldest_at else None,
+                "newest_at": stats.newest_at.isoformat() if stats.newest_at else None,
+                "unique_new_entries": stats.unique_new_entries,
+                "unique_neighbors": stats.unique_neighbors,
+            }, as_json=True)
+        else:
+            if stats.count == 0:
+                click.echo("Evolution queue is empty.")
+            else:
+                click.echo(f"Queue items:       {stats.count}")
+                click.echo(f"Unique sources:    {stats.unique_new_entries} entries")
+                click.echo(f"Unique neighbors:  {stats.unique_neighbors} entries")
+                if stats.oldest_at:
+                    click.echo(f"Oldest queued:     {stats.oldest_at.strftime('%Y-%m-%d %H:%M:%S')}")
+                if stats.newest_at:
+                    click.echo(f"Newest queued:     {stats.newest_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        return
+
+    if clear:
+        count = clear_queue()
+        if as_json:
+            output({"cleared": count}, as_json=True)
+        else:
+            click.echo(f"Cleared {count} items from evolution queue.")
+        return
+
+    # Read queue items
+    items = read_queue()
+    if limit is not None:
+        items = items[:limit]
+
+    if not items:
+        if as_json:
+            output({"processed": 0, "keywords_added": 0, "errors": 0, "message": "Queue is empty"}, as_json=True)
+        else:
+            click.echo("Evolution queue is empty. Nothing to process.")
+        return
+
+    if dry_run:
+        # Group by new_entry for display
+        from collections import defaultdict
+        groups: dict[str, list] = defaultdict(list)
+        for item in items:
+            groups[item.new_entry].append(item)
+
+        if as_json:
+            output({
+                "dry_run": True,
+                "items": len(items),
+                "groups": [
+                    {"new_entry": new_entry, "neighbors": [i.neighbor for i in neighbors]}
+                    for new_entry, neighbors in groups.items()
+                ],
+            }, as_json=True)
+        else:
+            click.echo(f"Would process {len(items)} items:\n")
+            for new_entry, neighbors in groups.items():
+                click.echo(f"  {new_entry}")
+                for n in neighbors:
+                    click.echo(f"    → {n.neighbor} (score: {n.score:.2f})")
+        return
+
+    # Process queue items
+    click.echo(f"Processing {len(items)} evolution items...")
+    result = run_async(process_evolution_items(items))
+
+    # Remove processed items from queue
+    remove_from_queue(items)
+
+    if as_json:
+        output({
+            "processed": result.processed,
+            "keywords_added": result.keywords_added,
+            "errors": result.errors,
+        }, as_json=True)
+    else:
+        click.echo(f"\nProcessed:       {result.processed} neighbors")
+        click.echo(f"Keywords added:  {result.keywords_added}")
+        if result.errors:
+            click.echo(f"Errors:          {result.errors}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

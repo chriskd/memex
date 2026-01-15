@@ -252,8 +252,8 @@ class TestLLMEvolution:
         assert result.add_keywords == ["new"]
 
 
-class TestEvolveNeighborsIntegration:
-    """Integration tests for _evolve_neighbors in core.py."""
+class TestQueueEvolution:
+    """Integration tests for queue-based evolution in core.py."""
 
     @pytest.fixture
     def tmp_kb(self, tmp_path, monkeypatch):
@@ -261,6 +261,7 @@ class TestEvolveNeighborsIntegration:
         kb_path = tmp_path / "kb"
         kb_path.mkdir()
         (kb_path / ".kbconfig").write_text("kb_path: .")
+        (kb_path / ".indices").mkdir()
         (kb_path / "test").mkdir()
 
         # Set up environment
@@ -269,43 +270,158 @@ class TestEvolveNeighborsIntegration:
 
         return kb_path
 
-    @pytest.mark.asyncio
-    async def test_evolve_neighbors_skipped_when_disabled(self, tmp_kb, monkeypatch):
-        """Evolution is skipped when disabled in config."""
-        # Ensure evolution is disabled (default)
+    def test_queue_evolution_skipped_when_disabled(self, tmp_kb, monkeypatch):
+        """Queueing is skipped when disabled in config."""
         monkeypatch.setattr(
             "memex.core.get_memory_evolution_config",
             lambda: MemoryEvolutionConfig(enabled=False),
         )
 
-        # Should not raise, just skip
-        await core._evolve_neighbors(
-            new_entry_title="Test",
-            new_entry_content="Content",
-            new_entry_keywords=[],
+        count = core._queue_evolution(
+            new_entry_path="test/new.md",
             neighbors_to_evolve=[("test/neighbor.md", 0.8)],
             kb_root=tmp_kb,
-            searcher=MagicMock(),
         )
-        # No assertions - just verifying it doesn't error
+        assert count == 0
 
-    @pytest.mark.asyncio
-    async def test_evolve_neighbors_filters_by_min_score(self, tmp_kb, monkeypatch):
-        """Only neighbors below min_score are filtered out."""
+    def test_queue_evolution_filters_by_min_score(self, tmp_kb, monkeypatch):
+        """Only neighbors above min_score are queued."""
         monkeypatch.setattr(
             "memex.core.get_memory_evolution_config",
             lambda: MemoryEvolutionConfig(enabled=True, min_score=0.8),
         )
+
+        # All neighbors below threshold
+        count = core._queue_evolution(
+            new_entry_path="test/new.md",
+            neighbors_to_evolve=[("test/a.md", 0.7), ("test/b.md", 0.6)],
+            kb_root=tmp_kb,
+        )
+        assert count == 0
+
+    def test_queue_evolution_queues_valid_neighbors(self, tmp_kb, monkeypatch):
+        """Neighbors above min_score are queued."""
+        monkeypatch.setattr(
+            "memex.core.get_memory_evolution_config",
+            lambda: MemoryEvolutionConfig(enabled=True, min_score=0.7),
+        )
+
+        count = core._queue_evolution(
+            new_entry_path="test/new.md",
+            neighbors_to_evolve=[("test/a.md", 0.8), ("test/b.md", 0.6)],
+            kb_root=tmp_kb,
+        )
+        # Only test/a.md should be queued (0.8 >= 0.7)
+        assert count == 1
+
+        # Verify queue contents
+        from memex.evolution_queue import read_queue
+        items = read_queue(tmp_kb)
+        assert len(items) == 1
+        assert items[0].neighbor == "test/a.md"
+
+
+class TestProcessEvolutionItems:
+    """Integration tests for process_evolution_items in core.py."""
+
+    @pytest.fixture
+    def tmp_kb(self, tmp_path, monkeypatch):
+        """Create a temporary KB directory with sample entries."""
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        (kb_path / ".kbconfig").write_text("""
+kb_path: .
+memory_evolution:
+  enabled: true
+  model: test-model
+  min_score: 0.7
+""")
+        (kb_path / ".indices").mkdir()
+        (kb_path / "test").mkdir()
+
+        # Create a new entry
+        (kb_path / "test" / "new.md").write_text("""---
+title: New Entry
+tags: [testing]
+keywords: [new-concept]
+created: 2024-01-15T10:00:00+00:00
+---
+
+# New Entry
+
+Content about new concepts.
+""")
+
+        # Create a neighbor entry
+        (kb_path / "test" / "neighbor.md").write_text("""---
+title: Neighbor Entry
+tags: [existing]
+keywords: [old-concept]
+created: 2024-01-14T10:00:00+00:00
+---
+
+# Neighbor Entry
+
+Content about existing concepts.
+""")
+
+        monkeypatch.setenv("MEMEX_SKIP_PROJECT_KB", "")
+        monkeypatch.chdir(kb_path)
+
+        return kb_path
+
+    @pytest.mark.asyncio
+    async def test_process_evolution_disabled(self, tmp_kb, monkeypatch):
+        """Processing returns early when evolution is disabled."""
+        monkeypatch.setattr(
+            "memex.core.get_memory_evolution_config",
+            lambda: MemoryEvolutionConfig(enabled=False),
+        )
+
+        from memex.evolution_queue import QueueItem
+        from datetime import datetime, UTC
+
+        items = [QueueItem(
+            new_entry="test/new.md",
+            neighbor="test/neighbor.md",
+            score=0.8,
+            queued_at=datetime.now(UTC),
+        )]
+
+        result = await core.process_evolution_items(items, tmp_kb)
+        assert result.processed == 0
+        assert result.keywords_added == 0
+
+    @pytest.mark.asyncio
+    async def test_process_evolution_with_mock_llm(self, tmp_kb, monkeypatch):
+        """Processing applies LLM suggestions to neighbors."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        # All neighbors below threshold - should skip evolution entirely
-        # (no file parsing needed since filtered by score first)
-        await core._evolve_neighbors(
-            new_entry_title="Test",
-            new_entry_content="Content",
-            new_entry_keywords=[],
-            neighbors_to_evolve=[("test/a.md", 0.7), ("test/b.md", 0.6)],  # Below 0.8
-            kb_root=tmp_kb,
-            searcher=MagicMock(),
-        )
-        # Test passes if no errors raised - neighbors were filtered by score
+        # Mock the LLM to return specific keywords
+        mock_suggestion = MagicMock()
+        mock_suggestion.neighbor_path = "test/neighbor.md"
+        mock_suggestion.add_keywords = ["new-keyword"]
+        mock_suggestion.relationship = "Related to new concepts"
+
+        async def mock_evolve(*args, **kwargs):
+            return [mock_suggestion]
+
+        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
+
+            items = [QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )]
+
+            result = await core.process_evolution_items(items, tmp_kb)
+
+        assert result.processed == 1
+        assert result.keywords_added == 1
+
+        # Verify neighbor was updated
+        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert "new-keyword" in neighbor_content
