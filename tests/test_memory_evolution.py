@@ -635,3 +635,174 @@ Content about existing concepts.
         # Verify description was updated
         neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
         assert "description: New semantic description for this entry" in neighbor_content
+
+    @pytest.mark.asyncio
+    async def test_process_evolution_records_history(self, tmp_kb, monkeypatch):
+        """Evolution records history with before/after values."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Mock the LLM to return new keywords and description
+        mock_suggestion = EvolutionSuggestion(
+            neighbor_path="test/neighbor.md",
+            new_keywords=["old-concept", "evolved-keyword"],
+            relationship="",
+            new_context="Updated description from evolution.",
+        )
+
+        async def mock_evolve(*args, **kwargs):
+            return [mock_suggestion]
+
+        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
+
+            items = [QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )]
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Verify history was recorded
+        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert "evolution_history:" in neighbor_content
+        assert "trigger_entry: test/new.md" in neighbor_content
+        assert "previous_keywords:" in neighbor_content
+        assert "old-concept" in neighbor_content
+        assert "new_keywords:" in neighbor_content
+        assert "evolved-keyword" in neighbor_content
+        assert "new_description: Updated description from evolution" in neighbor_content
+
+    @pytest.mark.asyncio
+    async def test_evolution_history_accumulates(self, tmp_kb, monkeypatch):
+        """Multiple evolutions accumulate in history."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # First evolution
+        mock_suggestion1 = EvolutionSuggestion(
+            neighbor_path="test/neighbor.md",
+            new_keywords=["old-concept", "keyword-from-first"],
+            relationship="",
+            new_context="",
+        )
+
+        async def mock_evolve1(*args, **kwargs):
+            return [mock_suggestion1]
+
+        with patch("memex.llm.evolve_neighbors_batched", mock_evolve1):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
+
+            items = [QueueItem(
+                new_entry="test/first-trigger.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )]
+
+            # Create the trigger entry first
+            (tmp_kb / "test" / "first-trigger.md").write_text("""---
+title: First Trigger
+tags: [testing]
+keywords: [first-trigger-kw]
+created: 2024-01-16T10:00:00+00:00
+---
+
+# First Trigger
+""")
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Second evolution
+        mock_suggestion2 = EvolutionSuggestion(
+            neighbor_path="test/neighbor.md",
+            new_keywords=["old-concept", "keyword-from-first", "keyword-from-second"],
+            relationship="",
+            new_context="",
+        )
+
+        async def mock_evolve2(*args, **kwargs):
+            return [mock_suggestion2]
+
+        with patch("memex.llm.evolve_neighbors_batched", mock_evolve2):
+            items = [QueueItem(
+                new_entry="test/second-trigger.md",
+                neighbor="test/neighbor.md",
+                score=0.9,
+                queued_at=datetime.now(UTC),
+            )]
+
+            # Create the second trigger entry
+            (tmp_kb / "test" / "second-trigger.md").write_text("""---
+title: Second Trigger
+tags: [testing]
+keywords: [second-trigger-kw]
+created: 2024-01-17T10:00:00+00:00
+---
+
+# Second Trigger
+""")
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Verify both history records exist
+        neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
+        assert "trigger_entry: test/first-trigger.md" in neighbor_content
+        assert "trigger_entry: test/second-trigger.md" in neighbor_content
+
+    @pytest.mark.asyncio
+    async def test_evolution_history_correct_before_after_values(self, tmp_kb, monkeypatch):
+        """History records correct before and after values for keywords."""
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Set up neighbor with specific initial keywords
+        (tmp_kb / "test" / "neighbor.md").write_text("""---
+title: Neighbor Entry
+description: Original description
+tags: [existing]
+keywords: [alpha, beta]
+created: 2024-01-14T10:00:00+00:00
+---
+
+# Neighbor Entry
+
+Content about existing concepts.
+""")
+
+        mock_suggestion = EvolutionSuggestion(
+            neighbor_path="test/neighbor.md",
+            new_keywords=["alpha", "beta", "gamma"],  # Added gamma
+            relationship="",
+            new_context="Enhanced description.",
+        )
+
+        async def mock_evolve(*args, **kwargs):
+            return [mock_suggestion]
+
+        with patch("memex.llm.evolve_neighbors_batched", mock_evolve):
+            from memex.evolution_queue import QueueItem
+            from datetime import datetime, UTC
+
+            items = [QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.85,
+                queued_at=datetime.now(UTC),
+            )]
+
+            await core.process_evolution_items(items, tmp_kb)
+
+        # Parse the result to verify history contents
+        from memex.parser import parse_entry
+
+        metadata, _, _ = parse_entry(tmp_kb / "test" / "neighbor.md")
+        assert len(metadata.evolution_history) == 1
+
+        record = metadata.evolution_history[0]
+        assert record.trigger_entry == "test/new.md"
+        assert set(record.previous_keywords) == {"alpha", "beta"}
+        assert set(record.new_keywords) == {"alpha", "beta", "gamma"}
+        assert record.previous_description == "Original description"
+        assert record.new_description == "Enhanced description."

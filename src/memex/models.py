@@ -6,6 +6,17 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+class EvolutionRecord(BaseModel):
+    """A record of how an entry was evolved based on a related entry."""
+
+    timestamp: datetime  # When evolution occurred
+    trigger_entry: str  # Path of entry that triggered evolution
+    previous_keywords: list[str] = Field(default_factory=list)  # Keywords before evolution
+    new_keywords: list[str] = Field(default_factory=list)  # Keywords after evolution
+    previous_description: str | None = None  # Description before (if changed)
+    new_description: str | None = None  # Description after (if changed)
+
+
 class SemanticLink(BaseModel):
     """A computed semantic relationship to another entry."""
 
@@ -37,6 +48,7 @@ class EntryMetadata(BaseModel):
     # A-Mem semantic linking
     keywords: list[str] = Field(default_factory=list)  # LLM-extracted key concepts
     semantic_links: list[SemanticLink] = Field(default_factory=list)  # Computed relationships
+    evolution_history: list[EvolutionRecord] = Field(default_factory=list)  # How entry evolved
 
 
 class DocumentChunk(BaseModel):
