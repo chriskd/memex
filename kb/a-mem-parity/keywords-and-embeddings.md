@@ -7,15 +7,17 @@ tags:
   - search
   - features
 created: 2026-01-14T23:35:46.279714+00:00
+updated: 2026-01-15T01:24:39.200319+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
 semantic_links:
   - path: a-mem-parity/semantic-linking.md
     score: 0.625
     reason: embedding_similarity
+  - path: a-mem-parity/a-mem-strict-mode.md
+    score: 0.651
+    reason: bidirectional
 ---
 
 # Keywords and Embeddings
