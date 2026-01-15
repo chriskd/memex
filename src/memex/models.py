@@ -230,3 +230,23 @@ class InitInventoryResult(BaseModel):
     needs_llm_count: int  # Entries queued for LLM keyword extraction
     missing_keyword_mode: Literal["error", "skip", "llm"]  # Mode used
     errors: list[str] = Field(default_factory=list)  # Entries that caused errors
+
+
+class KeywordExtractionEntry(BaseModel):
+    """Result of keyword extraction for a single entry."""
+
+    path: str  # Entry path
+    title: str  # Entry title
+    keywords: list[str]  # Extracted keywords
+    success: bool  # Whether extraction succeeded
+    error: str | None = None  # Error message if failed
+
+
+class KeywordExtractionPhaseResult(BaseModel):
+    """Result of Phase 2: LLM keyword extraction."""
+
+    entries_processed: int  # Total entries processed
+    entries_updated: int  # Entries successfully updated with keywords
+    entries_failed: int  # Entries that failed extraction
+    results: list[KeywordExtractionEntry] = Field(default_factory=list)  # Per-entry results
+    errors: list[str] = Field(default_factory=list)  # General errors

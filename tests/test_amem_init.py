@@ -436,3 +436,419 @@ class TestAmemInitScopeFiltering:
 
         assert result.total_count == 1
         assert result.entries[0].title == "Project Entry"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Phase 2: LLM Keyword Extraction Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestAmemInitKeywordExtraction:
+    """Tests for Phase 2: LLM keyword extraction."""
+
+    @pytest.mark.asyncio
+    async def test_no_entries_needing_llm_returns_empty_result(
+        self, kb_all_with_keywords: Path
+    ):
+        """Returns empty result when no entries need LLM extraction."""
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+
+        result = await core.amem_init_extract_keywords(inventory)
+
+        assert result.entries_processed == 0
+        assert result.entries_updated == 0
+        assert result.entries_failed == 0
+
+    @pytest.mark.asyncio
+    async def test_extracts_keywords_and_updates_entry(
+        self, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Successfully extracts keywords and updates entry frontmatter."""
+        from memex.llm import KeywordExtractionResult
+
+        # Mock the LLM call
+        async def mock_extract(*args, **kwargs):
+            return KeywordExtractionResult(
+                keywords=["api", "rest", "documentation"],
+                success=True,
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+        assert inventory.needs_llm_count == 2  # Two entries need keywords
+
+        result = await core.amem_init_extract_keywords(inventory, model="test-model")
+
+        assert result.entries_processed == 2
+        assert result.entries_updated == 2
+        assert result.entries_failed == 0
+
+        # Verify keywords were written to file
+        from memex.parser import parse_entry
+        api_docs_path = kb_with_mixed_entries / "reference/api-docs.md"
+        metadata, _, _ = parse_entry(api_docs_path)
+        assert set(metadata.keywords) == {"api", "rest", "documentation"}
+
+    @pytest.mark.asyncio
+    async def test_handles_llm_extraction_failure(
+        self, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Records failure when LLM extraction fails."""
+        from memex.llm import KeywordExtractionResult
+
+        # Mock failing LLM call
+        async def mock_extract_fail(*args, **kwargs):
+            return KeywordExtractionResult(
+                keywords=[],
+                success=False,
+                error="API rate limit exceeded",
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract_fail)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+        result = await core.amem_init_extract_keywords(inventory, model="test-model")
+
+        assert result.entries_processed == 2
+        assert result.entries_updated == 0
+        assert result.entries_failed == 2
+        assert len(result.errors) == 2
+        assert any("API rate limit" in e for e in result.errors)
+
+    @pytest.mark.asyncio
+    async def test_continues_processing_after_single_failure(
+        self, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Continues processing other entries after one fails."""
+        from memex.llm import KeywordExtractionResult
+
+        call_count = 0
+
+        # First call fails, second succeeds
+        async def mock_extract_mixed(*args, **kwargs):
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return KeywordExtractionResult(
+                    keywords=[],
+                    success=False,
+                    error="Network error",
+                )
+            return KeywordExtractionResult(
+                keywords=["keyword1", "keyword2"],
+                success=True,
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract_mixed)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+        result = await core.amem_init_extract_keywords(inventory, model="test-model")
+
+        assert result.entries_processed == 2
+        assert result.entries_updated == 1
+        assert result.entries_failed == 1
+
+    @pytest.mark.asyncio
+    async def test_raises_on_llm_configuration_error(
+        self, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Raises LLMConfigurationError when API key not configured."""
+        # Remove API key
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+
+        from memex.llm import LLMConfigurationError
+        with pytest.raises(LLMConfigurationError):
+            await core.amem_init_extract_keywords(inventory, model="test-model")
+
+    @pytest.mark.asyncio
+    async def test_uses_model_from_config_when_not_specified(
+        self, kb_with_mixed_entries: Path, monkeypatch, tmp_path: Path
+    ):
+        """Uses memory_evolution.model from config when model not specified."""
+        from memex.llm import KeywordExtractionResult
+
+        captured_model = None
+
+        async def mock_extract(content, title, model, **kwargs):
+            nonlocal captured_model
+            captured_model = model
+            return KeywordExtractionResult(keywords=["test"], success=True)
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Create .kbconfig with model setting
+        kbconfig = tmp_path / ".kbconfig"
+        kbconfig.write_text("""kb_path: kb
+memory_evolution:
+  enabled: true
+  model: anthropic/claude-3-5-sonnet
+""")
+        monkeypatch.chdir(tmp_path)
+
+        # Clear cached context
+        from memex.context import _context_cache
+        _context_cache.clear()
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+        await core.amem_init_extract_keywords(inventory)  # No model specified
+
+        assert captured_model == "anthropic/claude-3-5-sonnet"
+
+    @pytest.mark.asyncio
+    async def test_result_includes_extracted_keywords(
+        self, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Result includes the extracted keywords for each entry."""
+        from memex.llm import KeywordExtractionResult
+
+        async def mock_extract(*args, **kwargs):
+            return KeywordExtractionResult(
+                keywords=["extracted1", "extracted2"],
+                success=True,
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        inventory = await core.amem_init_inventory(missing_keywords="llm")
+        result = await core.amem_init_extract_keywords(inventory, model="test-model")
+
+        assert len(result.results) == 2
+        for r in result.results:
+            assert r.success is True
+            assert r.keywords == ["extracted1", "extracted2"]
+
+
+class TestExtractKeywordsLLM:
+    """Tests for the LLM keyword extraction function."""
+
+    @pytest.mark.asyncio
+    async def test_extracts_keywords_successfully(self, monkeypatch):
+        """Successfully extracts keywords from content."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        # Mock OpenAI client
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"keywords": ["python", "async", "testing"]}'
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+
+        from memex.llm import extract_keywords_llm
+        result = await extract_keywords_llm(
+            content="This is about Python async programming and testing patterns.",
+            title="Python Async Guide",
+            model="test-model",
+        )
+
+        assert result.success is True
+        assert result.keywords == ["python", "async", "testing"]
+        assert result.error is None
+
+    @pytest.mark.asyncio
+    async def test_handles_empty_keywords_response(self, monkeypatch):
+        """Returns failure when LLM returns no keywords."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"keywords": []}'
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+
+        from memex.llm import extract_keywords_llm
+        result = await extract_keywords_llm(
+            content="Some content",
+            title="Test",
+            model="test-model",
+        )
+
+        assert result.success is False
+        assert result.keywords == []
+        assert "no keywords" in result.error.lower()
+
+    @pytest.mark.asyncio
+    async def test_handles_json_parse_error(self, monkeypatch):
+        """Returns failure on JSON parse error."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = 'not valid json'
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+
+        from memex.llm import extract_keywords_llm
+        result = await extract_keywords_llm(
+            content="Some content",
+            title="Test",
+            model="test-model",
+        )
+
+        assert result.success is False
+        assert "JSON parse error" in result.error
+
+    @pytest.mark.asyncio
+    async def test_normalizes_keywords_to_lowercase(self, monkeypatch):
+        """Keywords are normalized to lowercase."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"keywords": ["Python", "ASYNC", "Testing"]}'
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+
+        from memex.llm import extract_keywords_llm
+        result = await extract_keywords_llm(
+            content="Test content",
+            title="Test",
+            model="test-model",
+        )
+
+        assert result.keywords == ["python", "async", "testing"]
+
+    @pytest.mark.asyncio
+    async def test_respects_max_keywords_limit(self, monkeypatch):
+        """Respects max_keywords parameter."""
+        from unittest.mock import AsyncMock, MagicMock
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"keywords": ["a", "b", "c", "d", "e", "f", "g", "h"]}'
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        def mock_get_client():
+            return mock_client
+
+        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+
+        from memex.llm import extract_keywords_llm
+        result = await extract_keywords_llm(
+            content="Test content",
+            title="Test",
+            model="test-model",
+            max_keywords=4,
+        )
+
+        assert len(result.keywords) == 4
+
+
+class TestAmemInitCLIPhase2:
+    """Tests for CLI with Phase 2 keyword extraction."""
+
+    def test_llm_mode_shows_phase2_output(
+        self, runner: CliRunner, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """LLM mode shows Phase 2 output when processing."""
+        from memex.llm import KeywordExtractionResult
+
+        async def mock_extract(*args, **kwargs):
+            return KeywordExtractionResult(
+                keywords=["extracted"],
+                success=True,
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        result = runner.invoke(
+            cli,
+            ["a-mem-init", "--missing-keywords=llm"],
+            env={"MEMEX_USER_KB_ROOT": str(kb_with_mixed_entries)},
+        )
+
+        assert result.exit_code == 0
+        assert "Phase 2: Keyword Extraction" in result.output
+        assert "Updated:" in result.output
+
+    def test_llm_mode_dry_run_does_not_run_phase2(
+        self, runner: CliRunner, kb_with_mixed_entries: Path
+    ):
+        """Dry run does not execute Phase 2."""
+        result = runner.invoke(
+            cli,
+            ["a-mem-init", "--missing-keywords=llm", "--dry-run"],
+            env={"MEMEX_USER_KB_ROOT": str(kb_with_mixed_entries)},
+        )
+
+        assert result.exit_code == 0
+        assert "Phase 2" not in result.output
+        assert "will extract with LLM" in result.output
+
+    def test_llm_mode_json_includes_phase2_results(
+        self, runner: CliRunner, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """JSON output includes Phase 2 results."""
+        from memex.llm import KeywordExtractionResult
+
+        async def mock_extract(*args, **kwargs):
+            return KeywordExtractionResult(
+                keywords=["kw1", "kw2"],
+                success=True,
+            )
+
+        monkeypatch.setattr("memex.llm.extract_keywords_llm", mock_extract)
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        result = runner.invoke(
+            cli,
+            ["a-mem-init", "--missing-keywords=llm", "--json"],
+            env={"MEMEX_USER_KB_ROOT": str(kb_with_mixed_entries)},
+        )
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+
+        assert data["phase"] == "keyword_extraction"
+        assert "phase2" in data
+        assert data["phase2"]["entries_updated"] == 2
+
+    def test_llm_config_error_shows_message(
+        self, runner: CliRunner, kb_with_mixed_entries: Path, monkeypatch
+    ):
+        """Shows helpful message when LLM not configured."""
+        # Ensure no API key is set
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+
+        result = runner.invoke(
+            cli,
+            ["a-mem-init", "--missing-keywords=llm"],
+            env={"MEMEX_USER_KB_ROOT": str(kb_with_mixed_entries)},
+        )
+
+        assert result.exit_code == 1
+        assert "OPENROUTER_API_KEY" in result.output or "LLM configuration error" in result.output

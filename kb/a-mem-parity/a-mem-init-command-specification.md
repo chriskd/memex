@@ -263,7 +263,7 @@ Running `a-mem-init` multiple times should be safe:
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Inventory & Validation | ✅ Complete | `amem_init_inventory()` in core.py, CLI options, 20 tests |
-| Phase 2: Keyword Extraction | 🔲 Planned | Will use LLM when `--missing-keywords=llm` |
+| Phase 2: Keyword Extraction | ✅ Complete | `extract_keywords_llm()` in llm.py, `amem_init_extract_keywords()` in core.py, 16 new tests |
 | Phase 3: Semantic Linking | 🔲 Planned | Chronological processing with date filtering |
 | Phase 4: Evolution Queue | 🔲 Planned | Queue items for `mx evolve` |
 
@@ -274,6 +274,20 @@ Running `a-mem-init` multiple times should be safe:
 - **CLI**: `mx a-mem-init` with `--missing-keywords`, `--scope`, `--dry-run`, `--limit`, `--json`
 - **Tests**: `tests/test_amem_init.py` (20 tests)
 - **Commit**: `1cbe6d8` (2026-01-14)
+
+### Phase 2 Implementation Details
+
+- **LLM function**: `extract_keywords_llm()` in `src/memex/llm.py` - extracts 3-6 keywords from content
+- **Core function**: `amem_init_extract_keywords()` in `src/memex/core.py` - processes entries needing LLM
+- **Models**: `KeywordExtractionEntry`, `KeywordExtractionPhaseResult` in `src/memex/models.py`
+- **CLI integration**: Phase 2 runs automatically when `--missing-keywords=llm` and not `--dry-run`
+- **Tests**: 16 new tests in `tests/test_amem_init.py` (36 total)
+- **Features**:
+  - Uses model from `.kbconfig` → `memory_evolution.model`
+  - Updates entry frontmatter with extracted keywords
+  - Triggers re-indexing after keyword addition
+  - Handles errors gracefully, continues processing remaining entries
+  - JSON output includes `phase2` object with detailed results
 
 ## Related
 
