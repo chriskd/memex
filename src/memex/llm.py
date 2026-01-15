@@ -36,6 +36,9 @@ class EvolutionSuggestion:
     new_context: str = ""
     """Updated context/description for the neighbor (one sentence describing semantic role)."""
 
+    should_evolve: bool = True
+    """Whether the LLM recommends evolving this neighbor (default True for backwards compat)."""
+
 
 class LLMConfigurationError(Exception):
     """Raised when LLM is not properly configured."""
@@ -122,7 +125,11 @@ Title: {neighbor_title}
 Current keywords: {neighbor_kw_str}
 Content (first 500 chars): {neighbor_content[:500]}
 
-Based on this new connection, suggest the COMPLETE new keyword list for the EXISTING entry.
+First, determine if the EXISTING entry should be evolved based on this connection.
+Consider: Is this connection meaningful enough to warrant updating the existing entry?
+High similarity scores don't always mean the entries are conceptually related in a way that benefits from evolution.
+
+If should_evolve is true, suggest the COMPLETE new keyword list for the EXISTING entry.
 The new list should:
 - Keep relevant existing keywords
 - Add new keywords based on the connection (if genuinely relevant)
@@ -134,7 +141,7 @@ Also provide:
 2. Updated context: a single sentence describing the EXISTING entry's semantic role in the KB
 
 Respond with JSON only:
-{{"new_keywords": ["kw1", "kw2", "kw3"], "relationship": "sentence or empty",
+{{"should_evolve": true, "new_keywords": ["kw1", "kw2", "kw3"], "relationship": "sentence or empty",
 "new_context": "one sentence describing what this entry is about"}}"""
 
     response = await client.chat.completions.create(
@@ -174,11 +181,17 @@ Respond with JSON only:
         new_context = ""
     new_context = new_context.strip()
 
+    # Parse should_evolve (default True for backwards compatibility)
+    should_evolve = result.get("should_evolve", True)
+    if not isinstance(should_evolve, bool):
+        should_evolve = True  # Default to evolving if invalid value
+
     return EvolutionSuggestion(
         neighbor_path=neighbor_path,
         new_keywords=new_keywords,
         relationship=relationship,
         new_context=new_context,
+        should_evolve=should_evolve,
     )
 
 
@@ -256,7 +269,11 @@ Content (first 400 chars): {new_entry_content[:400]}
 
 {chr(10).join(neighbor_sections)}
 
-For EACH neighbor, suggest the COMPLETE new keyword list based on the connection to the new entry.
+For EACH neighbor, first determine if it should be evolved based on this connection.
+Consider: Is this connection meaningful enough to warrant updating the existing entry?
+High similarity scores don't always mean entries are conceptually related in a way that benefits from evolution.
+
+If should_evolve is true, suggest the COMPLETE new keyword list.
 Each new list should:
 - Keep relevant existing keywords
 - Add new keywords based on the connection (if genuinely relevant)
@@ -268,7 +285,7 @@ Also provide:
 2. Updated context: a single sentence describing that neighbor's semantic role in the KB
 
 Respond with JSON array, one object per neighbor in order:
-[{{"path": "neighbor_path", "new_keywords": ["kw1", "kw2"], "relationship": "sentence",
+[{{"path": "neighbor_path", "should_evolve": true, "new_keywords": ["kw1", "kw2"], "relationship": "sentence",
 "new_context": "one sentence describing what this entry is about"}}]"""
 
     try:
@@ -318,10 +335,16 @@ Respond with JSON array, one object per neighbor in order:
             new_context = r.get("new_context", "")
             if not isinstance(new_context, str):
                 new_context = ""
+
+            # Parse should_evolve (default True for backwards compatibility)
+            should_evolve = r.get("should_evolve", True)
+            if not isinstance(should_evolve, bool):
+                should_evolve = True
         else:
             new_keywords = n.keywords  # Preserve existing on missing
             relationship = ""
             new_context = ""
+            should_evolve = True  # Default to evolving on missing response
 
         suggestions.append(
             EvolutionSuggestion(
@@ -329,6 +352,7 @@ Respond with JSON array, one object per neighbor in order:
                 new_keywords=new_keywords,
                 relationship=relationship.strip(),
                 new_context=new_context.strip(),
+                should_evolve=should_evolve,
             )
         )
 

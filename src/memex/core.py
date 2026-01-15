@@ -808,6 +808,11 @@ async def process_evolution_items(
         for suggestion in suggestions:
             total_processed += 1
 
+            # Skip if LLM decided evolution isn't warranted
+            if not suggestion.should_evolve:
+                log.debug("LLM decided not to evolve %s", suggestion.neighbor_path)
+                continue
+
             neighbor_file = kb_root / suggestion.neighbor_path
             if not neighbor_file.exists():
                 continue
