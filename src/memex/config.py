@@ -464,6 +464,12 @@ class MemoryEvolutionConfig:
     auto_queue_threshold: int = 0
     """Spawn background `mx evolve` when queue exceeds this size (0=disabled)."""
 
+    strengthen_on_add: bool = False
+    """Run strengthen analysis synchronously during add_entry() when neighbors found.
+
+    Conservative default (False) - user must opt-in via .kbconfig.
+    When enabled, adds an LLM call to add_entry() which may slow down the operation."""
+
 
 def get_memory_evolution_config() -> MemoryEvolutionConfig:
     """Load memory evolution config from .kbconfig.
@@ -503,6 +509,7 @@ def get_memory_evolution_config() -> MemoryEvolutionConfig:
             batch_neighbors=evolution_data.get("batch_neighbors", True),
             auto_probability=evolution_data.get("auto_probability", 0.0),
             auto_queue_threshold=evolution_data.get("auto_queue_threshold", 0),
+            strengthen_on_add=evolution_data.get("strengthen_on_add", True),
         )
     except (OSError, yaml.YAMLError):
         return MemoryEvolutionConfig()

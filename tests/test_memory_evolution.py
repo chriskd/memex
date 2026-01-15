@@ -635,3 +635,234 @@ Content about existing concepts.
         # Verify description was updated
         neighbor_content = (tmp_kb / "test" / "neighbor.md").read_text()
         assert "description: New semantic description for this entry" in neighbor_content
+
+
+class TestStrengthenAction:
+    """Tests for the strengthen action (updating new entry based on neighbors)."""
+
+    @pytest.mark.asyncio
+    async def test_analyze_for_strengthen_no_neighbors(self, monkeypatch):
+        """analyze_for_strengthen returns no changes with empty neighbors."""
+        from memex.llm import analyze_for_strengthen
+
+        result = await analyze_for_strengthen(
+            new_entry_content="Test content",
+            new_entry_keywords=["test"],
+            new_entry_title="Test Entry",
+            neighbors=[],
+            model="test-model",
+        )
+
+        assert result.should_strengthen is False
+        assert result.new_keywords == ["test"]
+        assert result.suggested_links == []
+
+    @pytest.mark.asyncio
+    async def test_analyze_for_strengthen_parses_response(self, monkeypatch):
+        """analyze_for_strengthen correctly parses LLM response."""
+        from memex.llm import NeighborInfo, StrengthenResult, analyze_for_strengthen
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(
+                message=MagicMock(
+                    content=json.dumps({
+                        "should_strengthen": True,
+                        "new_keywords": ["test", "python", "automation"],
+                        "suggested_links": ["guides/python.md"]
+                    })
+                )
+            )
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("memex.llm._get_openai_client", return_value=mock_client):
+            neighbors = [
+                NeighborInfo(
+                    path="guides/python.md",
+                    title="Python Guide",
+                    content="Guide about Python programming",
+                    keywords=["python"],
+                    score=0.85
+                )
+            ]
+
+            result = await analyze_for_strengthen(
+                new_entry_content="Content about test automation",
+                new_entry_keywords=["test"],
+                new_entry_title="Test Automation",
+                neighbors=neighbors,
+                model="test-model",
+            )
+
+        assert result.should_strengthen is True
+        assert result.new_keywords == ["test", "python", "automation"]
+        assert result.suggested_links == ["guides/python.md"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_for_strengthen_should_not_strengthen(self, monkeypatch):
+        """analyze_for_strengthen respects should_strengthen=false."""
+        from memex.llm import NeighborInfo, analyze_for_strengthen
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(
+                message=MagicMock(
+                    content=json.dumps({
+                        "should_strengthen": False,
+                        "new_keywords": ["test"],  # Same as input
+                        "suggested_links": []
+                    })
+                )
+            )
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("memex.llm._get_openai_client", return_value=mock_client):
+            neighbors = [
+                NeighborInfo(
+                    path="guides/python.md",
+                    title="Python",
+                    content="Python content",
+                    keywords=["python"],
+                    score=0.75
+                )
+            ]
+
+            result = await analyze_for_strengthen(
+                new_entry_content="Test content",
+                new_entry_keywords=["test"],
+                new_entry_title="Test",
+                neighbors=neighbors,
+                model="test-model",
+            )
+
+        assert result.should_strengthen is False
+        assert result.new_keywords == ["test"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_for_strengthen_handles_invalid_json(self, monkeypatch):
+        """analyze_for_strengthen handles invalid JSON gracefully."""
+        from memex.llm import NeighborInfo, analyze_for_strengthen
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock(message=MagicMock(content="not valid json"))]
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("memex.llm._get_openai_client", return_value=mock_client):
+            neighbors = [NeighborInfo(path="test.md", title="Test", content="Content", keywords=["existing"], score=0.8)]
+
+            result = await analyze_for_strengthen(
+                new_entry_content="Content",
+                new_entry_keywords=["original"],
+                new_entry_title="Test",
+                neighbors=neighbors,
+                model="test-model",
+            )
+
+        # Preserves original keywords on error
+        assert result.should_strengthen is False
+        assert result.new_keywords == ["original"]
+        assert result.suggested_links == []
+
+    @pytest.mark.asyncio
+    async def test_analyze_for_strengthen_filters_invalid_links(self, monkeypatch):
+        """analyze_for_strengthen filters out links not in neighbor list."""
+        from memex.llm import NeighborInfo, analyze_for_strengthen
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        mock_response = MagicMock()
+        mock_response.choices = [
+            MagicMock(
+                message=MagicMock(
+                    content=json.dumps({
+                        "should_strengthen": True,
+                        "new_keywords": ["test", "new"],
+                        "suggested_links": [
+                            "valid/neighbor.md",
+                            "invalid/not-a-neighbor.md",  # Not in neighbors list
+                        ]
+                    })
+                )
+            )
+        ]
+
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
+
+        with patch("memex.llm._get_openai_client", return_value=mock_client):
+            neighbors = [
+                NeighborInfo(path="valid/neighbor.md", title="Valid", content="Content", keywords=["test"], score=0.8)
+            ]
+
+            result = await analyze_for_strengthen(
+                new_entry_content="Content",
+                new_entry_keywords=["test"],
+                new_entry_title="Test",
+                neighbors=neighbors,
+                model="test-model",
+            )
+
+        # Only valid neighbor path should be in suggested links
+        assert result.suggested_links == ["valid/neighbor.md"]
+
+
+class TestStrengthenConfig:
+    """Tests for strengthen_on_add configuration."""
+
+    def test_default_config_strengthen_disabled(self, tmp_path, monkeypatch):
+        """Default config has strengthen_on_add disabled (conservative default)."""
+        monkeypatch.chdir(tmp_path)
+        config = get_memory_evolution_config()
+        assert config.strengthen_on_add is False
+
+    def test_config_loads_strengthen_on_add(self, tmp_path, monkeypatch):
+        """Config loads strengthen_on_add from .kbconfig."""
+        kbconfig = tmp_path / ".kbconfig"
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        kbconfig.write_text(
+            """
+kb_path: kb
+memory_evolution:
+  enabled: true
+  strengthen_on_add: true
+"""
+        )
+        monkeypatch.chdir(tmp_path)
+
+        config = get_memory_evolution_config()
+        assert config.enabled is True
+        assert config.strengthen_on_add is True
+
+    def test_config_strengthen_explicit_false(self, tmp_path, monkeypatch):
+        """Config respects strengthen_on_add: false."""
+        kbconfig = tmp_path / ".kbconfig"
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        kbconfig.write_text(
+            """
+kb_path: kb
+memory_evolution:
+  enabled: true
+  strengthen_on_add: false
+"""
+        )
+        monkeypatch.chdir(tmp_path)
+
+        config = get_memory_evolution_config()
+        assert config.enabled is True
+        assert config.strengthen_on_add is False

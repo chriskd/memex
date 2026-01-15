@@ -1474,6 +1474,74 @@ async def add_entry(
             except (ParseError, OSError) as e:
                 log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
 
+        # Strengthen new entry based on neighbors (synchronous, if enabled)
+        # Never block add_entry due to strengthen failure
+        config = get_memory_evolution_config()
+        if config.enabled and config.strengthen_on_add and linking_result.neighbors_for_evolution:
+            try:
+                from .llm import LLMConfigurationError, NeighborInfo, analyze_for_strengthen
+
+                # Build NeighborInfo objects from neighbors_for_evolution
+                neighbors_info: list[NeighborInfo] = []
+                for neighbor_path, score in linking_result.neighbors_for_evolution:
+                    if score < config.min_score:
+                        continue
+                    neighbor_file = kb_root / neighbor_path
+                    if not neighbor_file.exists():
+                        continue
+                    try:
+                        n_metadata, n_content, _ = parse_entry(neighbor_file)
+                        neighbors_info.append(
+                            NeighborInfo(
+                                path=neighbor_path,
+                                title=n_metadata.title,
+                                content=n_content,
+                                keywords=list(n_metadata.keywords),
+                                score=score,
+                            )
+                        )
+                    except ParseError:
+                        continue
+
+                if neighbors_info:
+                    # Call strengthen analysis
+                    strengthen_result = await analyze_for_strengthen(
+                        new_entry_content=final_content,
+                        new_entry_keywords=list(metadata.keywords) if metadata.keywords else [],
+                        new_entry_title=title,
+                        neighbors=neighbors_info,
+                        model=config.model,
+                    )
+
+                    if strengthen_result.should_strengthen:
+                        # Re-read entry to get latest metadata (may have semantic links now)
+                        current_metadata, current_content, _ = parse_entry(file_path)
+                        strengthened_metadata = current_metadata.model_copy(
+                            update={"keywords": strengthen_result.new_keywords}
+                        )
+                        strengthened_frontmatter = build_frontmatter(strengthened_metadata)
+                        strengthened_content = strengthened_frontmatter + current_content
+                        file_path.write_text(strengthened_content, encoding="utf-8")
+
+                        # Re-index with updated keywords
+                        _, _, strengthened_chunks = parse_entry(file_path)
+                        if strengthened_chunks:
+                            searcher = get_searcher()
+                            searcher.delete_document(rel_path)
+                            normalized_chunks = normalize_chunks(strengthened_chunks, rel_path)
+                            searcher.index_chunks(normalized_chunks)
+
+                        log.info(
+                            "Strengthened entry %s: keywords %s -> %s",
+                            rel_path,
+                            list(metadata.keywords) if metadata.keywords else [],
+                            strengthen_result.new_keywords,
+                        )
+            except LLMConfigurationError:
+                log.debug("Strengthen skipped: no API key configured")
+            except Exception as e:
+                log.warning("Strengthen failed, continuing: %s", e)
+
         # Queue memory evolution for linked neighbors (non-blocking)
         if linking_result.neighbors_for_evolution:
             _queue_evolution(

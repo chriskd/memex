@@ -492,3 +492,150 @@ Return JSON: {{"keywords": ["keyword1", "keyword2", ...]}}"""
             success=False,
             error=str(e),
         )
+
+
+@dataclass
+class StrengthenResult:
+    """Result of analyzing whether to strengthen a new entry based on neighbors.
+
+    The "strengthen" action in A-Mem updates the NEW entry's keywords and links
+    based on its relationship to existing neighbors. This complements the
+    "update_neighbor" action which updates existing entries.
+    """
+
+    should_strengthen: bool
+    """Whether the new entry should be updated."""
+
+    new_keywords: list[str]
+    """Updated keywords for the new entry (may include refinements based on neighbors)."""
+
+    suggested_links: list[str]
+    """Neighbor paths that should be explicitly linked to."""
+
+
+async def analyze_for_strengthen(
+    new_entry_content: str,
+    new_entry_keywords: list[str],
+    new_entry_title: str,
+    neighbors: list[NeighborInfo],
+    model: str,
+) -> StrengthenResult:
+    """Analyze if a new entry should be strengthened based on its neighbors.
+
+    This implements the A-Mem "strengthen" action: when a new entry is linked
+    to existing neighbors, the LLM analyzes whether the new entry's keywords
+    should be refined based on the discovered relationships.
+
+    Args:
+        new_entry_content: Content of the newly added entry.
+        new_entry_keywords: Current keywords of the new entry.
+        new_entry_title: Title of the new entry.
+        neighbors: List of neighbor entries that were linked to.
+        model: OpenRouter model ID to use.
+
+    Returns:
+        StrengthenResult with updated keywords and suggested links.
+
+    Raises:
+        LLMConfigurationError: If API key not configured.
+    """
+    if not neighbors:
+        return StrengthenResult(
+            should_strengthen=False,
+            new_keywords=new_entry_keywords,
+            suggested_links=[],
+        )
+
+    client = _get_openai_client()
+
+    # Build neighbor descriptions
+    neighbor_sections = []
+    for i, n in enumerate(neighbors):
+        kw_str = ", ".join(n.keywords) if n.keywords else "none"
+        section = f"""NEIGHBOR {i + 1} (path: {n.path}, similarity: {n.score:.2f}):
+Title: {n.title}
+Keywords: {kw_str}
+Content (first 200 chars): {n.content[:200]}"""
+        neighbor_sections.append(section)
+
+    new_kw_str = ", ".join(new_entry_keywords) if new_entry_keywords else "none"
+
+    prompt = f"""A new KB entry was just added and linked to existing entries.
+Analyze whether the NEW entry's keywords should be refined based on these connections.
+
+NEW ENTRY (to potentially strengthen):
+Title: {new_entry_title}
+Current keywords: {new_kw_str}
+Content (first 500 chars): {new_entry_content[:500]}
+
+LINKED NEIGHBORS:
+{chr(10).join(neighbor_sections)}
+
+Decide whether to STRENGTHEN the new entry by:
+1. Refining its keywords based on the discovered relationships
+2. Suggesting which neighbors should be explicitly linked
+
+Only strengthen if the neighbors reveal important context that should be captured.
+Do NOT strengthen if the current keywords are already adequate.
+
+The refined keyword list should:
+- Keep relevant existing keywords
+- Add keywords that capture important relationships to neighbors
+- Typically contain 3-7 keywords total
+
+Respond with JSON:
+{{"should_strengthen": true/false, "new_keywords": ["kw1", "kw2", ...],
+"suggested_links": ["path1", "path2"]}}"""
+
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+
+        content = response.choices[0].message.content or ""
+        result = _extract_first_json_object(content)
+
+        should_strengthen = result.get("should_strengthen", False)
+        if not isinstance(should_strengthen, bool):
+            should_strengthen = False
+
+        new_keywords = result.get("new_keywords", [])
+        if not isinstance(new_keywords, list):
+            new_keywords = new_entry_keywords
+        else:
+            new_keywords = [str(kw).strip().lower() for kw in new_keywords if kw]
+            if not new_keywords:
+                new_keywords = new_entry_keywords
+
+        suggested_links = result.get("suggested_links", [])
+        if not isinstance(suggested_links, list):
+            suggested_links = []
+        else:
+            suggested_links = [str(p).strip() for p in suggested_links if p]
+            # Filter to only paths that are in our neighbors
+            valid_paths = {n.path for n in neighbors}
+            suggested_links = [p for p in suggested_links if p in valid_paths]
+
+        return StrengthenResult(
+            should_strengthen=should_strengthen,
+            new_keywords=new_keywords,
+            suggested_links=suggested_links,
+        )
+
+    except json.JSONDecodeError as e:
+        log.warning("Failed to parse LLM strengthen response: %s", e)
+        return StrengthenResult(
+            should_strengthen=False,
+            new_keywords=new_entry_keywords,
+            suggested_links=[],
+        )
+    except Exception as e:
+        log.warning("LLM API error during strengthen analysis: %s", e)
+        return StrengthenResult(
+            should_strengthen=False,
+            new_keywords=new_entry_keywords,
+            suggested_links=[],
+        )
