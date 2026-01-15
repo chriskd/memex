@@ -1279,7 +1279,7 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope (default: auto-detect)")
-@click.option("--keywords", help="Key concepts for semantic linking (comma-separated)")
+@click.option("--keywords", help="Key concepts for semantic linking (comma-separated). Required when amem_strict: true in .kbconfig")
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
@@ -1579,7 +1579,7 @@ def append(
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content (replaces existing)")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
-@click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
+@click.option("--keywords", help="New keywords for semantic linking (comma-separated). Required with content changes when amem_strict: true")
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
 @click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
@@ -1695,7 +1695,7 @@ def replace_cmd(
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content")
 @click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
-@click.option("--keywords", help="New keywords for semantic linking (comma-separated)")
+@click.option("--keywords", help="New keywords for semantic linking (comma-separated). Required with content changes when amem_strict: true")
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
