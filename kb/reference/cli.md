@@ -350,6 +350,38 @@ mx reindex
 mx reindex --json
 ```
 
+### mx a-mem-init
+
+Initialize A-Mem structures (semantic links + evolution queue) for existing KB entries.
+
+```bash
+mx a-mem-init                        # Run all phases
+mx a-mem-init --dry-run              # Preview without executing
+mx a-mem-init --missing-keywords=llm # Use LLM to extract missing keywords
+mx a-mem-init --missing-keywords=skip # Skip entries without keywords
+mx a-mem-init --scope=project        # Only process project KB
+mx a-mem-init --limit=10             # Process first 10 entries only
+mx a-mem-init --json                 # JSON output
+```
+
+**Phases:**
+1. **Inventory & Validation** - Lists entries, validates keywords
+2. **Keyword Extraction** - Uses LLM to extract keywords (when mode=llm)
+3. **Semantic Linking** - Creates bidirectional links chronologically
+4. **Evolution Queue** - Queues items for `mx evolve`
+
+**Missing Keywords Modes:**
+- `error` - Stop and list missing keywords (default if `amem_strict: true`)
+- `skip` - Skip entries without keywords (default otherwise)
+- `llm` - Extract keywords using LLM (requires `OPENROUTER_API_KEY`)
+
+**Notes:**
+- Processes entries chronologically (oldest first) to simulate incremental A-Mem
+- Only links to entries created BEFORE the current entry
+- Idempotent: safe to re-run without creating duplicates
+
+See [[a-mem-parity/a-mem-init-command-specification.md]] for full specification.
+
 ### mx prime
 
 Output agent workflow context (for hooks).
