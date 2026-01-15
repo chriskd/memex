@@ -205,3 +205,28 @@ class IngestResult(BaseModel):
     title: str  # Entry title (extracted or provided)
     tags: list[str]  # Tags applied
     suggested_tags: list[dict] = Field(default_factory=list)  # Tag suggestions
+
+
+class InitInventoryEntry(BaseModel):
+    """An entry in the a-mem-init inventory."""
+
+    path: str  # Relative path to entry (with @scope/ prefix in multi-KB mode)
+    title: str  # Entry title
+    created: datetime  # Creation timestamp (for chronological ordering)
+    has_keywords: bool  # Whether entry has keywords
+    keyword_status: Literal["ready", "skipped", "needs_llm"]  # Processing status
+    keywords: list[str] = Field(default_factory=list)  # Existing keywords if any
+    absolute_path: str | None = None  # Absolute path for file operations
+
+
+class InitInventoryResult(BaseModel):
+    """Result of a-mem-init inventory phase."""
+
+    entries: list[InitInventoryEntry]  # Entries sorted by created (oldest first)
+    total_count: int  # Total entries found
+    with_keywords: int  # Entries with keywords
+    missing_keywords: int  # Entries without keywords
+    skipped_count: int  # Entries skipped (missing keywords in skip mode)
+    needs_llm_count: int  # Entries queued for LLM keyword extraction
+    missing_keyword_mode: Literal["error", "skip", "llm"]  # Mode used
+    errors: list[str] = Field(default_factory=list)  # Entries that caused errors

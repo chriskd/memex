@@ -20,7 +20,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, NoReturn, cast
+from typing import Any, Literal, NoReturn, Optional, cast
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -3117,6 +3117,144 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
         click.echo(f"Keywords added:  {result.keywords_added}")
         if result.errors:
             click.echo(f"Errors:          {result.errors}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A-Mem Init Command (Bootstrap A-Mem for existing KB)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command("a-mem-init")
+@click.option(
+    "--missing-keywords",
+    type=click.Choice(["error", "skip", "llm"]),
+    default=None,
+    help="How to handle entries without keywords. Default: error if amem_strict, else skip",
+)
+@click.option(
+    "--scope",
+    type=click.Choice(["project", "user"]),
+    default=None,
+    help="Limit to specific KB scope",
+)
+@click.option("--dry-run", is_flag=True, help="Show what would be done without executing")
+@click.option("--limit", type=int, default=None, help="Process up to N entries (for testing)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def a_mem_init(
+    missing_keywords: str | None,
+    scope: str | None,
+    dry_run: bool,
+    limit: int | None,
+    as_json: bool,
+):
+    """Initialize A-Mem structures for existing KB entries.
+
+    Bootstraps semantic linking and evolution queue for a knowledge base with
+    existing entries. Processes entries chronologically (oldest first) to
+    simulate incremental addition.
+
+    \b
+    Phase 1: Inventory & Validation (current implementation)
+      - Lists all entries, sorted by created timestamp
+      - Validates keyword presence
+      - Reports missing keywords according to mode
+
+    \b
+    Examples:
+      mx a-mem-init --dry-run                    # Preview what would happen
+      mx a-mem-init --missing-keywords=skip      # Skip entries without keywords
+      mx a-mem-init --missing-keywords=llm       # Use LLM to extract keywords
+      mx a-mem-init --scope=project              # Only process project KB
+      mx a-mem-init --limit 10                   # Process first 10 entries only
+
+    \b
+    Missing Keywords Modes:
+      error  - Stop and list all entries missing keywords (default if amem_strict)
+      skip   - Skip entries without keywords, continue with others (default otherwise)
+      llm    - Queue entries for LLM keyword extraction (Phase 2)
+    """
+    from .core import amem_init_inventory
+
+    # Run inventory phase
+    result = run_async(amem_init_inventory(
+        scope=scope,  # type: ignore
+        missing_keywords=missing_keywords,  # type: ignore
+        limit=limit,
+    ))
+
+    # JSON output mode
+    if as_json:
+        output({
+            "phase": "inventory",
+            "dry_run": dry_run,
+            "total_count": result.total_count,
+            "with_keywords": result.with_keywords,
+            "missing_keywords": result.missing_keywords,
+            "skipped_count": result.skipped_count,
+            "needs_llm_count": result.needs_llm_count,
+            "mode": result.missing_keyword_mode,
+            "entries": [
+                {
+                    "path": e.path,
+                    "title": e.title,
+                    "created": e.created.isoformat(),
+                    "has_keywords": e.has_keywords,
+                    "keyword_status": e.keyword_status,
+                    "keywords": e.keywords,
+                }
+                for e in result.entries
+            ],
+            "errors": result.errors,
+        }, as_json=True)
+        return
+
+    # Human-readable output
+    if dry_run:
+        click.echo("A-Mem Init (dry run)")
+        click.echo("════════════════════\n")
+    else:
+        click.echo("A-Mem Init")
+        click.echo("══════════\n")
+
+    click.echo("Phase 1: Inventory")
+    click.echo(f"  Entries found:     {result.total_count}")
+    click.echo(f"  With keywords:     {result.with_keywords}")
+
+    if result.missing_keywords > 0:
+        if result.missing_keyword_mode == "skip":
+            click.echo(f"  Missing keywords:  {result.missing_keywords} (will skip)")
+        elif result.missing_keyword_mode == "llm":
+            click.echo(f"  Missing keywords:  {result.missing_keywords} (will extract with LLM)")
+        else:
+            click.echo(f"  Missing keywords:  {result.missing_keywords}")
+
+    # Handle error mode with missing keywords
+    if result.missing_keyword_mode == "error" and result.errors:
+        click.echo(f"\n❌ Error: {result.missing_keywords} entries are missing keywords\n")
+        for error in result.errors:
+            click.echo(f"  {error}")
+        click.echo("\nAdd keywords to these entries or use --missing-keywords=skip to proceed.")
+        raise SystemExit(1)
+
+    # Show processing order preview
+    if dry_run and result.entries:
+        click.echo("\nProcessing order (oldest first):")
+        for i, entry in enumerate(result.entries[:10], 1):
+            date_str = entry.created.strftime("%Y-%m-%d")
+            status = "✓" if entry.has_keywords else "○"
+            click.echo(f"  {i:3}. {status} {date_str}  {entry.path}")
+        if len(result.entries) > 10:
+            click.echo(f"  ... and {len(result.entries) - 10} more entries")
+
+        click.echo("\nRun without --dry-run to execute.")
+    elif not dry_run:
+        # Phase 1 complete - future phases will be added here
+        click.echo("\n✓ Inventory complete")
+        if result.total_count > 0:
+            ready_count = result.with_keywords + result.skipped_count
+            click.echo(f"\n{ready_count} entries ready for semantic linking (Phase 3)")
+            if result.needs_llm_count > 0:
+                click.echo(f"{result.needs_llm_count} entries queued for keyword extraction (Phase 2)")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

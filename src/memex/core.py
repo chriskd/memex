@@ -64,6 +64,8 @@ from .models import (
     DocumentChunk,
     IndexStatus,
     IngestResult,
+    InitInventoryEntry,
+    InitInventoryResult,
     KBEntry,
     PotentialDuplicate,
     QualityReport,
@@ -3747,5 +3749,134 @@ def resolve_entry_by_title(
             raise AmbiguousMatchError(matches)
 
     return matches[0]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# A-Mem Init Functions
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def amem_init_inventory(
+    scope: Literal["project", "user"] | None = None,
+    missing_keywords: Literal["error", "skip", "llm"] | None = None,
+    limit: int | None = None,
+) -> InitInventoryResult:
+    """Build inventory of KB entries for A-Mem initialization.
+
+    Lists all entries in scope, validates keyword presence, and categorizes
+    entries by their keyword status. Entries are sorted by created timestamp
+    (oldest first) for chronological processing in later phases.
+
+    Args:
+        scope: Filter to specific KB scope - "project", "user", or None for all.
+        missing_keywords: How to handle entries without keywords:
+            - "error": Return error list, all missing entries marked as errors
+            - "skip": Mark entries as skipped, continue with others
+            - "llm": Mark entries as needs_llm for Phase 2 keyword extraction
+            - None: Default based on amem_strict config (error if true, skip if false)
+        limit: Maximum number of entries to process (for testing).
+
+    Returns:
+        InitInventoryResult with entries sorted by created date and statistics.
+
+    Example:
+        >>> result = await amem_init_inventory(scope="project", missing_keywords="skip")
+        >>> print(f"Found {result.total_count} entries, {result.with_keywords} ready")
+    """
+    from .config import get_kb_roots_for_indexing
+
+    # Determine default mode based on amem_strict config
+    if missing_keywords is None:
+        missing_keywords = "error" if is_amem_strict_enabled() else "skip"
+
+    kb_roots = get_kb_roots_for_indexing(scope=scope)
+    if not kb_roots:
+        return InitInventoryResult(
+            entries=[],
+            total_count=0,
+            with_keywords=0,
+            missing_keywords=0,
+            skipped_count=0,
+            needs_llm_count=0,
+            missing_keyword_mode=missing_keywords,
+        )
+
+    entries: list[InitInventoryEntry] = []
+    errors: list[str] = []
+
+    for scope_label, kb_root in kb_roots:
+        if not kb_root.exists():
+            continue
+
+        for md_file in kb_root.rglob("*.md"):
+            # Skip index files
+            if md_file.name.startswith("_"):
+                continue
+
+            rel_path = str(md_file.relative_to(kb_root))
+            # Add scope prefix for multi-KB mode
+            display_path = f"@{scope_label}/{rel_path}" if scope_label else rel_path
+
+            try:
+                metadata, _, _ = parse_entry(md_file)
+            except ParseError as e:
+                errors.append(f"{display_path}: {e}")
+                continue
+
+            # Check for keywords
+            has_keywords = bool(metadata.keywords)
+
+            # Determine keyword status based on mode
+            if has_keywords:
+                keyword_status: Literal["ready", "skipped", "needs_llm"] = "ready"
+            elif missing_keywords == "skip":
+                keyword_status = "skipped"
+            elif missing_keywords == "llm":
+                keyword_status = "needs_llm"
+            else:  # error mode
+                keyword_status = "skipped"  # Will be reported as error
+
+            # Ensure created timestamp is timezone-aware
+            created = _ensure_aware(metadata.created) or datetime.now(UTC)
+
+            entries.append(InitInventoryEntry(
+                path=display_path,
+                title=metadata.title,
+                created=created,
+                has_keywords=has_keywords,
+                keyword_status=keyword_status,
+                keywords=list(metadata.keywords) if metadata.keywords else [],
+                absolute_path=str(md_file),
+            ))
+
+    # Sort by created timestamp (oldest first)
+    entries.sort(key=lambda e: e.created)
+
+    # Apply limit if specified
+    if limit is not None and limit > 0:
+        entries = entries[:limit]
+
+    # Calculate statistics
+    with_keywords = sum(1 for e in entries if e.has_keywords)
+    missing_count = len(entries) - with_keywords
+    skipped_count = sum(1 for e in entries if e.keyword_status == "skipped" and not e.has_keywords)
+    needs_llm_count = sum(1 for e in entries if e.keyword_status == "needs_llm")
+
+    # In error mode, add missing keyword entries to errors list
+    if missing_keywords == "error":
+        for e in entries:
+            if not e.has_keywords:
+                errors.append(f"{e.path}: missing keywords")
+
+    return InitInventoryResult(
+        entries=entries,
+        total_count=len(entries),
+        with_keywords=with_keywords,
+        missing_keywords=missing_count,
+        skipped_count=skipped_count,
+        needs_llm_count=needs_llm_count,
+        missing_keyword_mode=missing_keywords,
+        errors=errors,
+    )
 
 
