@@ -191,6 +191,7 @@ def update_metadata_for_edit(
     actor: str | None = None,
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
+    description: str | None = None,
 ) -> EntryMetadata:
     """Create updated metadata for an existing entry.
 
@@ -207,6 +208,7 @@ def update_metadata_for_edit(
         actor: Actor making the edit.
         keywords: Updated keywords (or None to preserve existing).
         semantic_links: Updated semantic links (or None to preserve existing).
+        description: Updated description (or None to preserve existing).
 
     Returns:
         New EntryMetadata with updated fields.
@@ -223,7 +225,7 @@ def update_metadata_for_edit(
 
     return EntryMetadata(
         title=metadata.title,
-        description=metadata.description,
+        description=description if description is not None else metadata.description,
         tags=new_tags if new_tags is not None else list(metadata.tags),
         created=metadata.created,
         updated=datetime.now(UTC),

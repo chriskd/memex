@@ -798,7 +798,6 @@ async def process_evolution_items(
                 new_entry_keywords=list(new_metadata.keywords),
                 neighbors=neighbors_info,
                 model=config.model,
-                max_keywords=config.max_keywords_per_neighbor,
             )
         except Exception as e:
             log.warning("LLM evolution failed for %s: %s", new_entry_path, e)
@@ -809,9 +808,6 @@ async def process_evolution_items(
         for suggestion in suggestions:
             total_processed += 1
 
-            if not suggestion.add_keywords:
-                continue  # No keywords to add
-
             neighbor_file = kb_root / suggestion.neighbor_path
             if not neighbor_file.exists():
                 continue
@@ -819,25 +815,35 @@ async def process_evolution_items(
             try:
                 metadata, content, _ = parse_entry(neighbor_file)
 
-                # Merge new keywords with existing
-                existing_keywords = set(metadata.keywords)
-                new_keywords = [kw for kw in suggestion.add_keywords if kw not in existing_keywords]
+                # Check what's changing
+                existing_keywords = set(kw.lower() for kw in metadata.keywords)
+                new_keywords_set = set(kw.lower() for kw in suggestion.new_keywords)
+                keywords_changed = existing_keywords != new_keywords_set
 
-                if not new_keywords:
-                    continue  # All keywords already exist
+                # Check if description should be updated (only if LLM provided new context)
+                new_description = suggestion.new_context if suggestion.new_context else None
+                description_changed = new_description is not None
 
-                updated_keywords = list(metadata.keywords) + new_keywords
-                total_keywords += len(new_keywords)
+                if not keywords_changed and not description_changed:
+                    continue  # No changes needed
+
+                updated_keywords = suggestion.new_keywords if keywords_changed else None
+                if keywords_changed:
+                    keywords_added = len(new_keywords_set - existing_keywords)
+                    total_keywords += keywords_added
+
                 log.info(
-                    "Evolving %s: adding keywords %s",
+                    "Evolving %s:%s%s",
                     suggestion.neighbor_path,
-                    new_keywords,
+                    f" keywords {list(metadata.keywords)} -> {suggestion.new_keywords}" if keywords_changed else "",
+                    f" description: {new_description}" if description_changed else "",
                 )
 
-                # Update metadata with new keywords
+                # Update metadata with new keywords and/or description
                 updated_metadata = update_metadata_for_edit(
                     metadata,
                     keywords=updated_keywords,
+                    description=new_description,
                 )
 
                 # Write updated file

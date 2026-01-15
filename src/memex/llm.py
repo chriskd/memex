@@ -27,11 +27,14 @@ class EvolutionSuggestion:
     neighbor_path: str
     """Path to the neighbor entry being evolved."""
 
-    add_keywords: list[str]
-    """Keywords to add to the neighbor (0-3 typically)."""
+    new_keywords: list[str]
+    """Complete new keyword list for the neighbor (replaces existing)."""
 
     relationship: str
     """One-sentence description of the relationship, or empty string."""
+
+    new_context: str = ""
+    """Updated context/description for the neighbor (one sentence describing semantic role)."""
 
 
 class LLMConfigurationError(Exception):
@@ -80,7 +83,6 @@ async def evolve_single_neighbor(
     neighbor_keywords: list[str],
     link_score: float,
     model: str,
-    max_keywords: int = 3,
 ) -> EvolutionSuggestion:
     """Analyze relationship between new entry and neighbor, suggest updates.
 
@@ -94,10 +96,9 @@ async def evolve_single_neighbor(
         neighbor_keywords: Current keywords of the neighbor.
         link_score: Similarity score between entries (0.0-1.0).
         model: OpenRouter model ID to use.
-        max_keywords: Maximum keywords to suggest adding.
 
     Returns:
-        EvolutionSuggestion with keywords to add and relationship description.
+        EvolutionSuggestion with new keywords (replaces existing) and relationship.
 
     Raises:
         LLMConfigurationError: If API key not configured.
@@ -118,15 +119,23 @@ Content (first 500 chars): {new_entry_content[:500]}
 
 EXISTING ENTRY (to evolve):
 Title: {neighbor_title}
-Keywords: {neighbor_kw_str}
+Current keywords: {neighbor_kw_str}
 Content (first 500 chars): {neighbor_content[:500]}
 
-Based on this connection, suggest updates for the EXISTING entry:
-1. 0-{max_keywords} keywords to ADD (only if genuinely relevant, avoid duplicates)
-2. One sentence describing this relationship (or empty string if weak)
+Based on this new connection, suggest the COMPLETE new keyword list for the EXISTING entry.
+The new list should:
+- Keep relevant existing keywords
+- Add new keywords based on the connection (if genuinely relevant)
+- Remove keywords that are no longer appropriate
+- Typically contain 3-7 keywords total
+
+Also provide:
+1. One sentence describing this relationship (or empty string if weak)
+2. Updated context: a single sentence describing the EXISTING entry's semantic role in the KB
 
 Respond with JSON only:
-{{"add_keywords": ["kw1", "kw2"], "relationship": "sentence or empty string"}}"""
+{{"new_keywords": ["kw1", "kw2", "kw3"], "relationship": "sentence or empty",
+"new_context": "one sentence describing what this entry is about"}}"""
 
     response = await client.chat.completions.create(
         model=model,
@@ -141,30 +150,35 @@ Respond with JSON only:
         log.warning("Failed to parse LLM response for evolution: %s", e)
         return EvolutionSuggestion(
             neighbor_path=neighbor_path,
-            add_keywords=[],
+            new_keywords=neighbor_keywords,  # Preserve existing on error
             relationship="",
+            new_context="",
         )
 
     # Validate and sanitize keywords
-    add_keywords = result.get("add_keywords", [])
-    if not isinstance(add_keywords, list):
-        add_keywords = []
-    add_keywords = [str(kw).strip().lower() for kw in add_keywords if kw]
-    add_keywords = add_keywords[:max_keywords]
-
-    # Filter out keywords that already exist
-    existing_lower = {kw.lower() for kw in neighbor_keywords}
-    add_keywords = [kw for kw in add_keywords if kw not in existing_lower]
+    new_keywords = result.get("new_keywords", [])
+    if not isinstance(new_keywords, list):
+        new_keywords = neighbor_keywords  # Preserve existing on invalid response
+    else:
+        new_keywords = [str(kw).strip().lower() for kw in new_keywords if kw]
+        if not new_keywords:
+            new_keywords = neighbor_keywords  # Preserve existing if empty
 
     relationship = result.get("relationship", "")
     if not isinstance(relationship, str):
         relationship = ""
     relationship = relationship.strip()
 
+    new_context = result.get("new_context", "")
+    if not isinstance(new_context, str):
+        new_context = ""
+    new_context = new_context.strip()
+
     return EvolutionSuggestion(
         neighbor_path=neighbor_path,
-        add_keywords=add_keywords,
+        new_keywords=new_keywords,
         relationship=relationship,
+        new_context=new_context,
     )
 
 
@@ -185,7 +199,6 @@ async def evolve_neighbors_batched(
     new_entry_keywords: list[str],
     neighbors: list[NeighborInfo],
     model: str,
-    max_keywords: int = 3,
 ) -> list[EvolutionSuggestion]:
     """Analyze relationships with multiple neighbors in a single LLM call.
 
@@ -197,7 +210,6 @@ async def evolve_neighbors_batched(
         new_entry_keywords: Keywords of the new entry.
         neighbors: List of neighbor entries to analyze.
         model: OpenRouter model ID to use.
-        max_keywords: Maximum keywords per neighbor.
 
     Returns:
         List of EvolutionSuggestions, one per neighbor.
@@ -219,7 +231,6 @@ async def evolve_neighbors_batched(
                 neighbor_keywords=n.keywords,
                 link_score=n.score,
                 model=model,
-                max_keywords=max_keywords,
             )
         ]
 
@@ -230,7 +241,7 @@ async def evolve_neighbors_batched(
     for i, n in enumerate(neighbors):
         section = f"""NEIGHBOR {i + 1} (path: {n.path}, similarity: {n.score:.2f}):
 Title: {n.title}
-Keywords: {', '.join(n.keywords) if n.keywords else 'none'}
+Current keywords: {', '.join(n.keywords) if n.keywords else 'none'}
 Content (first 300 chars): {n.content[:300]}"""
         neighbor_sections.append(section)
 
@@ -245,12 +256,20 @@ Content (first 400 chars): {new_entry_content[:400]}
 
 {chr(10).join(neighbor_sections)}
 
-For EACH neighbor, suggest updates based on the connection to the new entry:
-1. 0-{max_keywords} keywords to ADD (only if genuinely relevant, avoid duplicates)
-2. One sentence describing this relationship (or empty string if weak)
+For EACH neighbor, suggest the COMPLETE new keyword list based on the connection to the new entry.
+Each new list should:
+- Keep relevant existing keywords
+- Add new keywords based on the connection (if genuinely relevant)
+- Remove keywords that are no longer appropriate
+- Typically contain 3-7 keywords total
+
+Also provide:
+1. One sentence describing the relationship (or empty string if weak)
+2. Updated context: a single sentence describing that neighbor's semantic role in the KB
 
 Respond with JSON array, one object per neighbor in order:
-[{{"path": "neighbor_path", "add_keywords": ["kw1"], "relationship": "sentence"}}]"""
+[{{"path": "neighbor_path", "new_keywords": ["kw1", "kw2"], "relationship": "sentence",
+"new_context": "one sentence describing what this entry is about"}}]"""
 
     try:
         response = await client.chat.completions.create(
@@ -284,28 +303,32 @@ Respond with JSON array, one object per neighbor in order:
     for i, n in enumerate(neighbors):
         if i < len(results) and isinstance(results[i], dict):
             r = results[i]
-            add_keywords = r.get("add_keywords", [])
-            if not isinstance(add_keywords, list):
-                add_keywords = []
-            add_keywords = [str(kw).strip().lower() for kw in add_keywords if kw]
-            add_keywords = add_keywords[:max_keywords]
-
-            # Filter out existing keywords
-            existing_lower = {kw.lower() for kw in n.keywords}
-            add_keywords = [kw for kw in add_keywords if kw not in existing_lower]
+            new_keywords = r.get("new_keywords", [])
+            if not isinstance(new_keywords, list):
+                new_keywords = n.keywords  # Preserve existing on invalid
+            else:
+                new_keywords = [str(kw).strip().lower() for kw in new_keywords if kw]
+                if not new_keywords:
+                    new_keywords = n.keywords  # Preserve existing if empty
 
             relationship = r.get("relationship", "")
             if not isinstance(relationship, str):
                 relationship = ""
+
+            new_context = r.get("new_context", "")
+            if not isinstance(new_context, str):
+                new_context = ""
         else:
-            add_keywords = []
+            new_keywords = n.keywords  # Preserve existing on missing
             relationship = ""
+            new_context = ""
 
         suggestions.append(
             EvolutionSuggestion(
                 neighbor_path=n.path,
-                add_keywords=add_keywords,
+                new_keywords=new_keywords,
                 relationship=relationship.strip(),
+                new_context=new_context.strip(),
             )
         )
 
