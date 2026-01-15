@@ -732,7 +732,7 @@ async def process_evolution_items(
 
     # Import LLM module
     try:
-        from .llm import NeighborInfo, evolve_neighbors_batched
+        from .llm import NeighborInfo, analyze_evolution
     except ImportError as e:
         log.warning("Memory evolution requires openai package: %s", e)
         return EvolutionResult(processed=0, keywords_added=0, errors=0)
@@ -791,9 +791,9 @@ async def process_evolution_items(
         if not neighbors_info:
             continue
 
-        # Get evolution suggestions from LLM
+        # Get evolution decision from LLM (A-Mem parity: explicit should_evolve)
         try:
-            suggestions = await evolve_neighbors_batched(
+            decision = await analyze_evolution(
                 new_entry_title=new_metadata.title,
                 new_entry_content=new_content,
                 new_entry_keywords=list(new_metadata.keywords),
@@ -805,11 +805,16 @@ async def process_evolution_items(
             total_errors += len(neighbors_info)
             continue
 
-        # Apply suggestions to neighbors
-        for suggestion in suggestions:
+        # A-Mem parity: respect LLM's should_evolve decision
+        if not decision.should_evolve:
+            log.info("LLM decided not to evolve neighbors for: %s", new_entry_path)
+            continue
+
+        # Apply updates to neighbors
+        for update in decision.neighbor_updates:
             total_processed += 1
 
-            neighbor_file = kb_root / suggestion.neighbor_path
+            neighbor_file = kb_root / update.path
             if not neighbor_file.exists():
                 continue
 
@@ -818,25 +823,25 @@ async def process_evolution_items(
 
                 # Check what's changing
                 existing_keywords = set(kw.lower() for kw in metadata.keywords)
-                new_keywords_set = set(kw.lower() for kw in suggestion.new_keywords)
+                new_keywords_set = set(kw.lower() for kw in update.new_keywords)
                 keywords_changed = existing_keywords != new_keywords_set
 
                 # Check if description should be updated (only if LLM provided new context)
-                new_description = suggestion.new_context if suggestion.new_context else None
+                new_description = update.new_context if update.new_context else None
                 description_changed = new_description is not None
 
                 if not keywords_changed and not description_changed:
                     continue  # No changes needed
 
-                updated_keywords = suggestion.new_keywords if keywords_changed else None
+                updated_keywords = update.new_keywords if keywords_changed else None
                 if keywords_changed:
                     keywords_added = len(new_keywords_set - existing_keywords)
                     total_keywords += keywords_added
 
                 log.info(
                     "Evolving %s:%s%s",
-                    suggestion.neighbor_path,
-                    f" keywords {list(metadata.keywords)} -> {suggestion.new_keywords}" if keywords_changed else "",
+                    update.path,
+                    f" keywords {list(metadata.keywords)} -> {update.new_keywords}" if keywords_changed else "",
                     f" description: {new_description}" if description_changed else "",
                 )
 
@@ -845,7 +850,7 @@ async def process_evolution_items(
                     timestamp=datetime.now(UTC),
                     trigger_entry=new_entry_path,
                     previous_keywords=list(metadata.keywords) if keywords_changed else [],
-                    new_keywords=suggestion.new_keywords if keywords_changed else [],
+                    new_keywords=update.new_keywords if keywords_changed else [],
                     previous_description=metadata.description if description_changed else None,
                     new_description=new_description,
                 )
@@ -867,17 +872,17 @@ async def process_evolution_items(
                 try:
                     _, _, updated_chunks = parse_entry(neighbor_file)
                     if updated_chunks:
-                        searcher.delete_document(suggestion.neighbor_path)
-                        normalized_chunks = normalize_chunks(updated_chunks, suggestion.neighbor_path)
+                        searcher.delete_document(update.path)
+                        normalized_chunks = normalize_chunks(updated_chunks, update.path)
                         searcher.index_chunks(normalized_chunks)
                 except ParseError as e:
-                    log.warning("Evolved neighbor but failed to re-index %s: %s", suggestion.neighbor_path, e)
+                    log.warning("Evolved neighbor but failed to re-index %s: %s", update.path, e)
 
             except ParseError as e:
-                log.warning("Failed to apply evolution to %s: %s", suggestion.neighbor_path, e)
+                log.warning("Failed to apply evolution to %s: %s", update.path, e)
                 total_errors += 1
             except OSError as e:
-                log.warning("Failed to write evolved neighbor %s: %s", suggestion.neighbor_path, e)
+                log.warning("Failed to write evolved neighbor %s: %s", update.path, e)
                 total_errors += 1
 
     return EvolutionResult(
