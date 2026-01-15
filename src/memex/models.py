@@ -117,6 +117,41 @@ class SearchResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class RelationNode(BaseModel):
+    """A node in the relations graph."""
+
+    path: str
+    title: str
+    tags: list[str] = Field(default_factory=list)
+    scope: str | None = None
+
+
+class RelationEdge(BaseModel):
+    """A directed edge in the relations graph."""
+
+    source: str
+    target: str
+    origin: Literal["wikilink", "frontmatter"]
+    relation_type: str | None = None
+    score: float | None = None
+
+
+class RelationsGraph(BaseModel):
+    """Unified relations graph across wikilinks and frontmatter edges."""
+
+    nodes: dict[str, RelationNode] = Field(default_factory=dict)
+    edges: list[RelationEdge] = Field(default_factory=list)
+
+
+class RelationsQueryResult(BaseModel):
+    """Subgraph returned from a relations graph query."""
+
+    root: str
+    depth: int
+    nodes: list[RelationNode] = Field(default_factory=list)
+    edges: list[RelationEdge] = Field(default_factory=list)
+
+
 class KBEntry(BaseModel):
     """A full KB entry."""
 

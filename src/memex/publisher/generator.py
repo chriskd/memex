@@ -301,6 +301,7 @@ class SiteGenerator:
         """Generate graph data (JSON) and visualization page (HTML)."""
         import json
 
+        from ..config import parse_scoped_path
         from .templates import render_graph_page
 
         # Build nodes and edges for D3.js force graph
@@ -318,6 +319,13 @@ class SiteGenerator:
             })
             node_ids.add(path)
 
+        def normalize_target(raw_path: str) -> str:
+            scope, relative = parse_scoped_path(raw_path)
+            target = relative
+            if target.endswith(".md"):
+                target = target[:-3]
+            return target
+
         # Add edges from outlinks (only to nodes that exist)
         for path, entry in self.entries.items():
             for target in entry.outlinks:
@@ -325,6 +333,20 @@ class SiteGenerator:
                     edges.append({
                         "source": path,
                         "target": target,
+                        "origin": "wikilink",
+                        "type": None,
+                        "score": None,
+                    })
+
+            for link in entry.metadata.semantic_links:
+                target = normalize_target(link.path)
+                if target in node_ids:
+                    edges.append({
+                        "source": path,
+                        "target": target,
+                        "origin": "frontmatter",
+                        "type": link.reason,
+                        "score": link.score,
                     })
 
         graph_data = {

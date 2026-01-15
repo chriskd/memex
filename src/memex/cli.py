@@ -1267,6 +1267,99 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Relations Graph Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.argument("path", required=False)
+@click.option("--depth", type=click.IntRange(min=0, max=5), default=1, help="Hops to traverse (default 1)")
+@click.option(
+    "--direction",
+    type=click.Choice(["outgoing", "incoming", "both"]),
+    default="both",
+    help="Edge direction to traverse (default both)",
+)
+@click.option(
+    "--origin",
+    "origins",
+    multiple=True,
+    type=click.Choice(["wikilink", "frontmatter"]),
+    help="Filter by edge origin (repeatable)",
+)
+@click.option("--type", "relation_types", multiple=True, help="Filter by relation type")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to KB scope")
+@click.option("--graph", "full_graph", is_flag=True, help="Output full graph (JSON only)")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def relations(
+    path: str | None,
+    depth: int,
+    direction: str,
+    origins: tuple[str, ...],
+    relation_types: tuple[str, ...],
+    scope: str | None,
+    full_graph: bool,
+    as_json: bool,
+):
+    """Query the unified relations graph."""
+    from .relations_graph import ensure_relations_graph, query_relations_graph
+
+    if full_graph:
+        if not as_json:
+            click.echo("Use --json with --graph to output the full relations graph.", err=True)
+            sys.exit(1)
+        graph = ensure_relations_graph(scope=scope)
+        output(graph.model_dump(), as_json=True)
+        return
+
+    if not path:
+        click.echo("Error: PATH is required unless --graph is specified.", err=True)
+        sys.exit(1)
+
+    origin_set = set(origins) if origins else None
+    type_set = set(relation_types) if relation_types else None
+
+    try:
+        result = query_relations_graph(
+            path=path,
+            depth=depth,
+            direction=cast(Literal["outgoing", "incoming", "both"], direction),
+            origin=origin_set,
+            relation_types=type_set,
+            scope=scope,
+        )
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        output(result.model_dump(), as_json=True)
+        return
+
+    click.echo(f"Root:  {result.root}")
+    click.echo(f"Nodes: {len(result.nodes)}")
+    click.echo(f"Edges: {len(result.edges)}")
+
+    if not result.edges:
+        return
+
+    rows = []
+    for edge in result.edges:
+        rows.append(
+            {
+                "source": edge.source,
+                "target": edge.target,
+                "origin": edge.origin,
+                "type": edge.relation_type or "",
+                "score": f"{edge.score:.3f}" if edge.score is not None else "",
+            }
+        )
+
+    click.echo()
+    click.echo(format_table(rows, ["source", "target", "origin", "type", "score"], {"source": 40, "target": 40}))
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Add Command
 # ─────────────────────────────────────────────────────────────────────────────
 

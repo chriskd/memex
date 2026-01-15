@@ -734,15 +734,21 @@ def render_graph_page(
                 .force('center', d3.forceCenter(width / 2, height / 2))
                 .force('collision', d3.forceCollide().radius(20));
 
+            const edgeColors = {
+                'wikilink': '#262b3a',
+                'frontmatter': '#5e81ac'
+            };
+
             // Links
             const link = g.append('g')
                 .attr('class', 'links')
                 .selectAll('line')
                 .data(data.edges)
                 .join('line')
-                .attr('stroke', '#262b3a')
-                .attr('stroke-opacity', 0.4)
-                .attr('stroke-width', 1);
+                .attr('stroke', d => edgeColors[d.origin] || '#262b3a')
+                .attr('stroke-opacity', 0.5)
+                .attr('stroke-width', d => d.score ? 1 + (d.score * 2) : 1)
+                .attr('stroke-dasharray', d => d.origin === 'wikilink' ? '2,2' : null);
 
             // Nodes
             const node = g.append('g')
@@ -813,6 +819,19 @@ def render_graph_page(
                 })
                 .on('click', (event, d) => {
                     window.location.href = baseUrl + '/' + d.url;
+                });
+
+            link.on('mouseover', (event, d) => {
+                    tooltip.style.display = 'block';
+                    const label = d.type ? d.type : 'wikilink';
+                    const score = d.score ? ' (' + d.score.toFixed(2) + ')' : '';
+                    tooltip.innerHTML = '<strong>' + label + '</strong>' +
+                        '<br>' + d.source.id + ' → ' + d.target.id + score;
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY + 10) + 'px';
+                })
+                .on('mouseout', () => {
+                    tooltip.style.display = 'none';
                 });
 
             // Simulation tick

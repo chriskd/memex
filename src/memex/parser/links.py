@@ -104,6 +104,35 @@ def resolve_backlinks(
     return {k: list(v) for k, v in backlinks.items()}
 
 
+def resolve_wikilink_target(
+    source: str,
+    target: str,
+    title_index: dict[str, str] | TitleIndex | None,
+) -> str | None:
+    """Resolve a wikilink target to a normalized path.
+
+    Handles title/alias resolution and relative path normalization.
+
+    Args:
+        source: Source file path without .md (e.g., "path/to/source").
+        target: Raw wikilink target (e.g., "Entry Title", "../other").
+        title_index: Title/alias index for resolution.
+
+    Returns:
+        Resolved path without .md, or None if not resolvable.
+    """
+    # Relative paths should resolve based on source directory
+    if target.startswith("..") or target.startswith("./"):
+        return _resolve_relative_link(source, target)
+
+    resolved = resolve_link_target(target, title_index, source)
+    if resolved is not None:
+        return resolved
+
+    # Fall back to relative resolution if title/path lookup failed
+    return _resolve_relative_link(source, target)
+
+
 def _resolve_relative_link(source: str, target: str) -> str:
     """Resolve a potentially relative link target.
 
