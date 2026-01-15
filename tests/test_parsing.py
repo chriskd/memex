@@ -29,7 +29,8 @@ from memex.parser.links import (
     update_links_batch,
     update_links_in_files,
 )
-from memex.parser.markdown import ParseError, _chunk_by_h2, parse_entry
+from memex.parser.chunking import chunk_by_headers
+from memex.parser.markdown import ParseError, parse_entry
 from memex.parser.md_renderer import MarkdownResult, normalize_link, render_markdown
 
 
@@ -737,29 +738,20 @@ class TestParseEntry:
         assert "frontmatter" in str(exc.value).lower()
 
 
-class TestChunkByH2:
-    """Tests for _chunk_by_h2 function."""
+class TestChunkByHeaders:
+    """Tests for chunk_by_headers function."""
 
-    @pytest.fixture
-    def metadata(self) -> EntryMetadata:
-        """Sample metadata for chunking tests."""
-        return EntryMetadata(
-            title="Test",
-            tags=["test"],
-            created=datetime(2024, 1, 1, 0, 0, 0),
-        )
-
-    def test_no_h2_headers_single_chunk(self, metadata: EntryMetadata):
+    def test_no_h2_headers_single_chunk(self):
         """Content without H2 headers becomes a single chunk."""
         content = "Just a paragraph.\n\nAnother paragraph."
 
-        chunks = _chunk_by_h2("test.md", content, metadata)
+        chunks = chunk_by_headers(content)
 
         assert len(chunks) == 1
         assert chunks[0].section is None
         assert "Just a paragraph" in chunks[0].content
 
-    def test_h2_headers_create_sections(self, metadata: EntryMetadata):
+    def test_h2_headers_create_sections(self):
         """H2 headers split content into named sections."""
         content = """Intro text.
 
@@ -771,7 +763,7 @@ Content of section one.
 
 Content of section two.
 """
-        chunks = _chunk_by_h2("test.md", content, metadata)
+        chunks = chunk_by_headers(content)
 
         sections = [c.section for c in chunks]
         assert None in sections  # Intro chunk

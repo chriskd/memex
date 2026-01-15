@@ -57,6 +57,7 @@ class HybridSearcher:
         project_context: str | None = None,
         kb_context: KBContext | None = None,
         strict: bool = False,
+        dedupe_by_path: bool = True,
     ) -> list[SearchResult]:
         """Search the knowledge base.
 
@@ -70,7 +71,7 @@ class HybridSearcher:
                 to filter out low-confidence matches.
 
         Returns:
-            List of search results, deduplicated by document path.
+            List of search results. Defaults to deduplicating by document path.
         """
         # Fetch more results to allow for deduplication
         fetch_limit = limit * 3
@@ -87,8 +88,10 @@ class HybridSearcher:
         else:
             results = self._hybrid_search(query, limit=fetch_limit, project_context=project_context, kb_context=kb_context, min_similarity=min_similarity)
 
-        # Deduplicate by path, keeping highest-scoring chunk per document
-        return self._deduplicate_by_path(results, limit)
+        if dedupe_by_path:
+            # Deduplicate by path, keeping highest-scoring chunk per document
+            return self._deduplicate_by_path(results, limit)
+        return results[:limit]
 
     def _hybrid_search(
         self,
@@ -149,23 +152,22 @@ class HybridSearcher:
         Returns:
             Merged and re-ranked results.
         """
-        # Build result map for deduplication (key: path#section)
+        # Build result map for deduplication (key: path#chunk_idx)
         result_map: dict[str, SearchResult] = {}
         rrf_scores: dict[str, float] = defaultdict(float)
 
         # Process Whoosh results
         for rank, result in enumerate(whoosh_results, start=1):
-            key = f"{result.path}#{result.section or ''}"
+            key = f"{result.path}#chunk_{result.chunk_idx}"
             rrf_scores[key] += 1.0 / (RRF_K + rank)
             if key not in result_map:
                 result_map[key] = result
 
         # Process Chroma results
         for rank, result in enumerate(chroma_results, start=1):
-            key = f"{result.path}#{result.section or ''}"
+            key = f"{result.path}#chunk_{result.chunk_idx}"
             rrf_scores[key] += 1.0 / (RRF_K + rank)
-            if key not in result_map:
-                result_map[key] = result
+            result_map[key] = result
 
         # Sort by RRF score
         sorted_keys = sorted(rrf_scores.keys(), key=lambda k: rrf_scores[k], reverse=True)
@@ -287,28 +289,35 @@ class HybridSearcher:
         deduplicated = sorted(best_by_path.values(), key=lambda r: r.score, reverse=True)
         return deduplicated[:limit]
 
-    def index_document(self, chunk: DocumentChunk) -> None:
-        """Index a single document chunk to both indices.
+    def index_document(self, document: DocumentChunk, chunks: list[DocumentChunk]) -> None:
+        """Index a single document to Whoosh and its chunks to Chroma.
 
         Args:
-            chunk: The document chunk to index.
+            document: Full-document chunk for Whoosh.
+            chunks: Chunked segments for Chroma.
         """
-        self._whoosh.index_document(chunk)
-        self._chroma.index_document(chunk)
+        self._whoosh.index_document(document)
+        if chunks:
+            self._chroma.index_documents(chunks)
         self._last_indexed = datetime.now(UTC)
 
-    def index_chunks(self, chunks: list[DocumentChunk]) -> None:
-        """Index multiple document chunks to both indices.
+    def index_chunks(
+        self, chunks: list[DocumentChunk], documents: list[DocumentChunk] | None = None
+    ) -> None:
+        """Index documents to Whoosh and chunks to Chroma.
 
         Args:
-            chunks: List of document chunks to index.
+            chunks: List of chunked segments for Chroma.
+            documents: List of full-document chunks for Whoosh.
         """
-        if not chunks:
-            return
-
-        self._whoosh.index_documents(chunks)
-        self._chroma.index_documents(chunks)
-        self._last_indexed = datetime.now(UTC)
+        if documents is None:
+            documents = chunks
+        if documents:
+            self._whoosh.index_documents(documents)
+        if chunks:
+            self._chroma.index_documents(chunks)
+        if documents or chunks:
+            self._last_indexed = datetime.now(UTC)
 
     def delete_document(self, path: str) -> None:
         """Delete a document from both indices.
@@ -319,24 +328,37 @@ class HybridSearcher:
         self._whoosh.delete_document(path)
         self._chroma.delete_document(path)
 
-    def reindex(self, kb_root: Path | None = None, kb_roots: list[tuple[str | None, Path]] | None = None) -> int:
+    def reindex(
+        self,
+        kb_root: Path | None = None,
+        kb_roots: list[tuple[str | None, Path]] | None = None,
+        *,
+        rechunk: bool = True,
+        chunking_strategy: str | None = None,
+    ) -> int:
         """Clear and rebuild indices from all markdown files.
 
         Args:
             kb_root: Knowledge base root directory (single KB mode). Uses config default if None.
             kb_roots: List of (scope, path) tuples for multi-KB mode. Scope is "project" or "user".
                       If provided, kb_root is ignored.
+            rechunk: If True, rebuild Chroma chunks; if False, keep existing Chroma data.
+            chunking_strategy: Strategy name to persist in Chroma metadata (when rechunking).
 
         Returns:
             Number of chunks indexed.
         """
         # Clear existing indices
-        self.clear()
+        if rechunk:
+            self.clear()
+        else:
+            self._whoosh.clear()
 
         # Import parser here to avoid circular imports
         from ..parser import parse_entry
 
         chunks: list[DocumentChunk] = []
+        documents: list[DocumentChunk] = []
 
         # Build list of (scope, kb_path) to index
         if kb_roots:
@@ -355,7 +377,7 @@ class HybridSearcher:
             for md_file in md_files:
                 try:
                     # Parse the file - returns (metadata, content, chunks)
-                    _, _, file_chunks = parse_entry(md_file)
+                    metadata, content, file_chunks = parse_entry(md_file)
                     if not file_chunks:
                         continue
 
@@ -366,19 +388,34 @@ class HybridSearcher:
                     else:
                         prefixed_path = relative_path
 
-                    normalized_chunks = [
-                        chunk.model_copy(update={"path": prefixed_path}) for chunk in file_chunks
-                    ]
-                    chunks.extend(normalized_chunks)
+                    if rechunk:
+                        normalized_chunks = [
+                            chunk.model_copy(update={"path": prefixed_path}) for chunk in file_chunks
+                        ]
+                        chunks.extend(normalized_chunks)
+
+                    from ..parser.chunking import build_document_chunk
+
+                    document_chunk = build_document_chunk(
+                        prefixed_path, content, metadata, chunk_strategy="document"
+                    )
+                    if document_chunk:
+                        documents.append(document_chunk)
                 except Exception as e:
                     log.warning("Skipping %s during reindex: %s", md_file, e)
                     continue
 
         # Index all chunks
-        if chunks:
-            self.index_chunks(chunks)
+        if chunks or documents:
+            self.index_chunks(chunks, documents)
+        if rechunk and chunking_strategy:
+            self._chroma.set_chunking_strategy(chunking_strategy)
 
         return len(chunks)
+
+    def get_chunking_strategy(self) -> str | None:
+        """Return stored chunking strategy from Chroma metadata."""
+        return self._chroma.get_chunking_strategy()
 
     def clear(self) -> None:
         """Clear both indices."""

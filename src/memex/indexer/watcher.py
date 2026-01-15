@@ -187,17 +187,23 @@ class FileWatcher:
                     continue
 
                 relative_path = str(file_path.relative_to(self._kb_root))
-                _, _, chunks = parse_entry(file_path)
+                metadata, content, chunks = parse_entry(file_path)
                 if not chunks:
                     continue
 
                 normalized_chunks = [
                     chunk.model_copy(update={"path": relative_path}) for chunk in chunks
                 ]
+                from ..parser.chunking import build_document_chunk
+
+                document_chunk = build_document_chunk(
+                    relative_path, content, metadata, chunk_strategy="document"
+                )
+                documents = [document_chunk] if document_chunk else []
 
                 # Update index
                 self._searcher.delete_document(relative_path)
-                self._searcher.index_chunks(normalized_chunks)
+                self._searcher.index_chunks(normalized_chunks, documents)
                 logger.debug(f"Re-indexed: {relative_path}")
                 refresh_backlinks = True
 

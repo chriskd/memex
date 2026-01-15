@@ -111,7 +111,7 @@ class ChromaIndex:
         collection = self._get_collection()
 
         # Create unique chunk ID
-        chunk_id = f"{chunk.path}#{chunk.section or 'main'}"
+        chunk_id = f"{chunk.path}#chunk_{chunk.chunk_idx}"
 
         # Build text for embedding with keywords and tags
         embedding_text = self._build_embedding_text(
@@ -128,6 +128,11 @@ class ChromaIndex:
             "path": chunk.path,
             "title": chunk.metadata.title,
             "section": chunk.section or "",
+            "parent_section": chunk.parent_section or "",
+            "chunk_idx": chunk.chunk_idx,
+            "chunk_strategy": chunk.chunk_strategy,
+            "start_offset": chunk.start_offset,
+            "end_offset": chunk.end_offset,
             "tags": ",".join(chunk.metadata.tags),
             "created": chunk.metadata.created.isoformat() if chunk.metadata.created else "",
             "updated": chunk.metadata.updated.isoformat() if chunk.metadata.updated else "",
@@ -155,10 +160,10 @@ class ChromaIndex:
         collection = self._get_collection()
 
         # Deduplicate chunks by ID, keeping the last occurrence
-        # (handles cases where documents have duplicate sections)
+        # (handles cases where chunks are duplicated in input list)
         seen_ids: dict[str, int] = {}
         for i, chunk in enumerate(chunks):
-            chunk_id = f"{chunk.path}#{chunk.section or 'main'}"
+            chunk_id = f"{chunk.path}#chunk_{chunk.chunk_idx}"
             seen_ids[chunk_id] = i  # Later occurrences overwrite earlier
 
         # Build lists using deduplicated indices
@@ -184,6 +189,11 @@ class ChromaIndex:
                     "path": chunk.path,
                     "title": chunk.metadata.title,
                     "section": chunk.section or "",
+                    "parent_section": chunk.parent_section or "",
+                    "chunk_idx": chunk.chunk_idx,
+                    "chunk_strategy": chunk.chunk_strategy,
+                    "start_offset": chunk.start_offset,
+                    "end_offset": chunk.end_offset,
                     "tags": ",".join(chunk.metadata.tags),
                     "created": chunk.metadata.created.isoformat() if chunk.metadata.created else "",
                     "updated": chunk.metadata.updated.isoformat() if chunk.metadata.updated else "",
@@ -289,6 +299,11 @@ class ChromaIndex:
                     score=score,
                     tags=tag_list,
                     section=meta.get("section") or None,
+                    parent_section=meta.get("parent_section") or None,
+                    chunk_idx=meta.get("chunk_idx") or 0,
+                    chunk_strategy=meta.get("chunk_strategy") or None,
+                    start_offset=meta.get("start_offset"),
+                    end_offset=meta.get("end_offset"),
                     created=created_date,
                     updated=updated_date,
                     token_count=meta.get("token_count") or 0,
@@ -324,6 +339,19 @@ class ChromaIndex:
         """Return the number of documents in the index."""
         collection = self._get_collection()
         return collection.count()
+
+    def get_chunking_strategy(self) -> str | None:
+        """Return the chunking strategy stored in collection metadata."""
+        collection = self._get_collection()
+        metadata = collection.metadata or {}
+        return metadata.get("chunking_strategy")
+
+    def set_chunking_strategy(self, strategy: str) -> None:
+        """Persist the chunking strategy in collection metadata."""
+        collection = self._get_collection()
+        metadata = dict(collection.metadata or {})
+        metadata["chunking_strategy"] = strategy
+        collection.modify(metadata=metadata)
 
     def delete_document(self, path: str) -> None:
         """Delete all chunks for a document path.

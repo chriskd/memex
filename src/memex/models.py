@@ -97,6 +97,11 @@ class DocumentChunk(BaseModel):
 
     path: str
     section: str | None = None
+    parent_section: str | None = None
+    chunk_idx: int = 0
+    chunk_strategy: str = "headers"
+    start_offset: int = 0
+    end_offset: int = 0
     content: str
     metadata: EntryMetadata
     token_count: int | None = None
@@ -111,6 +116,11 @@ class SearchResult(BaseModel):
     score: float
     tags: list[str] = Field(default_factory=list)
     section: str | None = None
+    parent_section: str | None = None
+    chunk_idx: int = 0
+    chunk_strategy: str | None = None
+    start_offset: int | None = None
+    end_offset: int | None = None
     created: datetime | None = None
     updated: datetime | None = None
     token_count: int = 0
