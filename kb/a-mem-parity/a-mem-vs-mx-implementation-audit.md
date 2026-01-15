@@ -6,11 +6,10 @@ tags:
   - parity
   - architecture
 created: 2026-01-15T03:42:58.597990+00:00
+updated: 2026-01-15T05:42:49.128716+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
 keywords:
   - implementation-comparison
   - evolution-semantics
@@ -33,6 +32,9 @@ semantic_links:
   - path: a-mem-parity/a-mem-evaluation-methodology.md
     score: 0.667
     reason: embedding_similarity
+  - path: memex/chunking-system-design.md
+    score: 0.632
+    reason: bidirectional
 ---
 
 # A-Mem vs mx Implementation Audit

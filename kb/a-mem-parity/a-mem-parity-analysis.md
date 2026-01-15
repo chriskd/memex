@@ -5,7 +5,7 @@ tags:
   - analysis
   - parity
 created: 2026-01-14T23:35:59.371670+00:00
-updated: 2026-01-14T23:36:37.568892+00:00
+updated: 2026-01-15T05:42:49.679903+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
@@ -15,6 +15,9 @@ semantic_links:
     reason: bidirectional
   - path: a-mem-parity/entry-metadata-schema.md
     score: 0.68
+    reason: bidirectional
+  - path: memex/chunking-system-design.md
+    score: 0.632
     reason: bidirectional
 ---
 

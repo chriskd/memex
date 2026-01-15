@@ -1834,10 +1834,11 @@ async def ingest_file(
     has_frontmatter = bool(post.metadata)
 
     # Extract or derive title
+    entry_title: str
     if title:
         entry_title = title
     elif has_frontmatter and post.metadata.get('title'):
-        entry_title = post.metadata['title']
+        entry_title = str(post.metadata['title'])
     else:
         # Try to extract from first H1 heading
         h1_match = re.match(r'^#\s+(.+)$', post.content.strip(), re.MULTILINE)
@@ -1848,11 +1849,12 @@ async def ingest_file(
             entry_title = source_path.stem.replace('-', ' ').replace('_', ' ').title()
 
     # Determine tags
+    entry_tags: list[str]
     if tags:
         entry_tags = tags
     elif has_frontmatter and post.metadata.get('tags'):
         existing_tags = post.metadata['tags']
-        entry_tags = existing_tags if isinstance(existing_tags, list) else [existing_tags]
+        entry_tags = [str(t) for t in existing_tags] if isinstance(existing_tags, list) else [str(existing_tags)]
     else:
         # Default to empty list - tags will be suggested
         entry_tags = []
@@ -1918,11 +1920,14 @@ async def ingest_file(
         if has_frontmatter:
             # Preserve fields that create_new_metadata doesn't set
             if post.metadata.get('description'):
-                metadata.description = post.metadata['description']
+                metadata.description = str(post.metadata['description'])
             if post.metadata.get('aliases'):
-                metadata.aliases = post.metadata['aliases']
+                aliases = post.metadata['aliases']
+                metadata.aliases = [str(a) for a in aliases] if isinstance(aliases, list) else [str(aliases)]
             if post.metadata.get('status'):
-                metadata.status = post.metadata['status']
+                status_val = post.metadata['status']
+                if status_val in ("draft", "published", "archived"):
+                    metadata.status = status_val  # type: ignore[assignment]
             # Preserve original created date if present
             if post.metadata.get('created'):
                 try:

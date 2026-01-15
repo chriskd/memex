@@ -6,12 +6,10 @@ tags:
   - evaluation
   - agents
 created: 2026-01-15T02:05:06.312359+00:00
-updated: 2026-01-15T03:22:56.340760+00:00
+updated: 2026-01-15T05:42:50.199590+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
 keywords:
   - test-cases
   - agent-behavior
@@ -35,6 +33,9 @@ semantic_links:
   - path: reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.md
     score: 0.609
     reason: embedding_similarity
+  - path: memex/chunking-system-design.md
+    score: 0.622
+    reason: bidirectional
 ---
 
 # A-Mem Test Cases for Agent Evaluation
