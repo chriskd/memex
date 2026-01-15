@@ -1,8 +1,25 @@
 ---
 title: MCP Server Setup
-tags: [mcp, claude-desktop, setup, configuration]
-created: 2026-01-06
 description: Configure memex as an MCP server for Claude Desktop
+tags:
+  - mcp
+  - claude-desktop
+  - setup
+  - configuration
+created: 2026-01-06T00:00:00
+updated: 2026-01-15T03:28:16.668586+00:00
+contributors:
+  - chriskd <2326567+chriskd@users.noreply.github.com>
+edit_sources:
+  - memex
+git_branch: main
+last_edited_by: chris
+keywords:
+  - model context protocol (mcp)
+  - memex knowledge base
+  - semantic search
+  - mcp server configuration
+  - knowledge management tools
 ---
 
 # MCP Server Setup

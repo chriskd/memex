@@ -1,8 +1,18 @@
 ---
 title: AI Agent Integration
-tags: [ai, claude-code, codex, agents, integration]
-created: 2026-01-06
 description: How to use memex with AI coding assistants
+tags:
+  - ai
+  - claude-code
+  - codex
+  - agents
+  - integration
+created: 2026-01-06T00:00:00
+updated: 2026-01-15T03:22:55.480350+00:00
+semantic_links:
+  - path: a-mem-parity/a-mem-test-cases-for-agent-evaluation.md
+    score: 0.667
+    reason: bidirectional
 ---
 
 # AI Agent Integration

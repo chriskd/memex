@@ -5,15 +5,17 @@ tags:
   - testing
   - evaluation
 created: 2026-01-14T23:36:01.305747+00:00
+updated: 2026-01-15T03:22:55.050600+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
 semantic_links:
   - path: a-mem-parity/a-mem-parity-analysis.md
     score: 0.735
     reason: embedding_similarity
+  - path: a-mem-parity/a-mem-test-cases-for-agent-evaluation.md
+    score: 0.727
+    reason: bidirectional
 ---
 
 # A-Mem Evaluation Methodology

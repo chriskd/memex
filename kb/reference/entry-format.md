@@ -1,8 +1,25 @@
 ---
 title: Entry Format Reference
-tags: [reference, frontmatter, markdown, links]
-created: 2026-01-06
 description: Markdown entry format with YAML frontmatter and bidirectional links
+tags:
+  - reference
+  - frontmatter
+  - markdown
+  - links
+created: 2026-01-06T00:00:00
+updated: 2026-01-15T03:28:13.038158+00:00
+contributors:
+  - chriskd <2326567+chriskd@users.noreply.github.com>
+edit_sources:
+  - memex
+git_branch: main
+last_edited_by: chris
+keywords:
+  - memex
+  - markdown
+  - yaml frontmatter
+  - bidirectional links
+  - knowledge management
 ---
 
 # Entry Format Reference

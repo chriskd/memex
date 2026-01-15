@@ -1,8 +1,24 @@
 ---
 title: CLI Reference
-tags: [cli, reference, commands]
-created: 2026-01-06
 description: Complete reference for the mx command-line interface
+tags:
+  - cli
+  - reference
+  - commands
+created: 2026-01-06T00:00:00
+updated: 2026-01-15T03:28:03.257645+00:00
+contributors:
+  - chriskd <2326567+chriskd@users.noreply.github.com>
+edit_sources:
+  - memex
+git_branch: main
+last_edited_by: chris
+keywords:
+  - hybrid search
+  - semantic search
+  - cli knowledge base
+  - search scoring
+  - query filtering
 ---
 
 # CLI Reference
