@@ -428,6 +428,90 @@ MEMORY_EVOLUTION_MIN_SCORE = 0.7
 
 
 # =============================================================================
+# LLM Provider Configuration
+# =============================================================================
+
+
+@dataclass
+class LLMConfig:
+    """Configuration for LLM provider and models.
+
+    Applies to all LLM-powered features (memory capture, evolution, etc.).
+    Provider is auto-detected from available API keys unless explicitly set.
+
+    Example .kbconfig:
+        llm:
+          provider: anthropic  # or "openrouter"
+          model: claude-3.5-haiku
+          models:
+            memory_capture: claude-3-haiku
+            memory_evolution: claude-3.5-haiku
+    """
+
+    provider: str | None = None
+    """LLM provider: 'anthropic' or 'openrouter'. Auto-detected if None."""
+
+    model: str = "claude-3.5-haiku"
+    """Default model for all LLM features."""
+
+    models: dict[str, str] | None = None
+    """Per-feature model overrides. Keys: 'memory_capture', 'memory_evolution'"""
+
+    def get_model(self, feature: str) -> str:
+        """Get the model for a specific feature.
+
+        Args:
+            feature: Feature name like 'memory_capture' or 'memory_evolution'.
+
+        Returns:
+            Model name, using feature-specific override if set.
+        """
+        if self.models and feature in self.models:
+            return self.models[feature]
+        return self.model
+
+
+def get_llm_config() -> LLMConfig:
+    """Load LLM config from .kbconfig.
+
+    Config is loaded from the project .kbconfig file's llm section.
+    Returns default config if not configured or KB not found.
+
+    Example .kbconfig:
+        llm:
+          provider: anthropic
+          model: claude-3.5-haiku
+          models:
+            memory_capture: claude-3-haiku
+
+    Returns:
+        LLMConfig with loaded or default values.
+    """
+    import yaml
+
+    try:
+        project_config = _discover_project_config()
+        if not project_config:
+            return LLMConfig()
+
+        config_path, _ = project_config
+        content = config_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content) or {}
+
+        llm_data = data.get("llm", {})
+        if not llm_data:
+            return LLMConfig()
+
+        return LLMConfig(
+            provider=llm_data.get("provider"),
+            model=llm_data.get("model", "claude-3.5-haiku"),
+            models=llm_data.get("models"),
+        )
+    except (OSError, yaml.YAMLError):
+        return LLMConfig()
+
+
+# =============================================================================
 # Memory Evolution (A-Mem style)
 # =============================================================================
 
@@ -441,13 +525,17 @@ class MemoryEvolutionConfig:
 
     Evolution is queued (non-blocking) and processed by `mx evolve`.
     Auto-triggers can spawn background evolution processing.
+
+    Note: Model configuration has moved to the top-level llm: section.
+    The model field here is kept for backwards compatibility but
+    llm.models.memory_evolution takes precedence if set.
     """
 
     enabled: bool = False
-    """Whether memory evolution is active. Requires OPENROUTER_API_KEY."""
+    """Whether memory evolution is active. Requires ANTHROPIC_API_KEY or OPENROUTER_API_KEY."""
 
     model: str = "anthropic/claude-3-5-haiku"
-    """OpenRouter model ID for evolution analysis."""
+    """Model ID for evolution analysis. Deprecated: prefer llm.models.memory_evolution."""
 
     min_score: float = MEMORY_EVOLUTION_MIN_SCORE
     """Minimum similarity score to trigger evolution (0.0-1.0)."""
