@@ -736,7 +736,7 @@ def render_graph_page(
 
             const edgeColors = {
                 'wikilink': '#262b3a',
-                'frontmatter': '#5e81ac'
+                'relations': '#5e81ac'
             };
 
             // Links

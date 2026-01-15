@@ -57,6 +57,13 @@ class SemanticLink(BaseModel):
     reason: str  # How discovered: 'embedding_similarity' | 'shared_tags' | 'bidirectional'
 
 
+class RelationLink(BaseModel):
+    """A typed relation to another entry (manual, not A-Mem)."""
+
+    path: str  # Target entry path
+    type: str  # Relation type (e.g., "implements", "depends_on")
+
+
 class EntryMetadata(BaseModel):
     """Frontmatter metadata for a KB entry."""
 
@@ -80,6 +87,8 @@ class EntryMetadata(BaseModel):
     # A-Mem semantic linking
     keywords: list[str] = Field(default_factory=list)  # LLM-extracted key concepts
     semantic_links: list[SemanticLink] = Field(default_factory=list)  # Computed relationships
+    # Typed relations (manual, non-A-Mem)
+    relations: list[RelationLink] = Field(default_factory=list)
     evolution_history: list[EvolutionRecord] = Field(default_factory=list)  # How entry evolved
 
 
@@ -131,7 +140,7 @@ class RelationEdge(BaseModel):
 
     source: str
     target: str
-    origin: Literal["wikilink", "frontmatter"]
+    origin: Literal["wikilink", "relations"]
     relation_type: str | None = None
     score: float | None = None
 

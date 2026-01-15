@@ -5,19 +5,20 @@ tags:
   - relations
   - graph
 created: 2026-01-15T06:32:18.918996+00:00
+updated: 2026-01-15T06:43:29.615952+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
+git_branch: relations-field
 last_edited_by: chris
-semantic_links:
+relations:
   - path: memex/relations-graph/relations-graph-overview.md
-    score: 0.88
-    reason: extends
+    type: extends
 ---
+
 
 # Frontmatter Edge Types
 
-Frontmatter semantic_links create typed edges with scores.
+Frontmatter relations create typed edges with explicit types.
 
 Related: [[memex/relations-graph/relations-graph-overview]].

@@ -117,6 +117,13 @@ def build_frontmatter(metadata: EntryMetadata) -> str:
             parts.append(f"    score: {link.score}")
             parts.append(f"    reason: {link.reason}")
 
+    # Typed relations (manual, non-A-Mem)
+    if metadata.relations:
+        parts.append("relations:")
+        for relation in metadata.relations:
+            parts.append(f"  - path: {_yaml_quote_if_needed(relation.path)}")
+            parts.append(f"    type: {_yaml_quote_if_needed(relation.type)}")
+
     # Evolution history (how this entry has been updated over time)
     if metadata.evolution_history:
         parts.append("evolution_history:")
@@ -166,6 +173,7 @@ def create_new_metadata(
     actor: str | None = None,
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
+    relations: list | None = None,
 ) -> EntryMetadata:
     """Create metadata for a new KB entry.
 
@@ -198,6 +206,7 @@ def create_new_metadata(
         last_edited_by=actor,
         keywords=keywords or [],
         semantic_links=semantic_links or [],
+        relations=relations or [],
     )
 
 
@@ -212,6 +221,7 @@ def update_metadata_for_edit(
     actor: str | None = None,
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
+    relations: list | None = None,
     description: str | None = None,
     evolution_history: list[EvolutionRecord] | None = None,
 ) -> EntryMetadata:
@@ -268,6 +278,7 @@ def update_metadata_for_edit(
         semantic_links=(
             semantic_links if semantic_links is not None else list(metadata.semantic_links)
         ),
+        relations=relations if relations is not None else list(metadata.relations),
         evolution_history=(
             evolution_history if evolution_history is not None else list(metadata.evolution_history)
         ),

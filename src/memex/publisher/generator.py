@@ -338,15 +338,15 @@ class SiteGenerator:
                         "score": None,
                     })
 
-            for link in entry.metadata.semantic_links:
-                target = normalize_target(link.path)
+            for relation in entry.metadata.relations:
+                target = normalize_target(relation.path)
                 if target in node_ids:
                     edges.append({
                         "source": path,
                         "target": target,
-                        "origin": "frontmatter",
-                        "type": link.reason,
-                        "score": link.score,
+                        "origin": "relations",
+                        "type": relation.type,
+                        "score": None,
                     })
 
         graph_data = {

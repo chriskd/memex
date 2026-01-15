@@ -1386,6 +1386,7 @@ async def add_entry(
     scope: str | None = None,
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
+    relations: list | None = None,
 ) -> dict:
     """Create a new KB entry.
 
@@ -1404,6 +1405,7 @@ async def add_entry(
                If not provided, uses auto-discovery (project KB if in project, else user KB).
         keywords: Optional list of key concepts for semantic linking.
         semantic_links: Optional list of SemanticLink objects for manual linking.
+        relations: Optional list of RelationLink objects for typed relations.
 
     Returns:
         Dict with 'path' of created file, 'suggested_links' to consider adding,
@@ -1492,6 +1494,7 @@ async def add_entry(
         actor=get_actor_identity(),
         keywords=keywords,
         semantic_links=semantic_links,
+        relations=relations,
     )
     frontmatter = build_frontmatter(metadata)
 
@@ -2146,6 +2149,7 @@ async def update_entry(
     section_updates: dict[str, str] | None = None,
     keywords: list[str] | None = None,
     semantic_links: list | None = None,
+    relations: list | None = None,
 ) -> dict:
     """Update an existing KB entry.
 
@@ -2156,6 +2160,7 @@ async def update_entry(
         section_updates: Optional dict of section heading -> new content.
         keywords: Optional new list of keywords. If provided, replaces existing keywords.
         semantic_links: Optional list of SemanticLink objects. If provided, replaces existing.
+        relations: Optional list of RelationLink objects. If provided, replaces existing.
 
     Returns:
         Dict with 'path' of updated file, 'suggested_links' to consider adding,
@@ -2170,8 +2175,15 @@ async def update_entry(
     if not file_path.is_file():
         raise ValueError(f"Path is not a file: {path}")
 
-    if content is None and not section_updates and tags is None and keywords is None and semantic_links is None:
-        raise ValueError("Provide new content, section_updates, tags, keywords, or semantic_links")
+    if (
+        content is None
+        and not section_updates
+        and tags is None
+        and keywords is None
+        and semantic_links is None
+        and relations is None
+    ):
+        raise ValueError("Provide new content, section_updates, tags, keywords, semantic_links, or relations")
 
     # Parse existing entry to get metadata
     try:
@@ -2203,6 +2215,7 @@ async def update_entry(
         actor=get_actor_identity(),
         keywords=keywords,
         semantic_links=semantic_links,
+        relations=relations,
     )
     frontmatter = build_frontmatter(updated_metadata)
 

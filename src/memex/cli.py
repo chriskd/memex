@@ -1284,7 +1284,7 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     "--origin",
     "origins",
     multiple=True,
-    type=click.Choice(["wikilink", "frontmatter"]),
+    type=click.Choice(["wikilink", "relations"]),
     help="Filter by edge origin (repeatable)",
 )
 @click.option("--type", "relation_types", multiple=True, help="Filter by relation type")
@@ -1374,6 +1374,8 @@ def relations(
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope (default: auto-detect)")
 @click.option("--keywords", help="Key concepts for semantic linking (comma-separated). Required when amem_strict: true in .kbconfig")
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
+@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
+@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
     title: str,
@@ -1385,6 +1387,8 @@ def add(
     scope: str | None,
     keywords: str | None,
     semantic_links_json: str | None,
+    relation_items: tuple[str, ...],
+    relations_json: str | None,
     as_json: bool,
 ):
     """Create a new knowledge base entry.
@@ -1416,11 +1420,18 @@ def add(
         reason: How link was discovered (required)
 
     \b
+    Relations:
+      --relation accepts path=type pairs (repeatable)
+      --relations accepts a JSON array of relation objects with:
+        path: Target entry path (required)
+        type: Relation type (required)
+
+    \b
     See also:
       mx append - Append content to existing entry (or create new)
     """
     from .core import add_entry
-    from .models import SemanticLink
+    from .models import RelationLink, SemanticLink
 
     # Validate mutual exclusivity of content sources
     sources = sum([bool(content), bool(file_path), stdin])
@@ -1476,6 +1487,43 @@ def add(
             click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
             sys.exit(1)
 
+    relations: list[RelationLink] | None = None
+    if relation_items:
+        relations = []
+        for item in relation_items:
+            if "=" not in item:
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            path_value, type_value = item.split("=", 1)
+            if not path_value.strip() or not type_value.strip():
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            relations.append(RelationLink(path=path_value.strip(), type=type_value.strip()))
+
+    if relations_json:
+        try:
+            relations_data = json.loads(relations_json)
+            if not isinstance(relations_data, list):
+                click.echo("Error: --relations must be a JSON array", err=True)
+                sys.exit(1)
+            if relations is None:
+                relations = []
+            for i, relation_data in enumerate(relations_data):
+                if not isinstance(relation_data, dict):
+                    click.echo(f"Error: --relations[{i}] must be a JSON object", err=True)
+                    sys.exit(1)
+                missing = [f for f in ("path", "type") if f not in relation_data]
+                if missing:
+                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    sys.exit(1)
+                relations.append(RelationLink(
+                    path=relation_data["path"],
+                    type=relation_data["type"],
+                ))
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
+            sys.exit(1)
+
     try:
         result = run_async(add_entry(
             title=title,
@@ -1485,6 +1533,7 @@ def add(
             scope=scope,
             keywords=keyword_list,
             semantic_links=semantic_links,
+            relations=relations,
         ))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
@@ -1764,6 +1813,8 @@ def append(
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
 @click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
+@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
+@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def replace_cmd(
     path: str,
@@ -1774,6 +1825,8 @@ def replace_cmd(
     find_flag: str | None,
     replace_flag: str | None,
     semantic_links_json: str | None,
+    relation_items: tuple[str, ...],
+    relations_json: str | None,
     as_json: bool,
 ):
     """Replace content or tags in a knowledge base entry.
@@ -1795,13 +1848,20 @@ def replace_cmd(
         reason: How link was discovered (required)
 
     \b
+    Relations:
+      --relation accepts path=type pairs (repeatable)
+      --relations accepts a JSON array of relation objects with:
+        path: Target entry path (required)
+        type: Relation type (required)
+
+    \b
     See also:
       mx patch  - Apply surgical find-replace edits (keeps rest of content)
       mx append - Add content to end of entry (doesn't overwrite)
     """
     from .cli_intent import detect_update_intent_mismatch
     from .core import update_entry
-    from .models import SemanticLink
+    from .models import RelationLink, SemanticLink
 
     # Check for intent mismatch (wrong command based on flags)
     mismatch = detect_update_intent_mismatch(
@@ -1852,6 +1912,43 @@ def replace_cmd(
             click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
             sys.exit(1)
 
+    relations: list[RelationLink] | None = None
+    if relation_items:
+        relations = []
+        for item in relation_items:
+            if "=" not in item:
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            path_value, type_value = item.split("=", 1)
+            if not path_value.strip() or not type_value.strip():
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            relations.append(RelationLink(path=path_value.strip(), type=type_value.strip()))
+
+    if relations_json:
+        try:
+            relations_data = json.loads(relations_json)
+            if not isinstance(relations_data, list):
+                click.echo("Error: --relations must be a JSON array", err=True)
+                sys.exit(1)
+            if relations is None:
+                relations = []
+            for i, relation_data in enumerate(relations_data):
+                if not isinstance(relation_data, dict):
+                    click.echo(f"Error: --relations[{i}] must be a JSON object", err=True)
+                    sys.exit(1)
+                missing = [f for f in ("path", "type") if f not in relation_data]
+                if missing:
+                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    sys.exit(1)
+                relations.append(RelationLink(
+                    path=relation_data["path"],
+                    type=relation_data["type"],
+                ))
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
+            sys.exit(1)
+
     try:
         result = run_async(update_entry(
             path=path,
@@ -1859,6 +1956,7 @@ def replace_cmd(
             tags=tag_list,
             keywords=keyword_list,
             semantic_links=semantic_links,
+            relations=relations,
         ))
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

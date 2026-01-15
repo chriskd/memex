@@ -5,15 +5,15 @@ tags:
   - relations
   - graph
 created: 2026-01-15T06:32:11.962315+00:00
+updated: 2026-01-15T06:42:30.234374+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
+git_branch: relations-field
 last_edited_by: chris
-semantic_links:
+relations:
   - path: memex/relations-graph/relations-graph-overview.md
-    score: 0.75
-    reason: related
+    type: related
 ---
 
 # Wikilink Edge Behavior

@@ -11,25 +11,24 @@ def _write_entry(
     title: str,
     tags: list[str],
     content: str,
-    semantic_links: list[dict] | None = None,
+    relations: list[dict] | None = None,
 ) -> None:
     entry_path = kb_root / path
     entry_path.parent.mkdir(parents=True, exist_ok=True)
 
     tags_str = f"[{', '.join(tags)}]"
-    links_yaml = ""
-    if semantic_links:
-        links_yaml = "semantic_links:\n"
-        for link in semantic_links:
-            links_yaml += f"  - path: {link['path']}\n"
-            links_yaml += f"    score: {link['score']}\n"
-            links_yaml += f"    reason: {link['reason']}\n"
+    relations_yaml = ""
+    if relations:
+        relations_yaml = "relations:\n"
+        for relation in relations:
+            relations_yaml += f"  - path: {relation['path']}\n"
+            relations_yaml += f"    type: {relation['type']}\n"
 
     frontmatter = f"""---
 title: {title}
 tags: {tags_str}
 created: 2024-01-15
-{links_yaml}---
+{relations_yaml}---
 
 {content}
 """
@@ -44,7 +43,7 @@ class TestRelationsGraph:
             "Entry A",
             ["test"],
             "See [[b]] for more.",
-            semantic_links=[{"path": "c.md", "score": 0.75, "reason": "manual"}],
+            relations=[{"path": "c.md", "type": "depends_on"}],
         )
         _write_entry(tmp_kb, "b.md", "Entry B", ["test"], "Content B")
         _write_entry(tmp_kb, "c.md", "Entry C", ["test"], "Content C")
@@ -60,7 +59,7 @@ class TestRelationsGraph:
             for edge in graph.edges
         }
         assert ("a.md", "b.md", "wikilink", None) in edge_keys
-        assert ("a.md", "c.md", "frontmatter", "manual") in edge_keys
+        assert ("a.md", "c.md", "relations", "depends_on") in edge_keys
 
     def test_query_filters_by_origin(self, tmp_kb: Path) -> None:
         _write_entry(
@@ -69,12 +68,12 @@ class TestRelationsGraph:
             "Entry A",
             ["test"],
             "See [[b]] for more.",
-            semantic_links=[{"path": "c.md", "score": 0.65, "reason": "manual"}],
+            relations=[{"path": "c.md", "type": "related"}],
         )
         _write_entry(tmp_kb, "b.md", "Entry B", ["test"], "Content B")
         _write_entry(tmp_kb, "c.md", "Entry C", ["test"], "Content C")
 
-        result = query_relations_graph("a.md", origin={"frontmatter"})
+        result = query_relations_graph("a.md", origin={"relations"})
         assert result.edges
-        assert all(edge.origin == "frontmatter" for edge in result.edges)
+        assert all(edge.origin == "relations" for edge in result.edges)
 

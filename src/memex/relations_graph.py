@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Iterable, Literal
+from typing import Iterable, Literal, cast
 
 from .config import get_index_root, get_kb_roots_for_indexing, parse_scoped_path
 from .models import RelationEdge, RelationNode, RelationsGraph, RelationsQueryResult
@@ -83,7 +83,7 @@ def _normalize_link_target(
 
 
 def build_relations_graph(scope: str | None = None) -> RelationsGraph:
-    """Build a relations graph from wikilinks and frontmatter semantic links."""
+    """Build a relations graph from wikilinks and typed relations."""
     kb_roots = get_kb_roots_for_indexing(scope=scope)
     if not kb_roots:
         return RelationsGraph()
@@ -93,7 +93,10 @@ def build_relations_graph(scope: str | None = None) -> RelationsGraph:
     known_nodes: set[str] = set()
 
     for scope_label, kb_root in kb_roots:
-        scope_indices[scope_label] = build_title_index(kb_root, include_filename_index=True)
+        scope_indices[scope_label] = cast(
+            TitleIndex,
+            build_title_index(kb_root, include_filename_index=True),
+        )
         files = [
             md_file
             for md_file in kb_root.rglob("*.md")
@@ -149,14 +152,14 @@ def build_relations_graph(scope: str | None = None) -> RelationsGraph:
                     )
                 )
 
-            # Frontmatter edges (typed)
-            for link in metadata.semantic_links:
-                target_scope, target_rel = parse_scoped_path(link.path)
+            # Typed relations (frontmatter)
+            for relation in metadata.relations:
+                target_scope, target_rel = parse_scoped_path(relation.path)
                 target_scope = target_scope if target_scope is not None else scope_label
                 target_path = _scoped_path(target_scope, _ensure_md_extension(target_rel))
                 if target_path not in known_nodes:
                     continue
-                key = (source_node, target_path, "frontmatter", link.reason, link.score)
+                key = (source_node, target_path, "relations", relation.type, None)
                 if key in edge_keys:
                     continue
                 edge_keys.add(key)
@@ -164,9 +167,8 @@ def build_relations_graph(scope: str | None = None) -> RelationsGraph:
                     RelationEdge(
                         source=source_node,
                         target=target_path,
-                        origin="frontmatter",
-                        relation_type=link.reason,
-                        score=link.score,
+                        origin="relations",
+                        relation_type=relation.type,
                     )
                 )
 
@@ -236,7 +238,7 @@ def query_relations_graph(
     *,
     depth: int = 1,
     direction: Literal["outgoing", "incoming", "both"] = "both",
-    origin: set[Literal["wikilink", "frontmatter"]] | None = None,
+    origin: set[Literal["wikilink", "relations"]] | None = None,
     relation_types: set[str] | None = None,
     scope: str | None = None,
 ) -> RelationsQueryResult:

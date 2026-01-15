@@ -21,7 +21,7 @@ import yaml
 
 from memex.core import slugify
 from memex.frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
-from memex.models import EntryMetadata, SemanticLink
+from memex.models import EntryMetadata, RelationLink, SemanticLink
 from memex.parser.links import (
     _resolve_relative_link,
     extract_links,
@@ -230,6 +230,38 @@ class TestBuildFrontmatter:
 
         assert "semantic_links:" not in result
 
+    def test_relations_serialized_when_present(self):
+        """Relations are serialized as structured YAML."""
+        metadata = EntryMetadata(
+            title="Entry with Relations",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+            relations=[
+                RelationLink(path="guides/setup.md", type="implements"),
+                RelationLink(path="reference/api.md", type="depends_on"),
+            ],
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "relations:" in result
+        assert "path: guides/setup.md" in result
+        assert "type: implements" in result
+        assert "path: reference/api.md" in result
+        assert "type: depends_on" in result
+
+    def test_relations_omitted_when_empty(self):
+        """Relations field is not included when empty."""
+        metadata = EntryMetadata(
+            title="No Relations",
+            tags=["test"],
+            created=datetime(2024, 1, 1, 0, 0, 0),
+        )
+
+        result = build_frontmatter(metadata)
+
+        assert "relations:" not in result
+
     def test_keywords_and_semantic_links_roundtrip(self):
         """Keywords and semantic links can be parsed back."""
         original = EntryMetadata(
@@ -251,6 +283,25 @@ class TestBuildFrontmatter:
         assert parsed["semantic_links"][0]["path"] == "other.md"
         assert parsed["semantic_links"][0]["score"] == 0.9
         assert parsed["semantic_links"][0]["reason"] == "bidirectional"
+
+    def test_relations_roundtrip(self):
+        """Relations can be parsed back."""
+        original = EntryMetadata(
+            title="Relations Entry",
+            tags=["test"],
+            created=datetime(2024, 1, 15, 10, 30, 0),
+            relations=[
+                RelationLink(path="other.md", type="related"),
+            ],
+        )
+
+        fm = build_frontmatter(original)
+        yaml_content = fm.split("---")[1]
+        parsed = yaml.safe_load(yaml_content)
+
+        assert len(parsed["relations"]) == 1
+        assert parsed["relations"][0]["path"] == "other.md"
+        assert parsed["relations"][0]["type"] == "related"
 
 
 class TestSemanticLink:
