@@ -1,0 +1,81 @@
+# Test entries for semantic link quality evaluation
+# Tests whether auto-created links are meaningful
+
+clusters:
+  # Cluster 1: Python ecosystem (should be inter-linked)
+  python_cluster:
+    entries:
+      - id: python_basics
+        title: Python Basics
+        tags: [python, programming, basics]
+        content: |
+          Introduction to Python programming language.
+          Covers variables, functions, classes, and modules.
+        expected_links: [python_typing, python_testing]
+
+      - id: python_typing
+        title: Python Type Hints
+        tags: [python, typing, mypy]
+        content: |
+          Guide to using type annotations in Python code.
+          Covers typing module, generics, and mypy integration.
+        expected_links: [python_basics]
+
+      - id: python_testing
+        title: Python Testing with pytest
+        tags: [python, testing, pytest]
+        content: |
+          Best practices for testing Python applications.
+          Covers pytest fixtures, parameterization, and mocking.
+        expected_links: [python_basics]
+
+  # Cluster 2: DevOps (should be inter-linked)
+  devops_cluster:
+    entries:
+      - id: docker_basics
+        title: Docker Fundamentals
+        tags: [docker, containers, devops]
+        content: |
+          Introduction to containerization with Docker.
+          Covers images, containers, volumes, and networking.
+        expected_links: [kubernetes_basics]
+
+      - id: kubernetes_basics
+        title: Kubernetes Overview
+        tags: [kubernetes, k8s, orchestration]
+        content: |
+          Managing containerized applications at scale.
+          Covers pods, services, deployments, and config maps.
+        expected_links: [docker_basics]
+
+  # Cluster 3: Unrelated (should NOT link to other clusters)
+  cooking_cluster:
+    entries:
+      - id: pasta_recipes
+        title: Italian Pasta Recipes
+        tags: [cooking, italian, pasta]
+        content: |
+          Collection of authentic Italian pasta recipes.
+          Includes carbonara, bolognese, and aglio e olio.
+        expected_links: [baking_basics]
+        should_not_link: [python_basics, docker_basics]
+
+      - id: baking_basics
+        title: Baking Fundamentals
+        tags: [cooking, baking, desserts]
+        content: |
+          Essential techniques for home baking.
+          Covers bread, pastries, and cake decoration.
+        expected_links: [pasta_recipes]
+        should_not_link: [python_basics, kubernetes_basics]
+
+# Cross-cluster test: entries that MIGHT link due to shared concepts
+cross_cluster_tests:
+  - id: python_docker
+    title: Dockerizing Python Applications
+    tags: [python, docker, deployment]
+    content: |
+      Best practices for containerizing Python apps.
+      Covers multi-stage builds, uvicorn, and gunicorn.
+    expected_links: [python_basics, docker_basics]
+    reason: "Bridges Python and DevOps clusters"

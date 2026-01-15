@@ -1,0 +1,119 @@
+# Ground truth for A-Mem evaluation
+# Defines expected outcomes for all test scenarios
+
+# Quality thresholds
+thresholds:
+  keyword_recall_at_3: 0.8      # 80% of keyword queries should find target in top 3
+  keyword_recall_at_10: 0.95    # 95% should find target in top 10
+  link_precision: 0.7           # 70% of auto-links should be meaningful
+  link_bidirectional_rate: 1.0  # 100% of forward links should have backlinks
+  neighbor_coverage_gain: 0.2   # At least 20% more relevant results via neighbors
+  neighbor_noise_rate: 0.3      # Max 30% irrelevant neighbors
+
+# Keyword embedding test expectations
+keyword_tests:
+  # Positive cases: query should find entry
+  positive:
+    - entry_id: keyword_test_1
+      queries:
+        - query: "python optimization"
+          min_score: 0.5
+          max_rank: 3
+        - query: "cython"
+          min_score: 0.4
+          max_rank: 5
+        - query: "jit compilation"
+          min_score: 0.4
+          max_rank: 5
+
+    - entry_id: keyword_test_2
+      queries:
+        - query: "pgbouncer"
+          min_score: 0.5
+          max_rank: 3
+        - query: "database scalability"
+          min_score: 0.5
+          max_rank: 3
+
+    - entry_id: keyword_test_3
+      queries:
+        - query: "CI CD pipeline"
+          min_score: 0.5
+          max_rank: 3
+        - query: "GitHub Actions workflow"
+          min_score: 0.5
+          max_rank: 5
+
+  # Negative cases: query should NOT find entry in top results
+  negative:
+    - entry_id: keyword_test_negative
+      queries:
+        - query: "kubernetes deployment"
+          should_not_rank_above: 5
+        - query: "database connection"
+          should_not_rank_above: 5
+
+# Semantic link test expectations
+link_tests:
+  # Within-cluster links (should exist)
+  expected_links:
+    - source: python_basics
+      targets: [python_typing, python_testing]
+      min_score: 0.5
+      reason_type: embedding_similarity
+
+    - source: docker_basics
+      targets: [kubernetes_basics]
+      min_score: 0.5
+
+  # Cross-cluster non-links (should NOT exist)
+  unexpected_links:
+    - source: pasta_recipes
+      targets: [python_basics, docker_basics]
+      reason: "Unrelated topics should not link"
+
+    - source: baking_basics
+      targets: [kubernetes_basics, python_testing]
+      reason: "Cooking and DevOps should not link"
+
+  # Bidirectional verification
+  bidirectional_pairs:
+    - [python_basics, python_typing]
+    - [docker_basics, kubernetes_basics]
+    - [pasta_recipes, baking_basics]
+
+# Graph traversal test expectations
+graph_tests:
+  coverage_tests:
+    - name: "ML chain traversal"
+      start_query: "gradient descent"
+      depth_1_coverage: [backpropagation, neural_networks]
+      depth_2_coverage: [backpropagation, neural_networks, ml_basics]
+
+    - name: "Web stack traversal"
+      start_query: "jest snapshot"
+      depth_1_coverage: [react_testing, react_guide]
+      depth_2_coverage: [react_testing, react_guide, web_basics]
+
+  deduplication_tests:
+    - name: "Circular chain"
+      start_query: "SOLID principles"
+      max_results: 3
+      should_not_have_duplicates: true
+
+# Aggregate quality metrics
+aggregate_metrics:
+  # MRR (Mean Reciprocal Rank) calculation
+  mrr_queries:
+    - query: "python type hints"
+      expected_entry: python_typing
+    - query: "docker containers"
+      expected_entry: docker_basics
+    - query: "neural network layers"
+      expected_entry: neural_networks
+    - query: "REST API versioning"
+      expected_entry: api_design
+    - query: "pytest fixtures"
+      expected_entry: python_testing
+
+  target_mrr: 0.7  # Mean reciprocal rank should be > 0.7

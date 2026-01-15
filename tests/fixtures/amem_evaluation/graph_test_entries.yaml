@@ -1,0 +1,123 @@
+# Test entries for graph-aware search evaluation
+# Tests whether --include-neighbors finds otherwise-missed results
+
+chains:
+  # Chain 1: ML concept chain (A -> B -> C)
+  # Query about C should find B and A via neighbor expansion
+  ml_chain:
+    description: "Machine learning concept progression"
+    entries:
+      - id: ml_basics
+        title: Machine Learning Fundamentals
+        tags: [ml, ai, basics]
+        content: |
+          Introduction to machine learning concepts.
+          Covers supervised learning, unsupervised learning, and reinforcement learning.
+        links_to: [neural_networks]
+
+      - id: neural_networks
+        title: Neural Networks Architecture
+        tags: [ml, neural-networks, deep-learning]
+        content: |
+          Understanding neural network components.
+          Covers layers, activations, and forward propagation.
+        links_to: [backpropagation]
+
+      - id: backpropagation
+        title: Backpropagation Algorithm
+        tags: [ml, optimization, training]
+        content: |
+          The gradient descent algorithm for training neural networks.
+          Covers chain rule, loss functions, and weight updates.
+        links_to: []
+
+    test_queries:
+      - query: "gradient descent"
+        without_neighbors:
+          expected: [backpropagation]
+          should_miss: [neural_networks, ml_basics]
+        with_neighbors_depth_1:
+          expected: [backpropagation, neural_networks]
+          should_miss: [ml_basics]
+        with_neighbors_depth_2:
+          expected: [backpropagation, neural_networks, ml_basics]
+
+  # Chain 2: Web dev stack (branching graph)
+  # A -> B, A -> C, B -> D
+  web_stack:
+    description: "Web development technology stack"
+    entries:
+      - id: web_basics
+        title: Web Development Overview
+        tags: [web, basics, fullstack]
+        content: |
+          Introduction to web development concepts.
+          Covers frontend, backend, and databases.
+        links_to: [react_guide, api_design]
+
+      - id: react_guide
+        title: React Components Guide
+        tags: [react, frontend, javascript]
+        content: |
+          Building user interfaces with React.
+          Covers components, hooks, and state management.
+        links_to: [react_testing]
+
+      - id: api_design
+        title: REST API Design
+        tags: [api, backend, rest]
+        content: |
+          Best practices for designing RESTful APIs.
+          Covers endpoints, versioning, and documentation.
+        links_to: []
+
+      - id: react_testing
+        title: Testing React Components
+        tags: [react, testing, jest]
+        content: |
+          Testing strategies for React applications.
+          Covers Jest, React Testing Library, and snapshot testing.
+        links_to: []
+
+    test_queries:
+      - query: "jest snapshot"
+        without_neighbors:
+          expected: [react_testing]
+        with_neighbors_depth_1:
+          expected: [react_testing, react_guide]
+        with_neighbors_depth_2:
+          expected: [react_testing, react_guide, web_basics]
+
+      - query: "REST endpoints"
+        without_neighbors:
+          expected: [api_design]
+        with_neighbors_depth_1:
+          expected: [api_design, web_basics]
+
+# Circular reference test
+circular_chain:
+  description: "Test that circular links don't cause infinite loops"
+  entries:
+    - id: design_patterns
+      title: Software Design Patterns
+      tags: [architecture, patterns]
+      content: Introduction to design patterns.
+      links_to: [solid_principles]
+
+    - id: solid_principles
+      title: SOLID Principles
+      tags: [architecture, oop]
+      content: Object-oriented design principles.
+      links_to: [clean_code]
+
+    - id: clean_code
+      title: Clean Code Practices
+      tags: [coding, best-practices]
+      content: Writing readable and maintainable code.
+      links_to: [design_patterns]  # Creates cycle
+
+  test_queries:
+    - query: "SOLID object oriented"
+      with_neighbors_depth_5:
+        expected: [solid_principles, design_patterns, clean_code]
+        should_not_duplicate: true

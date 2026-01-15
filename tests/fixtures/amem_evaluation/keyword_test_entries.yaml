@@ -1,0 +1,75 @@
+# Test entries for keyword embedding effectiveness
+# Each entry tests whether keywords improve search relevance
+
+entries:
+  # Test case 1: Technical concepts in keywords but not content
+  - id: keyword_test_1
+    title: Guide to Fast Python Execution
+    tags: [python, performance]
+    keywords: [optimization, cython, numba, jit-compilation]
+    content: |
+      This guide covers techniques for making Python code run faster.
+      We discuss profiling, algorithmic improvements, and compiled extensions.
+    test_queries:
+      - query: "python optimization"
+        should_find: true
+        reason: "optimization is in keywords"
+      - query: "cython performance"
+        should_find: true
+        reason: "cython is in keywords, performance in tags"
+      - query: "jit compilation python"
+        should_find: true
+        reason: "jit-compilation is in keywords"
+
+  # Test case 2: Domain-specific terminology
+  - id: keyword_test_2
+    title: Database Connection Pooling
+    tags: [database, postgres]
+    keywords: [pgbouncer, connection-management, scalability, latency]
+    content: |
+      Managing database connections efficiently is critical for web applications.
+      This entry covers strategies for reusing connections across requests.
+    test_queries:
+      - query: "pgbouncer setup"
+        should_find: true
+        reason: "pgbouncer is in keywords"
+      - query: "database scalability"
+        should_find: true
+        reason: "scalability in keywords, database in tags"
+      - query: "connection latency"
+        should_find: true
+        reason: "both terms are in keywords"
+
+  # Test case 3: Acronyms and aliases
+  - id: keyword_test_3
+    title: Continuous Integration Setup
+    tags: [devops, automation]
+    keywords: [CI, CD, GitHub-Actions, pipeline, build-automation]
+    content: |
+      Setting up automated testing and deployment for your projects.
+      This covers configuration of workflows and test runners.
+    test_queries:
+      - query: "CI CD pipeline"
+        should_find: true
+        reason: "CI, CD, pipeline all in keywords"
+      - query: "GitHub Actions"
+        should_find: true
+        reason: "GitHub-Actions in keywords"
+      - query: "build automation devops"
+        should_find: true
+        reason: "build-automation in keywords, devops in tags"
+
+  # Negative test cases - should NOT match
+  - id: keyword_test_negative
+    title: Machine Learning Basics
+    tags: [ml, ai]
+    keywords: [neural-networks, deep-learning, tensorflow, pytorch]
+    content: |
+      Introduction to machine learning concepts and frameworks.
+    test_queries:
+      - query: "kubernetes deployment"
+        should_find: false
+        reason: "completely unrelated topic"
+      - query: "database optimization"
+        should_find: false
+        reason: "no overlap with ML content or keywords"

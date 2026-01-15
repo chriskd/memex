@@ -6,11 +6,14 @@ tags:
   - basic-memory
   - claude-mem
 created: 2026-01-13T01:25:36.081714+00:00
+updated: 2026-01-14T23:36:11.361035+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
+semantic_links:
+  - path: a-mem-parity/a-mem-parity-analysis.md
+    score: 0.701
+    reason: bidirectional
 ---
 
 # Agent Memory Tool Comparison

@@ -6,11 +6,17 @@ tags:
   - memory
   - signals
 created: 2026-01-13T17:42:43.882297+00:00
+updated: 2026-01-14T23:36:09.300430+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
+semantic_links:
+  - path: a-mem-parity/semantic-linking.md
+    score: 0.62
+    reason: bidirectional
+  - path: a-mem-parity/a-mem-parity-analysis.md
+    score: 0.768
+    reason: bidirectional
 ---
 
 # Dense Memory Signals Research
