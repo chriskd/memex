@@ -3154,10 +3154,11 @@ def a_mem_init(
     simulate incremental addition.
 
     \b
-    Phase 1: Inventory & Validation (current implementation)
-      - Lists all entries, sorted by created timestamp
-      - Validates keyword presence
-      - Reports missing keywords according to mode
+    Phases:
+      1. Inventory & Validation - Lists entries, validates keywords
+      2. Keyword Extraction - Uses LLM to extract keywords (when mode=llm)
+      3. Semantic Linking - Creates bidirectional links (planned)
+      4. Evolution Queue - Queues items for mx evolve (planned)
 
     \b
     Examples:
@@ -3171,7 +3172,7 @@ def a_mem_init(
     Missing Keywords Modes:
       error  - Stop and list all entries missing keywords (default if amem_strict)
       skip   - Skip entries without keywords, continue with others (default otherwise)
-      llm    - Queue entries for LLM keyword extraction (Phase 2)
+      llm    - Extract keywords using LLM (requires OPENROUTER_API_KEY)
     """
     from .core import amem_init_inventory
 
