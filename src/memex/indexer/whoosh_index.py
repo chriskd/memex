@@ -26,12 +26,17 @@ class WhooshIndex:
         self._index_dir = index_dir or get_index_root() / "whoosh"
         self._index: index.Index | None = None
         self._schema = Schema(
-            path=ID(stored=True, unique=True),
+            path=ID(stored=True),
             section=ID(stored=True),
+            parent_section=ID(stored=True),
             title=TEXT(stored=True),
             content=TEXT(stored=True),
             tags=KEYWORD(stored=True, commas=True),
-            chunk_id=STORED,
+            chunk_id=ID(stored=True, unique=True),
+            chunk_idx=STORED,
+            chunk_strategy=ID(stored=True),
+            start_offset=STORED,
+            end_offset=STORED,
             created=STORED,
             updated=STORED,
             token_count=STORED,
@@ -62,15 +67,20 @@ class WhooshIndex:
         writer = ix.writer()
 
         # Create unique chunk ID
-        chunk_id = f"{chunk.path}#{chunk.section or 'main'}"
+        chunk_id = f"{chunk.path}#chunk_{chunk.chunk_idx}"
 
         writer.update_document(
             path=chunk.path,
             section=chunk.section or "",
+            parent_section=chunk.parent_section or "",
             title=chunk.metadata.title,
             content=chunk.content,
             tags=",".join(chunk.metadata.tags),
             chunk_id=chunk_id,
+            chunk_idx=chunk.chunk_idx,
+            chunk_strategy=chunk.chunk_strategy,
+            start_offset=chunk.start_offset,
+            end_offset=chunk.end_offset,
             created=chunk.metadata.created.isoformat() if chunk.metadata.created else None,
             updated=chunk.metadata.updated.isoformat() if chunk.metadata.updated else None,
             token_count=chunk.token_count or 0,
@@ -91,14 +101,19 @@ class WhooshIndex:
         writer = ix.writer()
 
         for chunk in chunks:
-            chunk_id = f"{chunk.path}#{chunk.section or 'main'}"
+            chunk_id = f"{chunk.path}#chunk_{chunk.chunk_idx}"
             writer.update_document(
                 path=chunk.path,
                 section=chunk.section or "",
+                parent_section=chunk.parent_section or "",
                 title=chunk.metadata.title,
                 content=chunk.content,
                 tags=",".join(chunk.metadata.tags),
                 chunk_id=chunk_id,
+                chunk_idx=chunk.chunk_idx,
+                chunk_strategy=chunk.chunk_strategy,
+                start_offset=chunk.start_offset,
+                end_offset=chunk.end_offset,
                 created=chunk.metadata.created.isoformat() if chunk.metadata.created else None,
                 updated=chunk.metadata.updated.isoformat() if chunk.metadata.updated else None,
                 token_count=chunk.token_count or 0,
@@ -170,6 +185,11 @@ class WhooshIndex:
                         score=hit.score / max_score,
                         tags=tag_list,
                         section=hit.get("section") or None,
+                        parent_section=hit.get("parent_section") or None,
+                        chunk_idx=hit.get("chunk_idx") or 0,
+                        chunk_strategy=hit.get("chunk_strategy") or None,
+                        start_offset=hit.get("start_offset"),
+                        end_offset=hit.get("end_offset"),
                         created=created_date,
                         updated=updated_date,
                         token_count=hit.get("token_count") or 0,

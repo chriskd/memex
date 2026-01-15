@@ -237,7 +237,13 @@ def _maybe_initialize_searcher(searcher: HybridSearcher) -> None:
     if status.kb_files > 0 and (status.whoosh_docs == 0 or status.chroma_docs == 0):
         kb_root = get_kb_root()
         if kb_root.exists():
-            searcher.reindex(kb_root)
+            from .config import get_chunking_config
+
+            searcher.reindex(
+                kb_root,
+                rechunk=True,
+                chunking_strategy=get_chunking_config().strategy,
+            )
 
     _searcher_ready = True
 
@@ -280,6 +286,37 @@ def relative_kb_path(kb_root: Path, file_path: Path) -> str:
 def normalize_chunks(chunks: list[DocumentChunk], relative_path: str) -> list[DocumentChunk]:
     """Ensure all chunk paths share the relative file path."""
     return [chunk.model_copy(update={"path": relative_path}) for chunk in chunks]
+
+
+def prepare_index_chunks(
+    chunks: list[DocumentChunk],
+    relative_path: str,
+    metadata: EntryMetadata,
+    content: str,
+    *,
+    document_strategy: str = "document",
+) -> tuple[list[DocumentChunk], list[DocumentChunk]]:
+    """Prepare chunked and full-document index records."""
+    normalized_chunks = normalize_chunks(chunks, relative_path)
+    from .parser.chunking import build_document_chunk
+
+    document_chunk = build_document_chunk(
+        relative_path, content, metadata, chunk_strategy=document_strategy
+    )
+    documents = [document_chunk] if document_chunk else []
+    return normalized_chunks, documents
+
+
+def get_chunking_strategy_mismatch() -> tuple[str, str] | None:
+    """Return (indexed, configured) chunking strategy if they differ."""
+    from .config import get_chunking_config
+
+    searcher = get_searcher()
+    indexed_strategy = searcher.get_chunking_strategy()
+    configured_strategy = get_chunking_config().strategy
+    if indexed_strategy and indexed_strategy != configured_strategy:
+        return (indexed_strategy, configured_strategy)
+    return None
 
 
 def apply_section_updates(content: str, updates: dict[str, str]) -> str:
@@ -654,8 +691,10 @@ def _add_backlink_to_neighbor(
         _, _, updated_chunks = parse_entry(neighbor_file)
         if updated_chunks:
             searcher.delete_document(neighbor_path)
-            normalized_chunks = normalize_chunks(updated_chunks, neighbor_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(
+                updated_chunks, neighbor_path, updated_metadata, content
+            )
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Updated neighbor but failed to re-index %s: %s", neighbor_path, e)
 
@@ -916,8 +955,10 @@ async def process_evolution_items(
                     _, _, updated_chunks = parse_entry(neighbor_file)
                     if updated_chunks:
                         searcher.delete_document(update.path)
-                        normalized_chunks = normalize_chunks(updated_chunks, update.path)
-                        searcher.index_chunks(normalized_chunks)
+                        normalized_chunks, documents = prepare_index_chunks(
+                            updated_chunks, update.path, updated_metadata, content
+                        )
+                        searcher.index_chunks(normalized_chunks, documents)
                 except ParseError as e:
                     log.warning("Evolved neighbor but failed to re-index %s: %s", update.path, e)
 
@@ -1200,6 +1241,7 @@ async def search(
     kb_context: KBContext | None = None,
     strict: bool = False,
     scope: str | None = None,
+    show_chunks: bool = False,
 ) -> SearchResponse:
     """Search the knowledge base.
 
@@ -1216,6 +1258,7 @@ async def search(
                 low-confidence semantic matches. Prevents misleading scores
                 for gibberish or unrelated queries.
         scope: Filter to specific scope - "project", "user", or None for all.
+        show_chunks: If True, return chunk-level results without deduping by path.
 
     Returns:
         SearchResponse with results and optional warnings.
@@ -1227,7 +1270,13 @@ async def search(
     if kb_context is None:
         kb_context = get_kb_context()
     results = searcher.search(
-        query, limit=limit, mode=mode, project_context=project_context, kb_context=kb_context, strict=strict
+        query,
+        limit=limit,
+        mode=mode,
+        project_context=project_context,
+        kb_context=kb_context,
+        strict=strict,
+        dedupe_by_path=not show_chunks,
     )
     warnings: list[str] = []
 
@@ -1505,8 +1554,10 @@ async def add_entry(
         searcher = get_searcher()
         if chunks:
             relative_path = relative_kb_path(kb_root, file_path)
-            normalized_chunks = normalize_chunks(chunks, relative_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(
+                chunks, relative_path, metadata, final_content
+            )
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Created entry but failed to index %s: %s", rel_path, e)
 
@@ -1530,8 +1581,10 @@ async def add_entry(
                 if updated_chunks:
                     searcher = get_searcher()
                     searcher.delete_document(rel_path)
-                    normalized_chunks = normalize_chunks(updated_chunks, rel_path)
-                    searcher.index_chunks(normalized_chunks)
+                    normalized_chunks, documents = prepare_index_chunks(
+                        updated_chunks, rel_path, updated_metadata, final_content
+                    )
+                    searcher.index_chunks(normalized_chunks, documents)
             except (ParseError, OSError) as e:
                 log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
 
@@ -1601,8 +1654,13 @@ async def add_entry(
                             if strengthened_chunks:
                                 searcher = get_searcher()
                                 searcher.delete_document(rel_path)
-                                normalized = normalize_chunks(strengthened_chunks, rel_path)
-                                searcher.index_chunks(normalized)
+                                normalized, documents = prepare_index_chunks(
+                                    strengthened_chunks,
+                                    rel_path,
+                                    strengthened_metadata,
+                                    current_content,
+                                )
+                                searcher.index_chunks(normalized, documents)
 
                             log.info(
                                 "Strengthened entry %s: keywords=%s",
@@ -1974,11 +2032,11 @@ async def ingest_file(
     rebuild_backlink_cache(kb_root)
 
     try:
-        _, _, chunks = parse_entry(target_path)
+        metadata, content, chunks = parse_entry(target_path)
         searcher = get_searcher()
         if chunks:
-            normalized_chunks = normalize_chunks(chunks, rel_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(chunks, rel_path, metadata, content)
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Ingested file but failed to index %s: %s", rel_path, e)
 
@@ -2104,8 +2162,10 @@ async def append_entry(
         searcher.delete_document(existing_path)
         _, _, chunks = parse_entry(existing_entry)
         if chunks:
-            normalized_chunks = normalize_chunks(chunks, existing_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(
+                chunks, existing_path, updated_metadata, new_content
+            )
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Appended to entry but failed to re-index %s: %s", existing_path, e)
     except Exception as e:
@@ -2224,8 +2284,10 @@ async def update_entry(
         # Parse and index new content
         _, _, chunks = parse_entry(file_path)
         if chunks:
-            normalized_chunks = normalize_chunks(chunks, relative_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(
+                chunks, relative_path, updated_metadata, new_content
+            )
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Updated entry but failed to re-index %s: %s", relative_path, e)
     except Exception as e:
@@ -2252,8 +2314,10 @@ async def update_entry(
                 _, _, final_chunks = parse_entry(file_path)
                 if final_chunks:
                     searcher.delete_document(relative_path)
-                    normalized_chunks = normalize_chunks(final_chunks, relative_path)
-                    searcher.index_chunks(normalized_chunks)
+                    normalized_chunks, documents = prepare_index_chunks(
+                        final_chunks, relative_path, final_metadata, new_content
+                    )
+                    searcher.index_chunks(normalized_chunks, documents)
             except (ParseError, OSError) as e:
                 log.warning(
                     "Failed to update entry with auto semantic links %s: %s",
@@ -2696,23 +2760,39 @@ async def backlinks(path: str) -> list[str]:
     return all_backlinks.get(path_key, [])
 
 
-async def reindex(scope: str | None = None) -> IndexStatus:
+async def reindex(scope: str | None = None, force_rechunk: bool = False) -> IndexStatus:
     """Rebuild search indices.
 
     Args:
         scope: Filter to specific scope - "project", "user", or None for all.
+        force_rechunk: Force rebuild of Chroma chunks when strategy changes.
 
     Returns:
         IndexStatus with document counts.
     """
-    from .config import get_kb_roots_for_indexing
+    from .config import get_chunking_config, get_kb_roots_for_indexing
 
     searcher = get_searcher()
     kb_roots = get_kb_roots_for_indexing(scope=scope)
+    chunking_config = get_chunking_config()
+    indexed_strategy = searcher.get_chunking_strategy()
+    rechunk = True
+    if indexed_strategy and indexed_strategy != chunking_config.strategy and not force_rechunk:
+        log.warning(
+            "Chunking strategy mismatch (index=%s, config=%s). "
+            "Run `mx reindex --force-rechunk` to rebuild chunks.",
+            indexed_strategy,
+            chunking_config.strategy,
+        )
+        rechunk = False
 
     # Index all KBs
     if kb_roots:
-        searcher.reindex(kb_roots=kb_roots)
+        searcher.reindex(
+            kb_roots=kb_roots,
+            rechunk=rechunk,
+            chunking_strategy=chunking_config.strategy if rechunk else None,
+        )
 
     # Rebuild backlink cache for each KB
     for scope, kb_root in kb_roots:
@@ -2971,10 +3051,12 @@ async def move(
         new_file_path = kb_root / new_path_md
         if new_file_path.exists():
             try:
-                _, _, chunks = parse_entry(new_file_path)
+                metadata, content, chunks = parse_entry(new_file_path)
                 if chunks:
-                    normalized_chunks = normalize_chunks(chunks, new_path_md)
-                    searcher.index_chunks(normalized_chunks)
+                    normalized_chunks, documents = prepare_index_chunks(
+                        chunks, new_path_md, metadata, content
+                    )
+                    searcher.index_chunks(normalized_chunks, documents)
                     entries_reindexed += 1
             except ParseError as e:
                 log.warning("Could not reindex moved file %s: %s", new_path_md, e)
@@ -3611,8 +3693,10 @@ async def patch_entry(
         # Parse and index new content
         _, _, chunks = parse_entry(file_path)
         if chunks:
-            normalized_chunks = normalize_chunks(chunks, relative_path)
-            searcher.index_chunks(normalized_chunks)
+            normalized_chunks, documents = prepare_index_chunks(
+                chunks, relative_path, updated_metadata, result.new_content
+            )
+            searcher.index_chunks(normalized_chunks, documents)
     except ParseError as e:
         log.warning("Patched entry but failed to re-index %s: %s", relative_path, e)
     except Exception as e:

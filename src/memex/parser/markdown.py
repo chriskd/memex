@@ -1,31 +1,13 @@
 """Markdown parsing with YAML frontmatter support."""
 
-import re
 from pathlib import Path
 
 import frontmatter
-import tiktoken
 from pydantic import ValidationError
 
+from ..config import get_chunking_config
 from ..models import DocumentChunk, EntryMetadata
-
-# Cached encoder for token counting (cl100k_base is Claude/GPT-4 compatible)
-_encoder: tiktoken.Encoding | None = None
-
-
-def _get_token_count(text: str) -> int:
-    """Count tokens using cl100k_base encoding.
-
-    Args:
-        text: Text to count tokens for.
-
-    Returns:
-        Number of tokens in the text.
-    """
-    global _encoder
-    if _encoder is None:
-        _encoder = tiktoken.get_encoding("cl100k_base")
-    return len(_encoder.encode(text))
+from .chunking import chunk_content
 
 
 class ParseError(Exception):
@@ -76,80 +58,7 @@ def parse_entry(path: Path) -> tuple[EntryMetadata, str, list[DocumentChunk]]:
     content = post.content
     path_str = str(path)
 
-    chunks = _chunk_by_h2(path_str, content, metadata)
+    chunking_config = get_chunking_config()
+    chunks = chunk_content(path_str, content, metadata, chunking_config)
 
     return metadata, content, chunks
-
-
-def _chunk_by_h2(path: str, content: str, metadata: EntryMetadata) -> list[DocumentChunk]:
-    """Split content into chunks by H2 headers.
-
-    Args:
-        path: File path for the chunks.
-        content: Markdown content to chunk.
-        metadata: Entry metadata to attach to chunks.
-
-    Returns:
-        List of DocumentChunk objects.
-    """
-    # Pattern matches H2 headers (## Title) at the start of a line
-    h2_pattern = re.compile(r"^## (.+)$", re.MULTILINE)
-
-    chunks: list[DocumentChunk] = []
-    matches = list(h2_pattern.finditer(content))
-
-    if not matches:
-        # No H2 headers - entire content is one chunk
-        stripped = content.strip()
-        if stripped:
-            chunks.append(
-                DocumentChunk(
-                    path=path,
-                    section=None,
-                    content=stripped,
-                    metadata=metadata,
-                    token_count=_get_token_count(stripped),
-                )
-            )
-        return chunks
-
-    # Handle intro section (content before first H2)
-    intro_end = matches[0].start()
-    intro_content = content[:intro_end].strip()
-    if intro_content:
-        chunks.append(
-            DocumentChunk(
-                path=path,
-                section=None,
-                content=intro_content,
-                metadata=metadata,
-                token_count=_get_token_count(intro_content),
-            )
-        )
-
-    # Handle each H2 section
-    for i, match in enumerate(matches):
-        section_name = match.group(1).strip()
-        section_start = match.end()
-
-        # Section ends at next H2 or end of content
-        if i + 1 < len(matches):
-            section_end = matches[i + 1].start()
-        else:
-            section_end = len(content)
-
-        section_content = content[section_start:section_end].strip()
-
-        # Only create chunk if there's actual content
-        if section_content:
-            chunks.append(
-                DocumentChunk(
-                    path=path,
-                    section=section_name,
-                    content=section_content,
-                    metadata=metadata,
-                    token_count=_get_token_count(section_content),
-                )
-            )
-
-    return chunks

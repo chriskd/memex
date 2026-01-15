@@ -961,6 +961,7 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
               help="Minimum score threshold (0.0-1.0). Scores: >=0.7 high, 0.4-0.7 moderate, <0.4 weak")
 @click.option("--content", is_flag=True, help="Include full content in results")
+@click.option("--show-chunks", is_flag=True, help="Show chunk-level results (no path dedupe)")
 @click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
@@ -978,6 +979,7 @@ def search(
     limit: int,
     min_score: float | None,
     content: bool,
+    show_chunks: bool,
     strict: bool,
     terse: bool,
     full_titles: bool,
@@ -1018,6 +1020,7 @@ def search(
       mx search "config" --min-score=0.5          # Only confident results
       mx search "query" --strict                  # No semantic fallback
       mx search "query" --scope=project           # Project KB only
+      mx search "query" --show-chunks            # Chunk-level results
       mx search "query" --include-neighbors       # Include linked entries
       mx search "query" --include-neighbors --neighbor-depth=2
 
@@ -1052,6 +1055,7 @@ def search(
         include_content=content,
         strict=strict,
         scope=scope,
+        show_chunks=show_chunks,
     ))
 
     # Record search in history
@@ -1142,6 +1146,13 @@ def search(
                     "score": r.score,
                     "confidence": _score_confidence(r.score),
                 }
+                if show_chunks:
+                    item["chunk_idx"] = r.chunk_idx
+                    item["chunk_strategy"] = r.chunk_strategy
+                    item["parent_section"] = r.parent_section
+                    item["section"] = r.section
+                    item["start_offset"] = r.start_offset
+                    item["end_offset"] = r.end_offset
                 if content and r.content:
                     item["content"] = r.content
                 else:
@@ -1150,7 +1161,10 @@ def search(
             output(results_data, as_json=True)
         elif terse:
             for r in filtered_results:
-                click.echo(r.path)
+                if show_chunks:
+                    click.echo(f"{r.path}#chunk_{r.chunk_idx}")
+                else:
+                    click.echo(r.path)
         else:
             if not filtered_results:
                 if min_score is not None and result.results:
@@ -1159,18 +1173,35 @@ def search(
                     click.echo("No results found.")
                 return
 
-            rows = [
-                {"path": r.path, "title": r.title, "score": f"{r.score:.2f}", "conf": _score_confidence_short(r.score)}
-                for r in filtered_results
-            ]
+            rows = []
+            for r in filtered_results:
+                row = {
+                    "path": r.path,
+                    "title": r.title,
+                    "score": f"{r.score:.2f}",
+                    "conf": _score_confidence_short(r.score),
+                }
+                if show_chunks:
+                    row["chunk"] = str(r.chunk_idx)
+                    row["section"] = r.parent_section or r.section or ""
+                rows.append(row)
             title_width = 10000 if full_titles else 30
-            click.echo(format_table(rows, ["path", "title", "score", "conf"], {"path": 40, "title": title_width}))
+            columns = ["path", "title", "score", "conf"]
+            widths = {"path": 40, "title": title_width}
+            if show_chunks:
+                columns.extend(["chunk", "section"])
+                widths["chunk"] = 6
+                widths["section"] = 24
+            click.echo(format_table(rows, columns, widths))
 
             # Show full content below table when --content flag is used
             if content:
                 click.echo("\n" + "=" * 60)
                 for r in filtered_results:
-                    click.echo(f"\n## {r.path}")
+                    if show_chunks:
+                        click.echo(f"\n## {r.path}#chunk_{r.chunk_idx}")
+                    else:
+                        click.echo(f"\n## {r.path}")
                     click.echo("-" * 40)
                     if r.content:
                         click.echo(r.content)
@@ -2237,9 +2268,10 @@ def suggest_links(path: str, limit: int, as_json: bool):
 
 @cli.command()
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--force-rechunk", is_flag=True, help="Rebuild chunks with current strategy")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def reindex(ctx: click.Context, scope: str | None, as_json: bool):
+def reindex(ctx: click.Context, scope: str | None, force_rechunk: bool, as_json: bool):
     """Rebuild search indices from all markdown files.
 
     By default, indexes entries from both project and user KBs.
@@ -2248,21 +2280,31 @@ def reindex(ctx: click.Context, scope: str | None, as_json: bool):
     Examples:
       mx reindex                # Index all KBs
       mx reindex --scope=project # Index project KB only
+      mx reindex --force-rechunk # Rebuild chunks with current strategy
       mx reindex --json
     """
     from .config import ConfigurationError, get_kb_root
-    from .core import reindex as core_reindex
+    from .core import get_chunking_strategy_mismatch, reindex as core_reindex
 
     try:
         get_kb_root()  # Validate KB is configured
     except ConfigurationError as exc:
         _handle_error(ctx, exc)
 
+    mismatch = get_chunking_strategy_mismatch()
+    if mismatch and not force_rechunk and not as_json:
+        indexed_strategy, configured_strategy = mismatch
+        click.echo(
+            "Warning: chunking strategy mismatch "
+            f"(index={indexed_strategy}, config={configured_strategy}). "
+            "Run `mx reindex --force-rechunk` to rebuild chunks."
+        )
+
     if not as_json:
         scope_msg = f"{scope} KB" if scope else "all KBs"
         click.echo(f"Reindexing {scope_msg}...")
 
-    result = run_async(core_reindex(scope=scope))
+    result = run_async(core_reindex(scope=scope, force_rechunk=force_rechunk))
 
     if as_json:
         output({

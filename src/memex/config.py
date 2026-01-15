@@ -512,6 +512,83 @@ def get_llm_config() -> LLMConfig:
 
 
 # =============================================================================
+# Chunking
+# =============================================================================
+
+
+@dataclass
+class ChunkingConfig:
+    """Configuration for document chunking.
+
+    Controls how documents are split for ChromaDB storage.
+
+    Example .kbconfig:
+        chunking:
+          enabled: true
+          strategy: headers  # headers, paragraph, semantic, sentences
+          max_chunk_tokens: 256
+          overlap_tokens: 32
+          min_chunk_tokens: 20
+    """
+
+    enabled: bool = True
+    """Whether chunking is enabled for indexing."""
+
+    strategy: str = "headers"
+    """Chunking strategy name."""
+
+    max_chunk_tokens: int = 256
+    """Maximum tokens per chunk (semantic strategy)."""
+
+    overlap_tokens: int = 32
+    """Tokens of overlap between adjacent chunks."""
+
+    min_chunk_tokens: int = 20
+    """Minimum tokens per chunk to avoid tiny fragments."""
+
+
+def get_chunking_config() -> ChunkingConfig:
+    """Load chunking config from .kbconfig.
+
+    Config is loaded from the project .kbconfig file's chunking section.
+    Returns default config if not configured or KB not found.
+
+    Example .kbconfig:
+        chunking:
+          enabled: true
+          strategy: headers
+          max_chunk_tokens: 256
+
+    Returns:
+        ChunkingConfig with loaded or default values.
+    """
+    import yaml
+
+    try:
+        project_config = _discover_project_config()
+        if not project_config:
+            return ChunkingConfig()
+
+        config_path, _ = project_config
+        content = config_path.read_text(encoding="utf-8")
+        data = yaml.safe_load(content) or {}
+
+        chunking_data = data.get("chunking", {})
+        if not chunking_data:
+            return ChunkingConfig()
+
+        return ChunkingConfig(
+            enabled=chunking_data.get("enabled", True),
+            strategy=chunking_data.get("strategy", "headers"),
+            max_chunk_tokens=chunking_data.get("max_chunk_tokens", 256),
+            overlap_tokens=chunking_data.get("overlap_tokens", 32),
+            min_chunk_tokens=chunking_data.get("min_chunk_tokens", 20),
+        )
+    except (OSError, yaml.YAMLError):
+        return ChunkingConfig()
+
+
+# =============================================================================
 # Memory Evolution (A-Mem style)
 # =============================================================================
 

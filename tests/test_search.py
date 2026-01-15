@@ -565,6 +565,7 @@ class TestHybridDeduplication:
         chunks = [
             DocumentChunk(
                 path="multi/doc.md",
+                chunk_idx=0,
                 section="intro",
                 content="Introduction section with some content",
                 metadata=EntryMetadata(
@@ -575,6 +576,7 @@ class TestHybridDeduplication:
             ),
             DocumentChunk(
                 path="multi/doc.md",
+                chunk_idx=1,
                 section="main",
                 content="Main section with Python programming tutorial",
                 metadata=EntryMetadata(
@@ -602,6 +604,38 @@ class TestHybridDeduplication:
         assert len(results) <= 5
         paths = [r.path for r in results]
         assert len(paths) == len(set(paths))  # All unique
+
+    def test_show_chunks_returns_multiple_matches(self, hybrid_searcher):
+        """Chunk-level search returns multiple matches for the same path."""
+        chunks = [
+            DocumentChunk(
+                path="multi/doc.md",
+                chunk_idx=0,
+                section="intro",
+                content="Introduction section with some content",
+                metadata=EntryMetadata(
+                    title="Multi-section Doc",
+                    tags=["test"],
+                    created=datetime(2024, 1, 1),
+                ),
+            ),
+            DocumentChunk(
+                path="multi/doc.md",
+                chunk_idx=1,
+                section="main",
+                content="Main section with Python programming tutorial",
+                metadata=EntryMetadata(
+                    title="Multi-section Doc",
+                    tags=["test"],
+                    created=datetime(2024, 1, 1),
+                ),
+            ),
+        ]
+        hybrid_searcher.index_chunks(chunks)
+
+        results = hybrid_searcher.search("Python programming", dedupe_by_path=False)
+        paths = [r.path for r in results]
+        assert paths.count("multi/doc.md") >= 2
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -836,7 +870,7 @@ class TestHybridIndexOperations:
     def test_index_document_to_both_indices(self, hybrid_searcher):
         """Indexing a document adds it to both Whoosh and Chroma."""
         chunk = _make_chunk("test.md", "Test content", "Test Doc")
-        hybrid_searcher.index_document(chunk)
+        hybrid_searcher.index_document(chunk, [chunk])
 
         assert hybrid_searcher._whoosh.doc_count() == 1
         assert hybrid_searcher._chroma.doc_count() == 1

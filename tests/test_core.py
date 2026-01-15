@@ -71,13 +71,13 @@ class DummySearcher:
     def search(self, query: str, limit: int = 10, mode: str = "hybrid", **kwargs):
         return self.results[:limit]
 
-    def index_chunks(self, chunks):
+    def index_chunks(self, chunks, documents=None):
         self._indexed_chunks.extend(chunks)
 
     def delete_document(self, path):
         self._deleted_docs.append(path)
 
-    def reindex(self, kb_root):
+    def reindex(self, kb_root=None, **kwargs):
         pass
 
     def status(self):
@@ -1508,13 +1508,13 @@ class SemanticLinkSearcher:
     def search(self, query: str, limit: int = 10, mode: str = "hybrid", **kwargs):
         return self.results[:limit]
 
-    def index_chunks(self, chunks):
+    def index_chunks(self, chunks, documents=None):
         self._indexed_chunks.extend(chunks)
 
     def delete_document(self, path):
         self._deleted_docs.append(path)
 
-    def reindex(self, kb_root):
+    def reindex(self, kb_root=None, **kwargs):
         pass
 
     def status(self):
