@@ -13,14 +13,48 @@ semantic_links:
   - path: reference/agent-memory-comparison.md
     score: 0.606
     reason: embedding_similarity
-  - path: reference/memory-evolution-queue-architecture.md
-    score: 0.845
-    reason: bidirectional
 ---
 
 # Memory Evolution Queue Architecture
 
 Design for non-blocking, configurable memory evolution triggered via queue + manual command.
+
+## Quick Start
+
+### 1. Get an API Key
+
+Memory evolution uses [OpenRouter](https://openrouter.ai/) as an LLM gateway. Get an API key at:
+https://openrouter.ai/keys
+
+### 2. Set Environment Variable
+
+```bash
+# Add to your shell profile (.bashrc, .zshrc, etc.)
+export OPENROUTER_API_KEY="sk-or-v1-..."
+
+# Or in .env file in your project
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+### 3. Enable in .kbconfig
+
+Add to your project's `.kbconfig` file:
+
+```yaml
+memory_evolution:
+  enabled: true
+  model: anthropic/claude-3-5-haiku  # Fast and cheap
+  min_score: 0.7                      # Only evolve strong connections
+```
+
+### 4. Process the Queue
+
+After adding entries, run:
+
+```bash
+mx evolve           # Process all queued items
+mx evolve --status  # Check queue size
+```
 
 ## Problem
 
