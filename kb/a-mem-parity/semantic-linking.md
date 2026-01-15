@@ -5,7 +5,7 @@ tags:
   - semantic-links
   - features
 created: 2026-01-14T23:27:03.555183+00:00
-updated: 2026-01-14T23:36:36.455911+00:00
+updated: 2026-01-15T02:55:14.820116+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
@@ -24,6 +24,9 @@ semantic_links:
     reason: bidirectional
   - path: a-mem-parity/entry-metadata-schema.md
     score: 0.683
+    reason: bidirectional
+  - path: a-mem-parity/a-mem-init-command-specification.md
+    score: 0.67
     reason: bidirectional
 ---
 

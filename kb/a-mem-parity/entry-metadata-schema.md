@@ -7,11 +7,10 @@ tags:
   - models
   - features
 created: 2026-01-14T23:36:29.356106+00:00
+updated: 2026-01-15T02:55:15.146243+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: main
-last_edited_by: chris
 semantic_links:
   - path: a-mem-parity/semantic-linking.md
     score: 0.683
@@ -19,6 +18,9 @@ semantic_links:
   - path: a-mem-parity/a-mem-parity-analysis.md
     score: 0.68
     reason: embedding_similarity
+  - path: a-mem-parity/a-mem-init-command-specification.md
+    score: 0.617
+    reason: bidirectional
 ---
 
 # Entry Metadata Schema
