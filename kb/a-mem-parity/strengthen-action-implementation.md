@@ -81,14 +81,44 @@ Response format:
 }
 ```
 
+## Status: Complete ✓
+
+The strengthen action is fully integrated into `add_entry()` as of January 2026.
+
+### Integration Flow
+
+1. `add_entry()` creates bidirectional semantic links
+2. If neighbors found AND `strengthen_on_add: true`:
+   - Build `NeighborInfo` objects from neighbor files
+   - Call `analyze_for_strengthen()` with LLM
+   - If `should_strengthen: true`:
+     - Update entry keywords with refined list
+     - Add suggested semantic links (with reason `strengthen_suggested`)
+     - Re-save and re-index entry
+3. Errors are logged but never block entry creation
+
+### Helper Function
+
+`_build_neighbor_info_for_strengthen()` reads neighbor entries and returns `NeighborInfo` objects for the LLM analysis.
+
 ## Testing
 
-8 tests in `tests/test_memory_evolution.py`:
+### LLM Function Tests (existing)
 - `test_analyze_for_strengthen_no_neighbors`
 - `test_analyze_for_strengthen_parses_response`
 - `test_analyze_for_strengthen_should_not_strengthen`
 - `test_analyze_for_strengthen_handles_invalid_json`
 - `test_analyze_for_strengthen_filters_invalid_links`
+
+### Config Tests (existing)
 - `test_default_config_strengthen_disabled`
 - `test_config_loads_strengthen_on_add`
 - `test_config_strengthen_explicit_false`
+
+### Integration Tests (new, `TestStrengthenIntegration` class)
+- `test_build_neighbor_info_for_strengthen` - Helper reads neighbor data correctly
+- `test_build_neighbor_info_skips_missing_files` - Handles missing neighbors gracefully
+- `test_strengthen_updates_keywords_when_enabled` - Keywords updated when config enabled
+- `test_strengthen_skipped_when_disabled` - No LLM call when config disabled
+- `test_strengthen_adds_semantic_links_when_suggested` - Links added from LLM suggestions
+- `test_strengthen_respects_should_strengthen_false` - Entry unchanged when LLM says no

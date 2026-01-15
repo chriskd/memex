@@ -970,3 +970,270 @@ Content about existing concepts.
         # Neighbor should be unchanged
         current_content = (tmp_kb / "test" / "neighbor.md").read_text()
         assert current_content == original_content
+
+
+class TestStrengthenIntegration:
+    """Tests for the strengthen action integration in add_entry (A-Mem parity)."""
+
+    @pytest.fixture
+    def tmp_kb_with_neighbor(self, tmp_path, monkeypatch):
+        """Create a temporary KB with a neighbor entry for linking."""
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        (kb_path / ".kbconfig").write_text("""kb_path: .
+memory_evolution:
+  enabled: true
+  strengthen_on_add: true
+  model: test-model
+""")
+        (kb_path / ".indices").mkdir()
+        (kb_path / "test").mkdir()
+
+        # Create a neighbor entry that will be linked to
+        neighbor_content = """---
+title: Existing Entry
+tags:
+  - testing
+created: 2024-01-01T00:00:00+00:00
+keywords:
+  - neighbor-concept
+  - existing-idea
+description: An existing entry in the KB.
+---
+
+# Existing Entry
+
+This is an existing entry with relevant content about testing.
+"""
+        (kb_path / "test" / "neighbor.md").write_text(neighbor_content)
+
+        # Set up environment
+        monkeypatch.setenv("MEMEX_SKIP_PROJECT_KB", "")
+        monkeypatch.chdir(kb_path)
+
+        return kb_path
+
+    def test_build_neighbor_info_for_strengthen(self, tmp_kb_with_neighbor):
+        """_build_neighbor_info_for_strengthen correctly reads neighbor data."""
+        neighbors_to_evolve = [("test/neighbor.md", 0.85)]
+
+        result = core._build_neighbor_info_for_strengthen(
+            kb_root=tmp_kb_with_neighbor,
+            neighbors_to_evolve=neighbors_to_evolve,
+        )
+
+        assert len(result) == 1
+        neighbor = result[0]
+        assert neighbor.path == "test/neighbor.md"
+        assert neighbor.title == "Existing Entry"
+        assert "neighbor-concept" in neighbor.keywords
+        assert neighbor.score == 0.85
+
+    def test_build_neighbor_info_skips_missing_files(self, tmp_kb_with_neighbor):
+        """_build_neighbor_info_for_strengthen handles missing neighbor files."""
+        neighbors_to_evolve = [
+            ("test/neighbor.md", 0.85),
+            ("test/nonexistent.md", 0.9),  # Missing file
+        ]
+
+        result = core._build_neighbor_info_for_strengthen(
+            kb_root=tmp_kb_with_neighbor,
+            neighbors_to_evolve=neighbors_to_evolve,
+        )
+
+        # Should only return the existing neighbor
+        assert len(result) == 1
+        assert result[0].path == "test/neighbor.md"
+
+    @pytest.mark.asyncio
+    async def test_strengthen_updates_keywords_when_enabled(
+        self, tmp_kb_with_neighbor, monkeypatch
+    ):
+        """When strengthen_on_add is true, new entry keywords are updated."""
+        from memex.llm import StrengthenResult
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Mock the semantic link creation to return neighbors
+        mock_linking_result = MagicMock()
+        mock_linking_result.forward_links = []
+        mock_linking_result.neighbors_for_evolution = [("test/neighbor.md", 0.85)]
+
+        # Mock analyze_for_strengthen to return should_strengthen=True
+        mock_strengthen_result = StrengthenResult(
+            should_strengthen=True,
+            new_keywords=["original-keyword", "strengthened-concept", "neighbor-related"],
+            suggested_links=["test/neighbor.md"],
+        )
+
+        async def mock_analyze_strengthen(*args, **kwargs):
+            return mock_strengthen_result
+
+        # Patch the dependencies
+        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+            with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
+                with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
+                    result = await core.add_entry(
+                        title="New Test Entry",
+                        content="Content about testing concepts.",
+                        tags=["testing"],
+                        category="test",
+                        keywords=["original-keyword"],
+                    )
+
+        # Read the created entry and verify keywords were strengthened
+        entry_path = tmp_kb_with_neighbor / result["path"]
+        entry_content = entry_path.read_text()
+
+        # Check that strengthened keywords are present
+        assert "strengthened-concept" in entry_content
+        assert "neighbor-related" in entry_content
+
+    @pytest.mark.asyncio
+    async def test_strengthen_skipped_when_disabled(
+        self, tmp_path, monkeypatch
+    ):
+        """When strengthen_on_add is false, strengthen is not called."""
+        # Create KB with strengthen disabled
+        kb_path = tmp_path / "kb"
+        kb_path.mkdir()
+        (kb_path / ".kbconfig").write_text("""kb_path: .
+memory_evolution:
+  enabled: true
+  strengthen_on_add: false
+""")
+        (kb_path / ".indices").mkdir()
+        (kb_path / "test").mkdir()
+
+        # Create neighbor
+        neighbor_content = """---
+title: Neighbor
+tags:
+  - testing
+created: 2024-01-01T00:00:00+00:00
+---
+
+Neighbor content.
+"""
+        (kb_path / "test" / "neighbor.md").write_text(neighbor_content)
+
+        monkeypatch.setenv("MEMEX_SKIP_PROJECT_KB", "")
+        monkeypatch.chdir(kb_path)
+
+        # Mock semantic linking to return neighbors
+        mock_linking_result = MagicMock()
+        mock_linking_result.forward_links = []
+        mock_linking_result.neighbors_for_evolution = [("test/neighbor.md", 0.85)]
+
+        # Track if analyze_for_strengthen was called
+        strengthen_called = []
+
+        async def mock_analyze_strengthen(*args, **kwargs):
+            strengthen_called.append(True)
+            return StrengthenResult(
+                should_strengthen=True,
+                new_keywords=["should-not-appear"],
+                suggested_links=[],
+            )
+
+        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+            with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
+                with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
+                    result = await core.add_entry(
+                        title="New Entry",
+                        content="Content.",
+                        tags=["testing"],
+                        category="test",
+                        keywords=["original"],
+                    )
+
+        # analyze_for_strengthen should NOT have been called
+        assert len(strengthen_called) == 0
+
+        # Original keywords should be unchanged
+        entry_path = kb_path / result["path"]
+        entry_content = entry_path.read_text()
+        assert "should-not-appear" not in entry_content
+
+    @pytest.mark.asyncio
+    async def test_strengthen_adds_semantic_links_when_suggested(
+        self, tmp_kb_with_neighbor, monkeypatch
+    ):
+        """Strengthen result can add semantic links to the new entry."""
+        from memex.llm import StrengthenResult
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        # Mock linking result with no forward links initially
+        mock_linking_result = MagicMock()
+        mock_linking_result.forward_links = []
+        mock_linking_result.neighbors_for_evolution = [("test/neighbor.md", 0.85)]
+
+        # Mock strengthen to suggest adding a semantic link
+        mock_strengthen_result = StrengthenResult(
+            should_strengthen=True,
+            new_keywords=["keyword"],
+            suggested_links=["test/neighbor.md"],  # Suggest linking to neighbor
+        )
+
+        async def mock_analyze_strengthen(*args, **kwargs):
+            return mock_strengthen_result
+
+        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+            with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
+                with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
+                    result = await core.add_entry(
+                        title="New Entry With Links",
+                        content="Content that relates to neighbor.",
+                        tags=["testing"],
+                        category="test",
+                        keywords=["keyword"],
+                    )
+
+        # Read the entry and verify semantic_links were added
+        entry_path = tmp_kb_with_neighbor / result["path"]
+        entry_content = entry_path.read_text()
+
+        # Check for semantic link with strengthen_suggested reason
+        assert "test/neighbor.md" in entry_content
+        assert "strengthen_suggested" in entry_content
+
+    @pytest.mark.asyncio
+    async def test_strengthen_respects_should_strengthen_false(
+        self, tmp_kb_with_neighbor, monkeypatch
+    ):
+        """When LLM returns should_strengthen=False, entry is not modified."""
+        from memex.llm import StrengthenResult
+
+        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+
+        mock_linking_result = MagicMock()
+        mock_linking_result.forward_links = []
+        mock_linking_result.neighbors_for_evolution = [("test/neighbor.md", 0.85)]
+
+        # Mock strengthen to return should_strengthen=False
+        mock_strengthen_result = StrengthenResult(
+            should_strengthen=False,  # LLM decided NOT to strengthen
+            new_keywords=["should-not-appear"],
+            suggested_links=["test/neighbor.md"],
+        )
+
+        async def mock_analyze_strengthen(*args, **kwargs):
+            return mock_strengthen_result
+
+        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+            with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
+                with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
+                    result = await core.add_entry(
+                        title="Entry Not Strengthened",
+                        content="Content.",
+                        tags=["testing"],
+                        category="test",
+                        keywords=["original-only"],
+                    )
+
+        # Entry should have original keywords only
+        entry_path = tmp_kb_with_neighbor / result["path"]
+        entry_content = entry_path.read_text()
+        assert "should-not-appear" not in entry_content
+        assert "original-only" in entry_content

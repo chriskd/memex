@@ -690,6 +690,49 @@ def _queue_evolution(
     return queue_evolution(new_entry_path, filtered, kb_root)
 
 
+def _build_neighbor_info_for_strengthen(
+    kb_root: Path,
+    neighbors_to_evolve: list[tuple[str, float]],
+) -> list:
+    """Build NeighborInfo objects for strengthen analysis.
+
+    Reads neighbor entry files and extracts the information needed
+    for the strengthen LLM analysis.
+
+    Args:
+        kb_root: KB root directory.
+        neighbors_to_evolve: List of (neighbor_path, score) tuples.
+
+    Returns:
+        List of NeighborInfo objects (from llm module).
+    """
+    from .llm import NeighborInfo
+
+    neighbors_info = []
+    for neighbor_path, score in neighbors_to_evolve:
+        neighbor_file = kb_root / neighbor_path
+        if not neighbor_file.exists():
+            log.warning("Neighbor not found for strengthen: %s", neighbor_path)
+            continue
+
+        try:
+            metadata, content, _ = parse_entry(neighbor_file)
+            neighbors_info.append(
+                NeighborInfo(
+                    path=neighbor_path,
+                    title=metadata.title,
+                    content=content,
+                    keywords=list(metadata.keywords),
+                    score=score,
+                )
+            )
+        except ParseError as e:
+            log.warning("Failed to parse neighbor for strengthen %s: %s", neighbor_path, e)
+            continue
+
+    return neighbors_info
+
+
 @dataclass
 class EvolutionResult:
     """Result of processing evolution queue items."""
@@ -1499,6 +1542,75 @@ async def add_entry(
                 neighbors_to_evolve=linking_result.neighbors_for_evolution,
                 kb_root=kb_root,
             )
+
+            # Strengthen new entry based on neighbor context (A-Mem parity)
+            evolution_config = get_memory_evolution_config()
+            if evolution_config.strengthen_on_add:
+                try:
+                    # Build NeighborInfo objects for strengthen analysis
+                    strengthen_neighbors = _build_neighbor_info_for_strengthen(
+                        kb_root=kb_root,
+                        neighbors_to_evolve=linking_result.neighbors_for_evolution,
+                    )
+
+                    if strengthen_neighbors:
+                        from .llm import analyze_for_strengthen
+
+                        # Re-read current metadata (may have been updated with semantic_links)
+                        current_metadata, current_content, _ = parse_entry(file_path)
+
+                        strengthen_result = await analyze_for_strengthen(
+                            new_entry_content=current_content,
+                            new_entry_keywords=list(current_metadata.keywords),
+                            new_entry_title=current_metadata.title,
+                            neighbors=strengthen_neighbors,
+                            model=evolution_config.model,
+                        )
+
+                        if strengthen_result.should_strengthen:
+                            # Apply strengthened keywords
+                            updates: dict = {"keywords": strengthen_result.new_keywords}
+
+                            # Add suggested links to semantic_links if not already present
+                            if strengthen_result.suggested_links:
+                                existing_link_paths = {
+                                    sl.path for sl in (current_metadata.semantic_links or [])
+                                }
+                                new_links = [
+                                    SemanticLink(
+                                        path=p,
+                                        score=0.8,  # High score for LLM-suggested links
+                                        reason="strengthen_suggested",
+                                    )
+                                    for p in strengthen_result.suggested_links
+                                    if p not in existing_link_paths
+                                ]
+                                if new_links:
+                                    all_links = list(current_metadata.semantic_links or []) + new_links
+                                    updates["semantic_links"] = all_links
+
+                            # Re-save with strengthened metadata
+                            strengthened_metadata = current_metadata.model_copy(update=updates)
+                            strengthened_frontmatter = build_frontmatter(strengthened_metadata)
+                            file_path.write_text(
+                                strengthened_frontmatter + current_content, encoding="utf-8"
+                            )
+
+                            # Re-index with updated metadata
+                            _, _, strengthened_chunks = parse_entry(file_path)
+                            if strengthened_chunks:
+                                searcher = get_searcher()
+                                searcher.delete_document(rel_path)
+                                normalized = normalize_chunks(strengthened_chunks, rel_path)
+                                searcher.index_chunks(normalized)
+
+                            log.info(
+                                "Strengthened entry %s: keywords=%s",
+                                rel_path,
+                                strengthen_result.new_keywords,
+                            )
+                except Exception as e:
+                    log.warning("Failed to strengthen entry %s: %s", rel_path, e)
 
     # Compute link suggestions for the new entry
     existing_links = set(links) if links else set()
