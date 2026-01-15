@@ -13,7 +13,6 @@ import json
 import os
 import re
 import subprocess
-import sys
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, TypedDict
@@ -335,10 +334,10 @@ def init_memory(
     settings_path.write_text(json.dumps(settings, indent=2))
     result["actions"].append(f"Installed hooks in {settings_path}")
 
-    # 4. Check for ANTHROPIC_API_KEY
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    # 4. Check for LLM API key (either Anthropic or OpenRouter)
+    if not os.environ.get("ANTHROPIC_API_KEY") and not os.environ.get("OPENROUTER_API_KEY"):
         result["warnings"].append(
-            "ANTHROPIC_API_KEY not set - memory capture requires this for summarization"
+            "No LLM API key set - memory capture requires ANTHROPIC_API_KEY or OPENROUTER_API_KEY"
         )
 
     return result
@@ -452,7 +451,9 @@ def get_memory_status(project_path: Path | None = None) -> dict[str, Any]:
     return {
         "config": config,
         "hooks_installed": hooks_installed,
-        "api_key_set": bool(os.environ.get("ANTHROPIC_API_KEY")),
+        "api_key_set": bool(
+            os.environ.get("ANTHROPIC_API_KEY") or os.environ.get("OPENROUTER_API_KEY")
+        ),
         "project_path": str(project_path),
     }
 
@@ -573,8 +574,10 @@ def capture_memory(
 ) -> dict[str, Any]:
     """Capture session memory by summarizing the current conversation.
 
-    Reads the conversation from Claude's project directory, calls Claude haiku
+    Reads the conversation from Claude's project directory, calls an LLM
     to extract observations, and writes to today's session file.
+
+    Supports both Anthropic (direct API) and OpenRouter providers.
 
     Args:
         project_path: Project directory (defaults to CLAUDE_PROJECT_DIR)
@@ -583,7 +586,12 @@ def capture_memory(
     Returns:
         Dict with status and path
     """
-    import anthropic
+    from .config import get_llm_config
+    from .llm_providers import (
+        LLMProviderError,
+        get_sync_client,
+        make_completion_sync,
+    )
 
     if project_path is None:
         project_path = get_project_path()
@@ -647,14 +655,15 @@ def capture_memory(
     except Exception as e:
         return {"error": f"Failed to read conversation: {e}", "captured": False}
 
-    # Call Claude haiku to summarize
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if not api_key:
-        return {"error": "ANTHROPIC_API_KEY not set", "captured": False}
+    # Get LLM client and config
+    try:
+        client, provider = get_sync_client()
+        llm_config = get_llm_config()
+        model = llm_config.get_model("memory_capture")
+    except LLMProviderError as e:
+        return {"error": str(e), "captured": False}
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-
         prompt = f"""Summarize this coding session in 2-3 sentences, then list key observations.
 
 Use these categories for observations:
@@ -677,13 +686,13 @@ Brief 2-3 sentence summary of what was accomplished.
 Conversation:
 {conversation_text}"""
 
-        response = client.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=500,
+        result_text = make_completion_sync(
+            client=client,
+            provider=provider,
+            model=model,
             messages=[{"role": "user", "content": prompt}],
+            max_tokens=500,
         )
-
-        result_text = response.content[0].text
 
         # Parse response
         summary = ""

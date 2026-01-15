@@ -15,6 +15,7 @@ from memex.llm import (
     evolve_neighbors_batched,
     evolve_single_neighbor,
 )
+from memex.llm_providers import LLMProviderError
 
 
 class TestMemoryEvolutionConfig:
@@ -74,19 +75,20 @@ class TestLLMEvolution:
     """Tests for LLM-based evolution functions."""
 
     def test_missing_api_key_raises_error(self, monkeypatch):
-        """Missing OPENROUTER_API_KEY raises LLMConfigurationError."""
+        """Missing API keys raises LLMProviderError."""
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        from memex.llm import _get_openai_client
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+        from memex.llm import _get_client
 
-        with pytest.raises(LLMConfigurationError, match="OPENROUTER_API_KEY"):
-            _get_openai_client()
+        with pytest.raises(LLMProviderError, match="No LLM API key"):
+            _get_client()
 
     @pytest.mark.asyncio
     async def test_evolve_single_neighbor_parses_response(self, monkeypatch):
         """evolve_single_neighbor correctly parses LLM JSON response."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
-        # Mock the OpenAI client
+        # Mock the OpenAI client (for OpenRouter provider)
         mock_response = MagicMock()
         mock_response.choices = [
             MagicMock(
@@ -101,7 +103,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             result = await evolve_single_neighbor(
                 new_entry_title="Test Entry",
                 new_entry_content="Content about testing",
@@ -140,7 +142,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             result = await evolve_single_neighbor(
                 new_entry_title="Test Entry",
                 new_entry_content="Content about testing",
@@ -167,7 +169,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             result = await evolve_single_neighbor(
                 new_entry_title="Test",
                 new_entry_content="Content",
@@ -196,7 +198,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             neighbors = [NeighborInfo(path="test.md", title="Test", content="Content", keywords=["existing"], score=0.8)]
 
             results = await evolve_neighbors_batched(
@@ -233,7 +235,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             neighbors = [
                 NeighborInfo(path="a.md", title="A", content="Content A", keywords=["existing_a"], score=0.8),
                 NeighborInfo(path="b.md", title="B", content="Content B", keywords=["old_b"], score=0.75),
@@ -281,7 +283,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             neighbors = [
                 NeighborInfo(path="a.md", title="A", content="Content A", keywords=["existing_a"], score=0.8),
                 NeighborInfo(path="b.md", title="B", content="Content B", keywords=["old_b"], score=0.75),
@@ -319,7 +321,7 @@ class TestLLMEvolution:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
-        with patch("memex.llm._get_openai_client", return_value=mock_client):
+        with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             result = await evolve_single_neighbor(
                 new_entry_title="Test",
                 new_entry_content="Content",

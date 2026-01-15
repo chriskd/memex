@@ -79,14 +79,14 @@ Output is capped at ~1000 tokens and includes entries from the last 7 days.
 
 ### mx memory capture
 
-Reads the current conversation from `~/.claude/projects/`, calls Claude haiku to extract a summary and observations, then writes to today's session file.
+Reads the current conversation from `~/.claude/projects/`, calls an LLM to extract a summary and observations, then writes to today's session file.
 
 ```bash
 mx memory capture               # Manual capture
 mx memory capture --event=stop  # Simulate stop hook
 ```
 
-Called automatically by Stop and PreCompact hooks. Requires `ANTHROPIC_API_KEY`.
+Called automatically by Stop and PreCompact hooks. Requires either `ANTHROPIC_API_KEY` or `OPENROUTER_API_KEY`.
 
 ## How It Works
 
@@ -145,11 +145,29 @@ session_dir: sessions              # Where session files go
 session_retention_days: 30         # Auto-cleanup after N days
 ```
 
+### LLM Provider
+
+Memory capture uses an LLM to summarize sessions. Either provider works:
+
+| Provider | API Key | Description |
+|----------|---------|-------------|
+| Anthropic | `ANTHROPIC_API_KEY` | Direct Anthropic API access |
+| OpenRouter | `OPENROUTER_API_KEY` | Multi-model gateway (supports Anthropic, OpenAI, etc.) |
+
+If both keys are set, specify which provider to use in `.kbconfig`:
+
+```yaml
+llm:
+  provider: anthropic  # or "openrouter"
+  model: claude-3.5-haiku  # optional model override
+```
+
 ### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | API key for haiku summarization |
+| `ANTHROPIC_API_KEY` | One of these | API key for Anthropic |
+| `OPENROUTER_API_KEY` | required | API key for OpenRouter |
 | `CLAUDE_PROJECT_DIR` | Auto | Set by Claude Code hooks |
 | `CLAUDE_SESSION_ID` | Auto | Set by Claude Code hooks |
 

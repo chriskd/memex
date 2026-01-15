@@ -558,14 +558,15 @@ class TestAmemInitKeywordExtraction:
     async def test_raises_on_llm_configuration_error(
         self, kb_with_mixed_entries: Path, monkeypatch
     ):
-        """Raises LLMConfigurationError when API key not configured."""
-        # Remove API key
+        """Raises LLMProviderError when no API key is configured."""
+        # Remove both API keys
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         inventory = await core.amem_init_inventory(missing_keywords="llm")
 
-        from memex.llm import LLMConfigurationError
-        with pytest.raises(LLMConfigurationError):
+        from memex.llm_providers import LLMProviderError
+        with pytest.raises(LLMProviderError):
             await core.amem_init_extract_keywords(inventory, model="test-model")
 
     @pytest.mark.asyncio
@@ -645,9 +646,9 @@ class TestExtractKeywordsLLM:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         def mock_get_client():
-            return mock_client
+            return mock_client, "openrouter"
 
-        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+        monkeypatch.setattr("memex.llm._get_client", mock_get_client)
 
         from memex.llm import extract_keywords_llm
         result = await extract_keywords_llm(
@@ -673,9 +674,9 @@ class TestExtractKeywordsLLM:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         def mock_get_client():
-            return mock_client
+            return mock_client, "openrouter"
 
-        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+        monkeypatch.setattr("memex.llm._get_client", mock_get_client)
 
         from memex.llm import extract_keywords_llm
         result = await extract_keywords_llm(
@@ -701,9 +702,9 @@ class TestExtractKeywordsLLM:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         def mock_get_client():
-            return mock_client
+            return mock_client, "openrouter"
 
-        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+        monkeypatch.setattr("memex.llm._get_client", mock_get_client)
 
         from memex.llm import extract_keywords_llm
         result = await extract_keywords_llm(
@@ -728,9 +729,9 @@ class TestExtractKeywordsLLM:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         def mock_get_client():
-            return mock_client
+            return mock_client, "openrouter"
 
-        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+        monkeypatch.setattr("memex.llm._get_client", mock_get_client)
 
         from memex.llm import extract_keywords_llm
         result = await extract_keywords_llm(
@@ -754,9 +755,9 @@ class TestExtractKeywordsLLM:
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         def mock_get_client():
-            return mock_client
+            return mock_client, "openrouter"
 
-        monkeypatch.setattr("memex.llm._get_openai_client", mock_get_client)
+        monkeypatch.setattr("memex.llm._get_client", mock_get_client)
 
         from memex.llm import extract_keywords_llm
         result = await extract_keywords_llm(
@@ -844,9 +845,10 @@ class TestAmemInitCLIPhase2:
     def test_llm_config_error_shows_message(
         self, runner: CliRunner, kb_with_mixed_entries: Path, monkeypatch
     ):
-        """Shows helpful message when LLM not configured."""
-        # Ensure no API key is set
+        """Shows helpful message when no LLM API key is configured."""
+        # Ensure no API keys are set
         monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
         result = runner.invoke(
             cli,
@@ -855,7 +857,7 @@ class TestAmemInitCLIPhase2:
         )
 
         assert result.exit_code == 1
-        assert "OPENROUTER_API_KEY" in result.output or "LLM configuration error" in result.output
+        assert "No LLM API key" in result.output or "LLM configuration error" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────

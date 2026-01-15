@@ -1,23 +1,27 @@
-"""LLM integration for memory evolution via OpenRouter.
+"""LLM integration for memory evolution.
 
 This module provides async functions for LLM-driven memory evolution,
 where neighbors of new entries are analyzed and their keywords/context
 updated based on the relationship.
 
-Uses OpenRouter as a model-agnostic LLM gateway with OpenAI SDK compatibility.
+Supports both Anthropic (direct API) and OpenRouter (OpenAI-compatible gateway).
+Provider is configured via .kbconfig or auto-detected from environment.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-import os
 from dataclasses import dataclass
+from typing import Any
+
+from .llm_providers import (
+    LLMProviderError,
+    get_async_client,
+    resolve_model,
+)
 
 log = logging.getLogger(__name__)
-
-# OpenRouter API endpoint (OpenAI SDK compatible)
-OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
 @dataclass
@@ -37,40 +41,22 @@ class EvolutionSuggestion:
     """Updated context/description for the neighbor (one sentence describing semantic role)."""
 
 
-class LLMConfigurationError(Exception):
-    """Raised when LLM is not properly configured."""
-
-    pass
+# Backwards compatibility alias
+LLMConfigurationError = LLMProviderError
 
 
-def _get_openai_client():
-    """Get an AsyncOpenAI client configured for OpenRouter.
-
-    Raises:
-        LLMConfigurationError: If OPENROUTER_API_KEY is not set.
+def _get_client() -> tuple[Any, str]:
+    """Get an async LLM client with provider info.
 
     Returns:
-        AsyncOpenAI client configured for OpenRouter.
+        Tuple of (client, provider) where:
+        - client is AsyncAnthropic or AsyncOpenAI
+        - provider is 'anthropic' or 'openrouter'
+
+    Raises:
+        LLMProviderError: If provider cannot be determined.
     """
-    api_key = os.environ.get("OPENROUTER_API_KEY")
-    if not api_key:
-        raise LLMConfigurationError(
-            "OPENROUTER_API_KEY environment variable is required for memory evolution. "
-            "Get an API key at https://openrouter.ai/keys"
-        )
-
-    try:
-        from openai import AsyncOpenAI
-    except ImportError:
-        raise LLMConfigurationError(
-            "openai package is required for memory evolution. "
-            "Install with: uv add openai"
-        )
-
-    return AsyncOpenAI(
-        base_url=OPENROUTER_BASE_URL,
-        api_key=api_key,
-    )
+    return get_async_client()
 
 
 async def evolve_single_neighbor(
@@ -95,16 +81,17 @@ async def evolve_single_neighbor(
         neighbor_content: Content of the neighbor (may be truncated).
         neighbor_keywords: Current keywords of the neighbor.
         link_score: Similarity score between entries (0.0-1.0).
-        model: OpenRouter model ID to use.
+        model: Model ID to use (canonical or provider-specific).
 
     Returns:
         EvolutionSuggestion with new keywords (replaces existing) and relationship.
 
     Raises:
-        LLMConfigurationError: If API key not configured.
+        LLMProviderError: If provider not configured.
         Exception: On API errors.
     """
-    client = _get_openai_client()
+    client, provider = _get_client()
+    resolved_model = resolve_model(model, provider)
 
     score_str = f"{link_score:.2f}"
     new_kw_str = ", ".join(new_entry_keywords) if new_entry_keywords else "none"
@@ -137,15 +124,25 @@ Respond with JSON only:
 {{"new_keywords": ["kw1", "kw2", "kw3"], "relationship": "sentence or empty",
 "new_context": "one sentence describing what this entry is about"}}"""
 
-    response = await client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": prompt}],
-        response_format={"type": "json_object"},
-        temperature=0.3,  # Low temperature for consistent, focused suggestions
-    )
+    # Make provider-appropriate API call
+    if provider == "anthropic":
+        response = await client.messages.create(
+            model=resolved_model,
+            max_tokens=500,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        response_text = response.content[0].text
+    else:
+        response = await client.chat.completions.create(
+            model=resolved_model,
+            messages=[{"role": "user", "content": prompt}],
+            response_format={"type": "json_object"},
+            temperature=0.3,
+        )
+        response_text = response.choices[0].message.content or ""
 
     try:
-        result = json.loads(response.choices[0].message.content)
+        result = json.loads(response_text)
     except (json.JSONDecodeError, IndexError, AttributeError) as e:
         log.warning("Failed to parse LLM response for evolution: %s", e)
         return EvolutionSuggestion(
@@ -209,7 +206,7 @@ async def evolve_neighbors_batched(
         new_entry_content: Content of the new entry.
         new_entry_keywords: Keywords of the new entry.
         neighbors: List of neighbor entries to analyze.
-        model: OpenRouter model ID to use.
+        model: Model ID to use (canonical or provider-specific).
 
     Returns:
         List of EvolutionSuggestions, one per neighbor.
@@ -234,7 +231,8 @@ async def evolve_neighbors_batched(
             )
         ]
 
-    client = _get_openai_client()
+    client, provider = _get_client()
+    resolved_model = resolve_model(model, provider)
 
     # Build neighbor descriptions
     neighbor_sections = []
@@ -272,15 +270,24 @@ Respond with JSON array, one object per neighbor in order:
 "new_context": "one sentence describing what this entry is about"}}]"""
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-        )
+        # Make provider-appropriate API call
+        if provider == "anthropic":
+            response = await client.messages.create(
+                model=resolved_model,
+                max_tokens=1000,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text
+        else:
+            response = await client.chat.completions.create(
+                model=resolved_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+            )
+            raw = response.choices[0].message.content or ""
 
         # Parse response - might be wrapped in an object
-        raw = response.choices[0].message.content
         parsed = json.loads(raw)
 
         # Handle both array and object with "neighbors" key
@@ -418,7 +425,7 @@ async def extract_keywords_llm(
     Args:
         content: The entry content to analyze.
         title: Entry title for context.
-        model: OpenRouter model ID to use.
+        model: Model ID to use (canonical or provider-specific).
         min_keywords: Minimum keywords to extract.
         max_keywords: Maximum keywords to extract.
 
@@ -426,9 +433,10 @@ async def extract_keywords_llm(
         KeywordExtractionResult with extracted keywords or error info.
 
     Raises:
-        LLMConfigurationError: If API key not configured.
+        LLMProviderError: If provider not configured.
     """
-    client = _get_openai_client()
+    client, provider = _get_client()
+    resolved_model = resolve_model(model, provider)
 
     # Truncate content to avoid excessive tokens
     content_preview = content[:2000] if len(content) > 2000 else content
@@ -446,17 +454,26 @@ Content:
 Return JSON: {{"keywords": ["keyword1", "keyword2", ...]}}"""
 
     try:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-            temperature=0.3,
-            max_tokens=256,  # Keywords only need minimal tokens
-        )
+        # Make provider-appropriate API call
+        if provider == "anthropic":
+            response = await client.messages.create(
+                model=resolved_model,
+                max_tokens=256,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            response_content = response.content[0].text
+        else:
+            response = await client.chat.completions.create(
+                model=resolved_model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+                temperature=0.3,
+                max_tokens=256,
+            )
+            response_content = response.choices[0].message.content or ""
 
-        content = response.choices[0].message.content or ""
         # Some models return extra data after JSON - extract first valid object
-        result = _extract_first_json_object(content)
+        result = _extract_first_json_object(response_content)
         keywords = result.get("keywords", [])
 
         # Validate and sanitize
