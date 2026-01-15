@@ -6,6 +6,7 @@ tags:
   - specification
   - feature
 created: 2026-01-15T02:13:58.692765+00:00
+updated: 2026-01-15T02:55:09.466313+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
@@ -20,22 +21,16 @@ keywords:
   - graph-initialization
 semantic_links:
   - path: a-mem-parity/semantic-linking.md
-    score: 0.703
-    reason: embedding_similarity
-  - path: a-mem-parity/a-mem-strict-mode.md
-    score: 0.667
-    reason: embedding_similarity
-  - path: a-mem-parity/a-mem-parity-analysis.md
-    score: 0.632
+    score: 0.67
     reason: embedding_similarity
   - path: a-mem-parity/entry-metadata-schema.md
-    score: 0.611
-    reason: embedding_similarity
-  - path: a-mem-parity/memory-evolution-queue-architecture.md
-    score: 0.609
+    score: 0.617
     reason: embedding_similarity
 ---
 
+# a-mem-init Command Specification
+Tags: a-mem, cli, specification, feature
+------------------------------------------------------------
 # a-mem-init Command Specification
 
 Initialize A-Mem structures (semantic links + evolution queue) for an existing knowledge base.
