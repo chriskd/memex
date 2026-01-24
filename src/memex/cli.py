@@ -1316,6 +1316,8 @@ def relations(
         click.echo("Error: PATH is required unless --graph is specified.", err=True)
         sys.exit(1)
 
+    assert path is not None  # narrowing for type checker after sys.exit
+
     origin_set = set(origins) if origins else None
     type_set = set(relation_types) if relation_types else None
 

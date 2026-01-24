@@ -13,7 +13,10 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from .models import EvolutionDecision
 
 from .llm_providers import (
     LLMProviderError,
