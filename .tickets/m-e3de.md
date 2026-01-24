@@ -16,3 +16,9 @@ Inventory A-Mem parity components (LoCoMo adapter, eval runner, prompts, metadat
 
 - [ ] Audit doc lists components with keep/drop/repurpose\n- [ ] Rationale for each decision captured\n- [ ] Follow-up cleanup tickets created or linked\n- [ ] Roadmap KB entry updated with outcomes
 
+
+## Notes
+
+**2026-01-24T20:47:28Z**
+
+Pulled audit summary from archive branch. See .tickets/m-db09.md for full keep/drop/repurpose analysis covering LoCoMo eval, A-Mem docs, and cleanup tasks.
