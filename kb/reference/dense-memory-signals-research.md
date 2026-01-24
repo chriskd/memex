@@ -6,7 +6,7 @@ tags:
   - memory
   - signals
 created: 2026-01-13T17:42:43.882297+00:00
-updated: 2026-01-14T23:36:09.300430+00:00
+updated: 2026-01-24T20:18:11.207256+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
@@ -16,6 +16,9 @@ semantic_links:
     reason: bidirectional
   - path: a-mem-parity/a-mem-parity-analysis.md
     score: 0.768
+    reason: bidirectional
+  - path: roadmap/mx-session-memory-vnext.md
+    score: 0.67
     reason: bidirectional
 ---
 
