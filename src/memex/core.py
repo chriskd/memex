@@ -54,6 +54,7 @@ from .config import (
     get_kb_root_by_scope,
     get_memory_evolution_config,
     is_amem_strict_enabled,
+    parse_scoped_path,
 )
 from .context import KBContext, get_kb_context, get_kbconfig
 from .evaluation import run_quality_checks
@@ -74,6 +75,7 @@ from .models import (
     LinkingPhaseResult,
     PotentialDuplicate,
     QualityReport,
+    RelationLink,
     SearchResponse,
     SearchResult,
     SemanticLink,
@@ -1261,8 +1263,8 @@ async def expand_search_with_neighbors(
 ) -> list[dict]:
     """Expand search results to include semantically linked entries (neighbors).
 
-    For each search result, reads its semantic_links from metadata and fetches
-    those linked entries. Performs graph traversal up to the specified depth.
+    For each search result, reads semantic_links and typed relations from metadata
+    and fetches those linked entries. Performs graph traversal up to the specified depth.
 
     Args:
         results: Initial search results to expand.
@@ -1314,7 +1316,7 @@ async def expand_search_with_neighbors(
         if current_depth >= depth:
             continue
 
-        # Read the entry to get its semantic_links
+        # Read the entry to get its semantic_links and relations
         try:
             file_path = resolve_scoped_path(current_path)
             if not file_path.exists():
@@ -1322,9 +1324,16 @@ async def expand_search_with_neighbors(
 
             metadata, content, _ = parse_entry(file_path)
             semantic_links = metadata.semantic_links
+            relation_links = metadata.relations
 
-            for link in semantic_links:
-                neighbor_path = link.path
+            neighbor_links: list[tuple[str, float]] = [
+                (link.path, link.score) for link in semantic_links
+            ]
+            neighbor_links.extend(
+                (relation.path, parent_score) for relation in relation_links
+            )
+
+            for neighbor_path, link_score in neighbor_links:
                 if neighbor_path not in seen_paths:
                     seen_paths.add(neighbor_path)
 
@@ -1346,7 +1355,7 @@ async def expand_search_with_neighbors(
                             neighbor_item: dict = {
                                 "path": neighbor_path,
                                 "title": neighbor_meta.title,
-                                "score": link.score,
+                                "score": link_score,
                                 "is_neighbor": True,
                                 "linked_from": linked_from_map[neighbor_path],
                             }
@@ -1357,7 +1366,7 @@ async def expand_search_with_neighbors(
                             output.append(neighbor_item)
 
                             # Add to queue for further traversal
-                            queue.append((neighbor_path, current_depth + 1, link.score, current_path))
+                            queue.append((neighbor_path, current_depth + 1, link_score, current_path))
                     except (ValueError, ParseError) as e:
                         log.debug("Could not read neighbor entry %s: %s", neighbor_path, e)
                         continue
@@ -2308,6 +2317,102 @@ async def update_entry(
     )
 
     return {"path": relative_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
+
+
+async def update_entry_relations(
+    path: str,
+    *,
+    add: list[RelationLink] | None = None,
+    remove: list[RelationLink] | None = None,
+) -> dict:
+    """Add/remove typed relations on an existing entry.
+
+    Args:
+        path: Path to the entry (supports @project/ and @user/ prefixes).
+        add: Relations to add (deduplicated).
+        remove: Relations to remove (exact path+type match).
+
+    Returns:
+        Dict with path, added, removed, and total relation count.
+    """
+    if not add and not remove:
+        raise ValueError("Provide relations to add or remove")
+
+    scope, relative = parse_scoped_path(path)
+    kb_root = get_kb_root_by_scope(scope) if scope else get_kb_root()
+    file_path = kb_root / relative
+
+    if not file_path.exists():
+        raise ValueError(f"Entry not found: {path}")
+
+    if not file_path.is_file():
+        raise ValueError(f"Path is not a file: {path}")
+
+    try:
+        metadata, content, _ = parse_entry(file_path)
+    except ParseError as e:
+        raise ValueError(f"Failed to parse existing entry: {e}") from e
+
+    def relation_key(relation: RelationLink) -> tuple[str, str]:
+        return (relation.path, relation.type)
+
+    updated_relations = list(metadata.relations)
+    removed: list[RelationLink] = []
+    added: list[RelationLink] = []
+
+    if remove:
+        remove_keys = {relation_key(r) for r in remove}
+        remaining: list[RelationLink] = []
+        for relation in updated_relations:
+            if relation_key(relation) in remove_keys:
+                removed.append(relation)
+            else:
+                remaining.append(relation)
+        updated_relations = remaining
+
+    if add:
+        existing_keys = {relation_key(r) for r in updated_relations}
+        for relation in add:
+            key = relation_key(relation)
+            if key not in existing_keys:
+                updated_relations.append(relation)
+                added.append(relation)
+                existing_keys.add(key)
+
+    updated_metadata = update_metadata_for_edit(
+        metadata,
+        new_contributor=get_current_contributor(),
+        edit_source=get_current_project(),
+        model=get_llm_model(),
+        git_branch=get_git_branch(),
+        actor=get_actor_identity(),
+        relations=updated_relations,
+    )
+    frontmatter = build_frontmatter(updated_metadata)
+    file_path.write_text(frontmatter + content, encoding="utf-8")
+    rebuild_backlink_cache(kb_root)
+
+    relative_path = relative_kb_path(kb_root, file_path)
+
+    searcher = get_searcher()
+    try:
+        searcher.delete_document(relative_path)
+        _, _, chunks = parse_entry(file_path)
+        if chunks:
+            normalized_chunks = normalize_chunks(chunks, relative_path)
+            searcher.index_chunks(normalized_chunks)
+    except ParseError as e:
+        log.warning("Updated relations but failed to re-index %s: %s", relative_path, e)
+    except Exception as e:
+        log.error("Unexpected error re-indexing %s: %s", relative_path, e)
+
+    return {
+        "path": relative_path,
+        "scope": scope,
+        "added": [relation.model_dump() for relation in added],
+        "removed": [relation.model_dump() for relation in removed],
+        "total": len(updated_relations),
+    }
 
 
 async def get_entry(path: str) -> KBEntry:
@@ -4417,5 +4522,3 @@ async def amem_init_link_entries(
         results=results,
         errors=errors,
     )
-
-

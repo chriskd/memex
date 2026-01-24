@@ -24,3 +24,11 @@ relations:
 This page connects wikilinks and typed relations into a single graph.
 
 See [[memex/relations-graph/wikilink-edge-behavior]] and [[memex/relations-graph/frontmatter-edge-types]] for details.
+
+## Search neighbors
+
+`mx search --include-neighbors` expands results using both semantic links and typed relations.
+
+## Editing typed relations
+
+Use `mx relations-add` and `mx relations-remove` to update frontmatter relations without replacing the full entry.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 """
 mx: CLI for memex knowledge base
 
@@ -20,7 +21,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Literal, NoReturn, Optional, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, Optional, cast
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -45,6 +46,56 @@ def decode_escape_sequences(s: str) -> str:
     # Use unicode_escape to decode, but we need to encode to bytes first
     # since unicode_escape works on bytes
     return codecs.decode(s, "unicode_escape")
+
+
+if TYPE_CHECKING:
+    from .models import RelationLink
+
+
+def _parse_relations_inputs(
+    relation_items: tuple[str, ...],
+    relations_json: str | None,
+) -> list[RelationLink] | None:
+    from .models import RelationLink
+
+    relations: list[RelationLink] | None = None
+    if relation_items:
+        relations = []
+        for item in relation_items:
+            if "=" not in item:
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            path_value, type_value = item.split("=", 1)
+            if not path_value.strip() or not type_value.strip():
+                click.echo("Error: --relation must be in path=type format", err=True)
+                sys.exit(1)
+            relations.append(RelationLink(path=path_value.strip(), type=type_value.strip()))
+
+    if relations_json:
+        try:
+            relations_data = json.loads(relations_json)
+            if not isinstance(relations_data, list):
+                click.echo("Error: --relations must be a JSON array", err=True)
+                sys.exit(1)
+            if relations is None:
+                relations = []
+            for i, relation_data in enumerate(relations_data):
+                if not isinstance(relation_data, dict):
+                    click.echo(f"Error: --relations[{i}] must be a JSON object", err=True)
+                    sys.exit(1)
+                missing = [f for f in ("path", "type") if f not in relation_data]
+                if missing:
+                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    sys.exit(1)
+                relations.append(RelationLink(
+                    path=relation_data["path"],
+                    type=relation_data["type"],
+                ))
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
+            sys.exit(1)
+
+    return relations
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -965,7 +1016,11 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
-@click.option("--include-neighbors", is_flag=True, help="Include semantically linked entries")
+@click.option(
+    "--include-neighbors",
+    is_flag=True,
+    help="Include semantically linked entries and typed relations",
+)
 @click.option("--neighbor-depth", type=click.IntRange(min=1, max=5), default=1,
               help="Max hops for neighbor traversal (default 1)")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
@@ -1007,8 +1062,8 @@ def search(
     for unrelated queries (e.g., gibberish). Useful when you need precise matches.
 
     The --include-neighbors flag enables graph-aware search by including entries
-    that are semantically linked to the direct matches. Use --neighbor-depth to
-    control how many hops to traverse (default 1).
+    that are semantically linked or connected via typed relations to the direct
+    matches. Use --neighbor-depth to control how many hops to traverse (default 1).
 
     \b
     Examples:
@@ -1362,6 +1417,81 @@ def relations(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Relations Edit Commands
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command("relations-add")
+@click.argument("path")
+@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
+@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def relations_add(
+    path: str,
+    relation_items: tuple[str, ...],
+    relations_json: str | None,
+    as_json: bool,
+):
+    """Add typed relations to an entry without replacing full frontmatter."""
+    from .core import update_entry_relations
+
+    relations = _parse_relations_inputs(relation_items, relations_json)
+    if not relations:
+        click.echo("Error: Provide at least one --relation or --relations entry", err=True)
+        sys.exit(1)
+
+    try:
+        result = run_async(update_entry_relations(path=path, add=relations))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        output(result, as_json=True)
+    else:
+        scope = result.get("scope")
+        path_display = f"@{scope}/{result['path']}" if scope else result["path"]
+        click.echo(f"Updated relations: {path_display}")
+        click.echo(f"  Added: {len(result.get('added', []))}")
+        click.echo(f"  Total: {result.get('total', 0)}")
+
+
+@cli.command("relations-remove")
+@click.argument("path")
+@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
+@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+def relations_remove(
+    path: str,
+    relation_items: tuple[str, ...],
+    relations_json: str | None,
+    as_json: bool,
+):
+    """Remove typed relations from an entry without replacing full frontmatter."""
+    from .core import update_entry_relations
+
+    relations = _parse_relations_inputs(relation_items, relations_json)
+    if not relations:
+        click.echo("Error: Provide at least one --relation or --relations entry", err=True)
+        sys.exit(1)
+
+    try:
+        result = run_async(update_entry_relations(path=path, remove=relations))
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    if as_json:
+        output(result, as_json=True)
+    else:
+        scope = result.get("scope")
+        path_display = f"@{scope}/{result['path']}" if scope else result["path"]
+        click.echo(f"Updated relations: {path_display}")
+        click.echo(f"  Removed: {len(result.get('removed', []))}")
+        click.echo(f"  Total: {result.get('total', 0)}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Add Command
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1433,7 +1563,7 @@ def add(
       mx append - Append content to existing entry (or create new)
     """
     from .core import add_entry
-    from .models import RelationLink, SemanticLink
+    from .models import SemanticLink
 
     # Validate mutual exclusivity of content sources
     sources = sum([bool(content), bool(file_path), stdin])
@@ -1489,42 +1619,7 @@ def add(
             click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
             sys.exit(1)
 
-    relations: list[RelationLink] | None = None
-    if relation_items:
-        relations = []
-        for item in relation_items:
-            if "=" not in item:
-                click.echo("Error: --relation must be in path=type format", err=True)
-                sys.exit(1)
-            path_value, type_value = item.split("=", 1)
-            if not path_value.strip() or not type_value.strip():
-                click.echo("Error: --relation must be in path=type format", err=True)
-                sys.exit(1)
-            relations.append(RelationLink(path=path_value.strip(), type=type_value.strip()))
-
-    if relations_json:
-        try:
-            relations_data = json.loads(relations_json)
-            if not isinstance(relations_data, list):
-                click.echo("Error: --relations must be a JSON array", err=True)
-                sys.exit(1)
-            if relations is None:
-                relations = []
-            for i, relation_data in enumerate(relations_data):
-                if not isinstance(relation_data, dict):
-                    click.echo(f"Error: --relations[{i}] must be a JSON object", err=True)
-                    sys.exit(1)
-                missing = [f for f in ("path", "type") if f not in relation_data]
-                if missing:
-                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
-                    sys.exit(1)
-                relations.append(RelationLink(
-                    path=relation_data["path"],
-                    type=relation_data["type"],
-                ))
-        except json.JSONDecodeError as e:
-            click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
-            sys.exit(1)
+    relations = _parse_relations_inputs(relation_items, relations_json)
 
     try:
         result = run_async(add_entry(
@@ -1863,7 +1958,7 @@ def replace_cmd(
     """
     from .cli_intent import detect_update_intent_mismatch
     from .core import update_entry
-    from .models import RelationLink, SemanticLink
+    from .models import SemanticLink
 
     # Check for intent mismatch (wrong command based on flags)
     mismatch = detect_update_intent_mismatch(
@@ -1914,42 +2009,7 @@ def replace_cmd(
             click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
             sys.exit(1)
 
-    relations: list[RelationLink] | None = None
-    if relation_items:
-        relations = []
-        for item in relation_items:
-            if "=" not in item:
-                click.echo("Error: --relation must be in path=type format", err=True)
-                sys.exit(1)
-            path_value, type_value = item.split("=", 1)
-            if not path_value.strip() or not type_value.strip():
-                click.echo("Error: --relation must be in path=type format", err=True)
-                sys.exit(1)
-            relations.append(RelationLink(path=path_value.strip(), type=type_value.strip()))
-
-    if relations_json:
-        try:
-            relations_data = json.loads(relations_json)
-            if not isinstance(relations_data, list):
-                click.echo("Error: --relations must be a JSON array", err=True)
-                sys.exit(1)
-            if relations is None:
-                relations = []
-            for i, relation_data in enumerate(relations_data):
-                if not isinstance(relation_data, dict):
-                    click.echo(f"Error: --relations[{i}] must be a JSON object", err=True)
-                    sys.exit(1)
-                missing = [f for f in ("path", "type") if f not in relation_data]
-                if missing:
-                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
-                    sys.exit(1)
-                relations.append(RelationLink(
-                    path=relation_data["path"],
-                    type=relation_data["type"],
-                ))
-        except json.JSONDecodeError as e:
-            click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
-            sys.exit(1)
+    relations = _parse_relations_inputs(relation_items, relations_json)
 
     try:
         result = run_async(update_entry(

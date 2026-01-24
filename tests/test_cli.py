@@ -50,6 +50,8 @@ ALL_COMMANDS = [
     "context",
     "evolve",
     "patch",
+    "relations-add",
+    "relations-remove",
 ]
 
 # Commands that support --json output
@@ -72,6 +74,8 @@ JSON_COMMANDS = [
     "prime",
     "reindex",
     "evolve",
+    "relations-add",
+    "relations-remove",
 ]
 
 
@@ -132,6 +136,90 @@ class TestSearchCommand:
 
         assert result.exit_code == 0
         assert "tooling/test.md" in result.output
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Relations Edit Command Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestRelationsEditCommands:
+    """Tests for relations add/remove helpers."""
+
+    def test_relations_add_updates_frontmatter(self, runner: CliRunner, tmp_kb: Path):
+        from memex.parser import parse_entry
+
+        entry_path = tmp_kb / "a.md"
+        entry_path.write_text(
+            """---
+title: Entry A
+tags: [test]
+created: 2024-01-15
+---
+
+Content A
+"""
+        )
+        (tmp_kb / "b.md").write_text(
+            """---
+title: Entry B
+tags: [test]
+created: 2024-01-15
+---
+
+Content B
+"""
+        )
+
+        result = runner.invoke(
+            cli,
+            ["relations-add", "a.md", "--relation", "b.md=depends_on"],
+            env={"MEMEX_USER_KB_ROOT": str(tmp_kb)},
+        )
+
+        assert result.exit_code == 0
+        metadata, _, _ = parse_entry(entry_path)
+        assert len(metadata.relations) == 1
+        assert metadata.relations[0].path == "b.md"
+        assert metadata.relations[0].type == "depends_on"
+
+    def test_relations_remove_updates_frontmatter(self, runner: CliRunner, tmp_kb: Path):
+        from memex.parser import parse_entry
+
+        entry_path = tmp_kb / "a.md"
+        entry_path.write_text(
+            """---
+title: Entry A
+tags: [test]
+created: 2024-01-15
+relations:
+  - path: b.md
+    type: depends_on
+---
+
+Content A
+"""
+        )
+        (tmp_kb / "b.md").write_text(
+            """---
+title: Entry B
+tags: [test]
+created: 2024-01-15
+---
+
+Content B
+"""
+        )
+
+        result = runner.invoke(
+            cli,
+            ["relations-remove", "a.md", "--relation", "b.md=depends_on"],
+            env={"MEMEX_USER_KB_ROOT": str(tmp_kb)},
+        )
+
+        assert result.exit_code == 0
+        metadata, _, _ = parse_entry(entry_path)
+        assert metadata.relations == []
 
     @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")

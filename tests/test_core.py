@@ -161,8 +161,9 @@ class TestAddEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_add_entry_requires_category_or_directory(self, tmp_kb):
+    async def test_add_entry_requires_category_or_directory(self, tmp_kb, monkeypatch):
         """Missing both category and directory raises ValueError."""
+        monkeypatch.setenv("VL_KB_CONTEXT", "/nonexistent")
         with pytest.raises(ValueError, match="category.*directory"):
             await core.add_entry(
                 title="Test Entry",
@@ -510,7 +511,10 @@ class TestUpdateEntry:
             "Content",
         )
 
-        with pytest.raises(ValueError, match="content, section_updates, tags, keywords, or semantic_links"):
+        with pytest.raises(
+            ValueError,
+            match="content, section_updates, tags, keywords, semantic_links, or relations",
+        ):
             await core.update_entry(path="general/test.md")
 
     @pytest.mark.asyncio

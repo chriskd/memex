@@ -6,6 +6,7 @@ Tests cover:
 3. Output formats (JSON, terse, table) with neighbor markers
 4. Deduplication of results
 5. Edge cases (no neighbors, circular links, depth limiting)
+6. Typed relations included as neighbors
 """
 
 from pathlib import Path
@@ -24,8 +25,9 @@ def create_entry_with_links(
     content: str,
     tags: list[str],
     semantic_links: list[dict] | None = None,
+    relations: list[dict] | None = None,
 ) -> Path:
-    """Create a test entry with semantic_links in frontmatter."""
+    """Create a test entry with semantic_links/relations in frontmatter."""
     entry_path = kb_root / path
     entry_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -40,11 +42,18 @@ def create_entry_with_links(
             links_yaml += f"    score: {link['score']}\n"
             links_yaml += f"    reason: {link['reason']}\n"
 
+    relations_yaml = ""
+    if relations:
+        relations_yaml = "relations:\n"
+        for relation in relations:
+            relations_yaml += f"  - path: {relation['path']}\n"
+            relations_yaml += f"    type: {relation['type']}\n"
+
     frontmatter = f"""---
 title: {title}
 tags: {tags_str}
 created: 2024-01-15
-{links_yaml}---
+{links_yaml}{relations_yaml}---
 
 {content}
 """
@@ -196,6 +205,42 @@ class TestExpandSearchWithNeighbors:
         assert expanded[0]["path"] == "a.md"
         assert expanded[0]["is_neighbor"] is False
         # Second result should be neighbor
+        assert expanded[1]["path"] == "b.md"
+        assert expanded[1]["is_neighbor"] is True
+        assert expanded[1]["linked_from"] == "a.md"
+
+    @pytest.mark.asyncio
+    async def test_expands_direct_results_with_relations(self, tmp_kb: Path):
+        """Typed relations are included as neighbors."""
+        from memex.core import expand_search_with_neighbors
+
+        # Create entry A with relation to B
+        create_entry_with_links(
+            tmp_kb,
+            "a.md",
+            "Entry A",
+            "Content about entry A",
+            ["test"],
+            relations=[{"path": "b.md", "type": "depends_on"}],
+        )
+        # Create entry B
+        create_entry_with_links(tmp_kb, "b.md", "Entry B", "Content about entry B", ["test"])
+
+        results = [
+            SearchResult(
+                path="a.md",
+                title="Entry A",
+                snippet="Content about entry A",
+                score=0.9,
+                tags=["test"],
+            )
+        ]
+
+        expanded = await expand_search_with_neighbors(results, depth=1)
+
+        assert len(expanded) == 2
+        assert expanded[0]["path"] == "a.md"
+        assert expanded[0]["is_neighbor"] is False
         assert expanded[1]["path"] == "b.md"
         assert expanded[1]["is_neighbor"] is True
         assert expanded[1]["linked_from"] == "a.md"

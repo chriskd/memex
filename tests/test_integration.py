@@ -568,8 +568,9 @@ class TestEdgeCases:
         assert "dir1" in result1["path"]
         assert "dir2" in result2["path"]
 
-    def test_add_without_category_fails(self, tmp_kb):
+    def test_add_without_category_fails(self, tmp_kb, monkeypatch):
         """add_entry without category or directory fails."""
+        monkeypatch.setenv("VL_KB_CONTEXT", "/nonexistent")
         with pytest.raises(ValueError, match="category.*directory"):
             run_async(core.add_entry(
                 title="No Category",
