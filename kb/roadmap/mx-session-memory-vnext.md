@@ -8,11 +8,10 @@ tags:
   - eval
   - a-mem
 created: 2026-01-24T20:18:05.545604+00:00
+updated: 2026-01-24T20:52:03.514574+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-git_branch: session-memory-improvements
-last_edited_by: chris
 semantic_links:
   - path: reference/agent-memory-comparison.md
     score: 0.712
@@ -26,6 +25,9 @@ semantic_links:
   - path: a-mem-parity/a-mem-vs-mx-implementation-audit.md
     score: 0.61
     reason: embedding_similarity
+  - path: roadmap/a-mem-component-audit-summary.md
+    score: 0.811
+    reason: bidirectional
 ---
 
 # MX Session Memory vNext (A-Mem Retcon + Dense Signals + Eval)
@@ -87,4 +89,3 @@ Build a session-resume benchmark (synthetic sessions + QA) with metrics: EM/F1, 
 ## Non-goals
 - Achieving full A-Mem parity
 - Reproducing LoCoMo scores as a primary objective
-
