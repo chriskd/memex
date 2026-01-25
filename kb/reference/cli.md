@@ -6,7 +6,7 @@ tags:
   - reference
   - commands
 created: 2026-01-06T00:00:00
-updated: 2026-01-15T03:28:03.257645+00:00
+updated: 2026-01-25T19:15:11+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 edit_sources:
@@ -40,6 +40,9 @@ mx search "query" --limit=20         # More results
 mx search "query" --min-score=0.5    # Only confident results
 mx search "query" --content          # Include full content
 mx search "query" --strict           # No semantic fallback
+mx search "query" --scope=project    # Project KB only
+mx search "query" --include-neighbors
+mx search "query" --include-neighbors --neighbor-depth=2
 mx search "query" --terse            # Paths only
 mx search "query" --full-titles      # Show untruncated titles
 mx search "query" --json             # JSON output
@@ -54,6 +57,9 @@ mx search "query" --json             # JSON output
 - `--strict`: Disable semantic fallback
 - `--terse`: Output paths only
 - `--full-titles`: Show full titles without truncation
+- `--scope`: Limit to KB scope (project or user)
+- `--include-neighbors`: Include semantic links + typed relations
+- `--neighbor-depth`: Neighbor traversal depth (default: 1)
 - `--json`: JSON output
 
 **Content Flag Behavior:**
@@ -150,6 +156,7 @@ mx list --tags=infrastructure  # Filter by tag
 mx list --category=tooling     # Filter by category
 mx list --limit=50             # More results
 mx list --full-titles          # Show untruncated titles
+mx list --scope=project        # Project KB only
 ```
 
 ### mx tree
@@ -160,6 +167,7 @@ Display directory structure.
 mx tree                    # Full tree
 mx tree tooling            # Specific path
 mx tree --depth=2          # Limit depth
+mx tree --scope=project    # Project KB only
 ```
 
 ## Write Commands
@@ -172,14 +180,18 @@ Create a new entry.
 mx add --title="My Entry" --tags="foo,bar" --category=tooling --content="..."
 mx add --title="..." --tags="..." --category=... --file=content.md
 cat content.md | mx add --title="..." --tags="..." --category=... --stdin
-mx add --title="..." --tags="..." --template=troubleshooting
-mx add --title="..." --tags="..." --dry-run  # Preview only
 ```
 
 **Required:**
 - `--title, -t`: Entry title
 - `--tags`: Tags (comma-separated)
 - `--category, -c`: Target directory (unless .kbcontext sets primary)
+
+**Common options:**
+- `--scope`: Target KB scope (project or user)
+- `--relation`: Add typed relations as path=type (repeatable)
+- `--relations`: Add typed relations as JSON array
+- `--semantic-links`: Set semantic links as JSON array
 
 ### mx replace
 
@@ -233,6 +245,30 @@ Delete an entry.
 ```bash
 mx delete path/entry.md
 mx delete path/entry.md --force  # Delete even with backlinks
+```
+
+### mx quick-add
+
+Quickly add content with auto-generated metadata.
+
+```bash
+mx quick-add --stdin              # Paste content, auto-generate all
+mx quick-add -f notes.md          # From file with auto metadata
+mx quick-add -c "..." -y          # Auto-confirm creation
+echo "..." | mx quick-add --stdin --json
+```
+
+### mx ingest
+
+Ingest a markdown file into the KB, adding frontmatter if missing.
+
+```bash
+mx ingest notes.md                          # Auto-detect title/tags
+mx ingest draft.md --title="My Entry"       # Override title
+mx ingest doc.md --tags="api,docs"          # Set tags
+mx ingest doc.md --directory="guides"       # Place in guides/
+mx ingest doc.md --scope=project            # Project KB only
+mx ingest doc.md --dry-run                  # Preview changes
 ```
 
 ## Analysis Commands
@@ -305,10 +341,11 @@ mx whats-new --limit=20           # More results
 
 ### mx init
 
-Initialize a local project KB. Creates a `kb/` directory for project-specific knowledge that stays with the project and is GitHub Pages compatible.
+Initialize a knowledge base (project or user scope).
 
 ```bash
-mx init                    # Create kb/ in current directory
+mx init                    # Project KB in ./kb/
+mx init --user             # User KB in ~/.memex/kb/
 mx init --path docs/kb     # Custom location
 mx init --force            # Reinitialize existing
 mx init --json             # JSON output
@@ -316,12 +353,13 @@ mx init --json             # JSON output
 
 **Options:**
 - `--path, -p`: Custom location for local KB (default: kb/)
-- `--force, -f`: Reinitialize existing local KB
+- `--user, -u`: Create user KB at ~/.memex/kb/
+- `--force, -f`: Reinitialize existing KB
 - `--json`: JSON output
 
 **What gets created:**
-- `kb/README.md` - Documentation for the local KB
-- `kb/.kbconfig` - Configuration file marking this as a memex KB
+- Project: `kb/README.md` and `.kbconfig` at the project root
+- User: `~/.memex/kb/README.md` and `~/.memex/kb/.kbconfig`
 
 **When to use:**
 - Starting a new project that needs project-specific documentation
@@ -330,17 +368,58 @@ mx init --json             # JSON output
 
 ### mx context
 
-Manage project-specific KB context (for routing to global KB).
+Show or validate project KB context (.kbcontext).
 
 ```bash
 mx context                  # Show current context
-mx context init             # Create .kbcontext file
-mx context init --json      # JSON output
+mx context show             # Same as above
 mx context validate         # Validate context paths
 mx context validate --json  # JSON output
 ```
 
-**Note:** `mx init` creates a local `kb/` directory. `mx context init` creates a `.kbcontext` file that routes entries to the global KB.
+**Note:** `mx init` creates a project KB. `.kbcontext` is optional and read if present.
+
+## Relations Graph Commands
+
+### mx relations
+
+Query the unified relations graph (wikilinks + typed relations).
+
+```bash
+mx relations path/entry.md
+mx relations path/entry.md --depth=2 --direction=outgoing
+mx relations path/entry.md --origin=relations --type=depends_on
+mx relations --graph --json
+```
+
+**Options:**
+- `--depth`: Hops to traverse (default: 1)
+- `--direction`: outgoing, incoming, or both
+- `--origin`: Filter by edge origin (repeatable: wikilink, relations)
+- `--type`: Filter by relation type (repeatable)
+- `--scope`: Limit to KB scope
+- `--graph`: Output full graph (JSON only)
+- `--json`: JSON output
+
+### mx relations-add / mx relations-remove
+
+Add or remove typed relations without replacing full frontmatter.
+
+```bash
+mx relations-add path/entry.md --relation reference/cli.md=documents
+mx relations-add path/entry.md --relations='[{"path":"ref/other.md","type":"implements"}]'
+mx relations-remove path/entry.md --relation reference/cli.md=documents
+```
+
+## Templates
+
+List or show available entry templates.
+
+```bash
+mx templates
+mx templates show troubleshooting
+mx templates --json
+```
 
 ## Publishing
 
