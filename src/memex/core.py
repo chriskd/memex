@@ -1266,10 +1266,15 @@ async def search(
     )
     warnings: list[str] = []
 
-    # Filter by scope if specified (matches @project/ or @user/ prefix)
+    # Filter by scope if specified (matches @project/ or @user/ prefix in multi-KB mode)
     if scope:
-        scope_prefix = f"@{scope}/"
-        results = [r for r in results if r.path.startswith(scope_prefix)]
+        is_multi_kb = any(scope_label for scope_label, _ in get_kb_roots_for_indexing())
+        if is_multi_kb:
+            scope_prefix = f"@{scope}/"
+            results = [r for r in results if r.path.startswith(scope_prefix)]
+        else:
+            # Single-KB mode: results are unscoped, but we can annotate for callers
+            results = [r.model_copy(update={"kb_scope": scope}) for r in results]
 
     # Filter by tags if specified
     if tags:

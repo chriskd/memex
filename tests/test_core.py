@@ -734,6 +734,24 @@ class TestSearch:
 
     @pytest.mark.asyncio
     @pytest.mark.semantic
+    async def test_search_scope_single_kb_returns_results(self, tmp_kb):
+        """Search with scope works when only one KB exists (no scoped paths)."""
+        _create_entry(
+            tmp_kb / "general" / "scoped-entry.md",
+            "Scoped Entry",
+            "Content in a single KB",
+        )
+
+        await core.reindex()
+
+        result = await core.search("Scoped Entry", scope="user")
+
+        paths = [r.path for r in result.results]
+        assert "general/scoped-entry.md" in paths
+        assert all(r.kb_scope == "user" for r in result.results)
+
+    @pytest.mark.asyncio
+    @pytest.mark.semantic
     @pytest.mark.parametrize("mode", ["keyword", "semantic", "hybrid"])
     async def test_search_modes(self, tmp_kb, mode):
         """Search works in all three modes."""
