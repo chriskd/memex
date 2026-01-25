@@ -123,6 +123,10 @@ mx health                          # Audit KB
 mx reindex                         # Rebuild indices
 ```
 
+## Design Docs
+
+- [State diagrams for major flows](kb/memex/state-diagrams.md)
+
 ## Claude Code Integration
 
 Add to `.claude/settings.local.json`:

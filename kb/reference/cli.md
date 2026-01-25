@@ -6,7 +6,7 @@ tags:
   - reference
   - commands
 created: 2026-01-06T00:00:00
-updated: 2026-01-25T19:15:11+00:00
+updated: 2026-01-25T22:28:00+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 edit_sources:
@@ -568,3 +568,4 @@ Per-command (when available):
 - [[guides/installation|Installation Guide]]
 - [[guides/ai-integration|AI Agent Integration]]
 - [[reference/entry-format|Entry Format]]
+- [[memex/state-diagrams|State diagrams for MX flows]]
