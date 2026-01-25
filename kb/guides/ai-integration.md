@@ -8,7 +8,7 @@ tags:
   - agents
   - integration
 created: 2026-01-06T00:00:00
-updated: 2026-01-25T18:55:55+00:00
+updated: 2026-01-25T19:24:03+00:00
 semantic_links: []
 ---
 
@@ -123,7 +123,13 @@ Set up project-specific KB context with `.kbcontext`:
 
 ```bash
 # In your project directory
-mx context init
+cat <<'EOF' > .kbcontext
+primary: projects/memex
+boost_paths:
+  - projects/memex/*
+default_tags:
+  - memex
+EOF
 ```
 
 This creates a `.kbcontext` file that:
