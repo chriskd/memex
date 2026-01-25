@@ -7,23 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-25
+
 ### Added
 
+- **Typed relations**: Frontmatter relations with canonical relation types, plus CLI helpers to add/remove and inspect relations
+- **Typed relation linting**: `mx relations-lint` warns on unknown or inconsistent types (with `--strict` for CI)
+- **Publisher typed-relations UX**: Relation type labels + direction in entry panels, with relation metadata in graph output
 - **CLI** (`mx`): Token-efficient command-line interface
   - Search, browse, and modify KB entries
   - Designed for automation and scripting
   - Minimal output format reduces context usage
-
 - **Hybrid Search**: Best-of-both-worlds search approach
   - BM25 keyword search via Whoosh
   - Semantic search via ChromaDB + sentence-transformers
   - Reciprocal Rank Fusion (RRF) for result merging
   - Context-aware boosting for project relevance
-
 - **Bidirectional Links**: Wiki-style `[[link]]` syntax
   - Auto-resolved to existing entries
   - Backlink tracking across the KB
   - Stale link detection in health checks
+
+### Changed
+
+- **Search neighbors**: `mx search --include-neighbors` now includes typed relations with relation metadata
 
 ### Technical
 
