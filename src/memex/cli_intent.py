@@ -10,6 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class IntentSuggestion:
     """A suggested alternative command based on detected intent."""
+
     description: str
     command: str
 
@@ -17,6 +18,7 @@ class IntentSuggestion:
 @dataclass
 class IntentMismatch:
     """Detected intent mismatch with suggestions."""
+
     message: str
     suggestions: list[IntentSuggestion]
 

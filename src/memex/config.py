@@ -174,7 +174,7 @@ def parse_scoped_path(path: str) -> tuple[str | None, str]:
         slash_idx = path.find("/")
         if slash_idx > 1:
             scope = path[1:slash_idx]
-            relative = path[slash_idx + 1:]
+            relative = path[slash_idx + 1 :]
             return (scope, relative)
     return (None, path)
 
@@ -241,7 +241,10 @@ def get_kb_roots_for_indexing(scope: str | None = None) -> list[tuple[str | None
         return result
 
 
-def _discover_project_config(start_dir: Path | None = None, max_depth: int = 10) -> tuple[Path, Path] | None:
+def _discover_project_config(
+    start_dir: Path | None = None,
+    max_depth: int = 10,
+) -> tuple[Path, Path] | None:
     """Walk up from start_dir looking for .kbconfig with kb_path.
 
     Args:
@@ -513,6 +516,7 @@ def get_llm_config() -> LLMConfig:
 # =============================================================================
 # Memory Evolution (A-Mem style)
 # =============================================================================
+
 
 @dataclass
 class MemoryEvolutionConfig:

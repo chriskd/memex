@@ -445,7 +445,10 @@ def list_templates() -> list[Template]:
         List of Template objects sorted by name.
     """
     templates = get_all_templates()
-    return sorted(templates.values(), key=lambda t: (t.source != "project", t.source != "user", t.name))
+    return sorted(
+        templates.values(),
+        key=lambda t: (t.source != "project", t.source != "user", t.name),
+    )
 
 
 def apply_template(template: Template, title: str) -> str:

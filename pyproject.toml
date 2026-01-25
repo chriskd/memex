@@ -41,7 +41,7 @@ select = ["E", "F", "I", "UP"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
-norecursedirs = ["_archive", "__pycache__"]
+norecursedirs = ["__pycache__"]
 
 [tool.ty.environment]
 python-version = "3.11"

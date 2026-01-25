@@ -206,9 +206,7 @@ def ensure_tags_cache(kb_root: Path, index_root: Path | None = None) -> dict[str
     # Also check for deleted files
     if not needs_update:
         current_paths = {
-            str(f.relative_to(kb_root))
-            for f in kb_root.rglob("*.md")
-            if not f.name.startswith("_")
+            str(f.relative_to(kb_root)) for f in kb_root.rglob("*.md") if not f.name.startswith("_")
         }
         if set(cached_files.keys()) != current_paths:
             needs_update = True

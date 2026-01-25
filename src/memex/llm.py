@@ -117,7 +117,8 @@ Content (first 500 chars): {neighbor_content[:500]}
 
 First, determine if the EXISTING entry should be evolved based on this connection.
 Consider: Is this connection meaningful enough to warrant updating the existing entry?
-High similarity scores don't always mean the entries are conceptually related in a way that benefits from evolution.
+High similarity scores don't always mean the entries are conceptually related
+in a way that benefits from evolution.
 
 If should_evolve is true, suggest the COMPLETE new keyword list for the EXISTING entry.
 The new list should:
@@ -131,7 +132,8 @@ Also provide:
 2. Updated context: a single sentence describing the EXISTING entry's semantic role in the KB
 
 Respond with JSON only:
-{{"should_evolve": true, "new_keywords": ["kw1", "kw2", "kw3"], "relationship": "sentence or empty",
+{{"should_evolve": true, "new_keywords": ["kw1", "kw2", "kw3"],
+"relationship": "sentence or empty",
 "new_context": "one sentence describing what this entry is about"}}"""
 
     # Make provider-appropriate API call
@@ -255,7 +257,7 @@ async def evolve_neighbors_batched(
     for i, n in enumerate(neighbors):
         section = f"""NEIGHBOR {i + 1} (path: {n.path}, similarity: {n.score:.2f}):
 Title: {n.title}
-Current keywords: {', '.join(n.keywords) if n.keywords else 'none'}
+Current keywords: {", ".join(n.keywords) if n.keywords else "none"}
 Content (first 300 chars): {n.content[:300]}"""
         neighbor_sections.append(section)
 
@@ -272,7 +274,8 @@ Content (first 400 chars): {new_entry_content[:400]}
 
 For EACH neighbor, first determine if it should be evolved based on this connection.
 Consider: Is this connection meaningful enough to warrant updating the existing entry?
-High similarity scores don't always mean entries are conceptually related in a way that benefits from evolution.
+High similarity scores don't always mean entries are conceptually related
+in a way that benefits from evolution.
 
 If should_evolve is true, suggest the COMPLETE new keyword list.
 Each new list should:
@@ -286,7 +289,8 @@ Also provide:
 2. Updated context: a single sentence describing that neighbor's semantic role in the KB
 
 Respond with JSON array, one object per neighbor in order:
-[{{"path": "neighbor_path", "should_evolve": true, "new_keywords": ["kw1", "kw2"], "relationship": "sentence",
+[{{"path": "neighbor_path", "should_evolve": true, "new_keywords": ["kw1", "kw2"],
+"relationship": "sentence",
 "new_context": "one sentence describing what this entry is about"}}]"""
 
     try:
@@ -375,7 +379,7 @@ async def analyze_evolution(
     new_entry_keywords: list[str],
     neighbors: list[NeighborInfo],
     model: str,
-) -> "EvolutionDecision":
+) -> EvolutionDecision:
     """Analyze whether a new entry should trigger evolution of its neighbors.
 
     Mirrors A-Mem's evolution decision: LLM explicitly decides whether
@@ -498,9 +502,7 @@ Total neighbors: {len(neighbors)}"""
                     if not isinstance(new_keywords, list):
                         new_keywords = list(n.keywords)
                     else:
-                        new_keywords = [
-                            str(kw).strip().lower() for kw in new_keywords if kw
-                        ]
+                        new_keywords = [str(kw).strip().lower() for kw in new_keywords if kw]
                         if not new_keywords:
                             new_keywords = list(n.keywords)
 

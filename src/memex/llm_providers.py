@@ -154,8 +154,7 @@ def detect_provider(config: LLMConfig | None = None) -> str:
         provider = config.provider.lower()
         if provider not in ("anthropic", "openrouter"):
             raise LLMProviderError(
-                f"Invalid llm.provider '{config.provider}'. "
-                "Must be 'anthropic' or 'openrouter'."
+                f"Invalid llm.provider '{config.provider}'. Must be 'anthropic' or 'openrouter'."
             )
         return provider
 
@@ -216,8 +215,7 @@ def _get_anthropic_sync_client():
         import anthropic
     except ImportError:
         raise LLMProviderError(
-            "anthropic package is required for Anthropic provider. "
-            "Install with: uv add anthropic"
+            "anthropic package is required for Anthropic provider. Install with: uv add anthropic"
         )
 
     return anthropic.Anthropic(api_key=api_key)
@@ -236,8 +234,7 @@ def _get_openrouter_sync_client():
         from openai import OpenAI
     except ImportError:
         raise LLMProviderError(
-            "openai package is required for OpenRouter provider. "
-            "Install with: uv add openai"
+            "openai package is required for OpenRouter provider. Install with: uv add openai"
         )
 
     return OpenAI(
@@ -287,8 +284,7 @@ def _get_anthropic_async_client():
         import anthropic
     except ImportError:
         raise LLMProviderError(
-            "anthropic package is required for Anthropic provider. "
-            "Install with: uv add anthropic"
+            "anthropic package is required for Anthropic provider. Install with: uv add anthropic"
         )
 
     return anthropic.AsyncAnthropic(api_key=api_key)
@@ -307,8 +303,7 @@ def _get_openrouter_async_client():
         from openai import AsyncOpenAI
     except ImportError:
         raise LLMProviderError(
-            "openai package is required for OpenRouter provider. "
-            "Install with: uv add openai"
+            "openai package is required for OpenRouter provider. Install with: uv add openai"
         )
 
     return AsyncOpenAI(

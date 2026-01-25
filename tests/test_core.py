@@ -13,16 +13,13 @@ Design:
 - Every test should catch a real bug class
 """
 
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from memex import core
 from memex.models import SearchResult
-from memex.parser import ParseError
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
@@ -68,7 +65,15 @@ class DummySearcher:
         self._indexed_chunks = []
         self._deleted_docs = []
 
-    def search(self, query: str, limit: int = 10, mode: str = "hybrid", **kwargs):
+    def search(
+        self,
+        query: str,
+        limit: int = 10,
+        mode: str = "hybrid",
+        project_context: str | None = None,
+        kb_context: object | None = None,
+        strict: bool = False,
+    ):
         return self.results[:limit]
 
     def index_chunks(self, chunks):
@@ -82,7 +87,8 @@ class DummySearcher:
 
     def status(self):
         from memex.models import IndexStatus
-        return IndexStatus(whoosh_docs=0, chroma_docs=0, kb_files=0)
+
+        return IndexStatus(whoosh_docs=0, chroma_docs=0, kb_files=0, last_indexed=None)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -133,12 +139,15 @@ class TestAddEntry:
         assert isinstance(result["suggested_tags"], list)
 
     @pytest.mark.asyncio
-    @pytest.mark.parametrize("invalid_title", [
-        "",
-        "   ",
-        "\t\n",
-        "!@#$%^&*()",
-    ])
+    @pytest.mark.parametrize(
+        "invalid_title",
+        [
+            "",
+            "   ",
+            "\t\n",
+            "!@#$%^&*()",
+        ],
+    )
     async def test_add_entry_rejects_invalid_titles(self, tmp_kb, invalid_title):
         """Titles without alphanumeric chars are rejected."""
         with pytest.raises(ValueError, match="alphanumeric"):
@@ -325,7 +334,11 @@ class TestAddEntryWithScope:
         (user_kb / "personal").mkdir()
 
         # Mock scope resolution - patch at the usage site (core module)
-        monkeypatch.setattr(core, "get_kb_root_by_scope", lambda s: project_kb if s == "project" else user_kb)
+        monkeypatch.setattr(
+            core,
+            "get_kb_root_by_scope",
+            lambda s: project_kb if s == "project" else user_kb,
+        )
         monkeypatch.setattr(core, "get_kb_root", lambda: project_kb)
         monkeypatch.setattr(core, "get_searcher", lambda: DummySearcher())
 
@@ -503,8 +516,12 @@ class TestUpdateEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_update_entry_requires_content_sections_tags_keywords_or_semantic_links(self, tmp_kb):
-        """update_entry requires either content, section_updates, tags, keywords, or semantic_links."""
+    async def test_update_entry_requires_content_sections_tags_keywords_or_semantic_links(
+        self, tmp_kb
+    ):
+        """update_entry requires either content, section_updates, tags, keywords,
+        or semantic_links.
+        """
         _create_entry(
             tmp_kb / "general" / "test.md",
             "Test",
@@ -971,12 +988,15 @@ class TestPreviewAddEntry:
 class TestPathValidation:
     """Tests for path validation and security."""
 
-    @pytest.mark.parametrize("invalid_path", [
-        "../etc/passwd",
-        "/absolute/path",
-        "development/.hidden/file.md",
-        "development/_private/file.md",
-    ])
+    @pytest.mark.parametrize(
+        "invalid_path",
+        [
+            "../etc/passwd",
+            "/absolute/path",
+            "development/.hidden/file.md",
+            "development/_private/file.md",
+        ],
+    )
     def test_validate_nested_path_rejects_invalid(self, tmp_kb, invalid_path):
         """Invalid paths are rejected with ValueError."""
         with pytest.raises(ValueError):
@@ -998,18 +1018,21 @@ class TestPathValidation:
 class TestSlugify:
     """Tests for title slugification."""
 
-    @pytest.mark.parametrize("title,expected", [
-        ("Test Entry", "test-entry"),
-        ("Hello World 123", "hello-world-123"),
-        ("Special_Chars-Test", "special-chars-test"),
-        ("  Trimmed  Spaces  ", "trimmed-spaces"),
-        ("test---entry", "test-entry"),
-        ("-leading-trailing-", "leading-trailing"),
-        ("Hello 你好 World", "hello-world"),
-        ("", ""),
-        ("   ", ""),
-        ("!@#$%", ""),
-    ])
+    @pytest.mark.parametrize(
+        "title,expected",
+        [
+            ("Test Entry", "test-entry"),
+            ("Hello World 123", "hello-world-123"),
+            ("Special_Chars-Test", "special-chars-test"),
+            ("  Trimmed  Spaces  ", "trimmed-spaces"),
+            ("test---entry", "test-entry"),
+            ("-leading-trailing-", "leading-trailing"),
+            ("Hello 你好 World", "hello-world"),
+            ("", ""),
+            ("   ", ""),
+            ("!@#$%", ""),
+        ],
+    )
     def test_slugify(self, title, expected):
         """Slugify produces expected output for various inputs."""
         assert core.slugify(title) == expected
@@ -1391,7 +1414,8 @@ class TestEnsureAware:
 
         result = core._ensure_aware(naive)
 
-        assert result.tzinfo == timezone.utc
+        assert result is not None
+        assert result.tzinfo == UTC
         assert result.year == 2026
         assert result.month == 1
         assert result.day == 15
@@ -1400,7 +1424,7 @@ class TestEnsureAware:
 
     def test_aware_datetime_unchanged(self):
         """Aware datetime is returned unchanged."""
-        aware = datetime(2026, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
+        aware = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
 
         result = core._ensure_aware(aware)
 
@@ -1523,6 +1547,7 @@ class SemanticLinkSearcher:
 
     def status(self):
         from memex.models import IndexStatus
+
         return IndexStatus(whoosh_docs=0, chroma_docs=0, last_indexed=None, kb_files=0)
 
 
@@ -1599,7 +1624,7 @@ class TestAutoSemanticLinks:
         monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
 
         # Add a new entry about Rust
-        result = await core.add_entry(
+        await core.add_entry(
             title="Rust Advanced",
             content="Advanced Rust patterns and ownership.",
             tags=["rust", "advanced"],
@@ -1739,9 +1764,7 @@ class TestAutoSemanticLinks:
         monkeypatch.setattr(core, "SEMANTIC_LINK_ENABLED", True)
 
         # Manual semantic links provided
-        manual_links = [
-            SemanticLink(path="custom/path.md", score=0.95, reason="manual")
-        ]
+        manual_links = [SemanticLink(path="custom/path.md", score=0.95, reason="manual")]
 
         # Add entry with manual links
         result = await core.add_entry(
@@ -1794,7 +1817,7 @@ class TestAutoSemanticLinks:
         monkeypatch.setattr(core, "SEMANTIC_LINK_K", 5)
 
         # Update the target entry with new content
-        result = await core.update_entry(
+        await core.update_entry(
             path="general/target.md",
             content="Updated content about programming topics.",
         )
@@ -1838,7 +1861,7 @@ class TestAutoSemanticLinks:
         monkeypatch.setattr(core, "SEMANTIC_LINK_MIN_SCORE", 0.6)
 
         # Update only tags (no content change)
-        result = await core.update_entry(
+        await core.update_entry(
             path="general/target.md",
             tags=["test", "updated"],
         )

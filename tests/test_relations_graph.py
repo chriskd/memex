@@ -55,8 +55,7 @@ class TestRelationsGraph:
         assert "c.md" in graph.nodes
 
         edge_keys = {
-            (edge.source, edge.target, edge.origin, edge.relation_type)
-            for edge in graph.edges
+            (edge.source, edge.target, edge.origin, edge.relation_type) for edge in graph.edges
         }
         assert ("a.md", "b.md", "wikilink", None) in edge_keys
         assert ("a.md", "c.md", "relations", "depends_on") in edge_keys
@@ -76,4 +75,3 @@ class TestRelationsGraph:
         result = query_relations_graph("a.md", origin={"relations"})
         assert result.edges
         assert all(edge.origin == "relations" for edge in result.edges)
-

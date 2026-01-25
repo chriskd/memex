@@ -20,7 +20,6 @@ from click.testing import CliRunner
 
 from memex.cli import cli
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Command Lists
 # ─────────────────────────────────────────────────────────────────────────────
@@ -301,16 +300,24 @@ Content B
     @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async")
     @patch("memex.search_history.record_search")
-    def test_search_records_history(self, mock_record, mock_run_async, mock_get_kb_root, runner, tmp_path):
+    def test_search_records_history(
+        self,
+        mock_record,
+        mock_run_async,
+        mock_get_kb_root,
+        runner,
+        tmp_path,
+    ):
         """Search records query in history."""
         mock_get_kb_root.return_value = tmp_path
         mock_result = MagicMock()
-        mock_result.results = [
-            MagicMock(path="test.md", title="Test", score=0.9, snippet="...")
-        ]
+        mock_result.results = [MagicMock(path="test.md", title="Test", score=0.9, snippet="...")]
         mock_run_async.return_value = mock_result
 
-        result = runner.invoke(cli, ["search", "my query", "--tags=infra,docker", "--mode=semantic"])
+        result = runner.invoke(
+            cli,
+            ["search", "my query", "--tags=infra,docker", "--mode=semantic"],
+        )
 
         assert result.exit_code == 0
         mock_record.assert_called_once_with(
@@ -420,12 +427,18 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test Entry",
-            "--tags", "tag1,tag2",
-            "--content", "# Test Content",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test Entry",
+                "--tags",
+                "tag1,tag2",
+                "--content",
+                "# Test Content",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Created: test/entry.md" in result.output
@@ -439,13 +452,19 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--json",
+            ],
+        )
 
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -453,11 +472,16 @@ class TestAddCommand:
 
     def test_add_missing_content_source(self, runner):
         """Add fails without content source."""
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Must provide --content, --file, or --stdin" in result.output
@@ -467,12 +491,18 @@ class TestAddCommand:
         """Add handles errors gracefully."""
         mock_run_async.side_effect = ValueError("Invalid entry")
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+            ],
+        )
 
         assert result.exit_code == 1
         assert "Error" in result.output
@@ -486,13 +516,20 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--scope", "project",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--scope",
+                "project",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Created: @project/notes/entry.md" in result.output
@@ -506,13 +543,20 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Personal Note",
-            "--tags", "personal",
-            "--content", "My notes",
-            "--scope", "user",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Personal Note",
+                "--tags",
+                "personal",
+                "--content",
+                "My notes",
+                "--scope",
+                "user",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Created: @user/personal/note.md" in result.output
@@ -526,14 +570,21 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--scope", "user",
-            "--json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--scope",
+                "user",
+                "--json",
+            ],
+        )
 
         assert result.exit_code == 0
         data = json.loads(result.output)
@@ -542,13 +593,20 @@ class TestAddCommand:
 
     def test_add_invalid_scope(self, runner):
         """Add rejects invalid scope values."""
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--scope", "invalid",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--scope",
+                "invalid",
+            ],
+        )
 
         assert result.exit_code != 0
         assert "Invalid value for '--scope'" in result.output
@@ -557,17 +615,25 @@ class TestAddCommand:
     def test_add_scope_error_no_user_kb(self, mock_run_async, runner):
         """Add with --scope=user fails if user KB doesn't exist."""
         from memex.config import ConfigurationError
+
         mock_run_async.side_effect = ConfigurationError(
             "No user KB found. Run 'mx init --user' to create one at ~/.memex/kb/"
         )
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--scope", "user",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--scope",
+                "user",
+            ],
+        )
 
         assert result.exit_code == 1
         assert "No user KB found" in result.output
@@ -581,12 +647,18 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test Entry",
-            "--tags", "tag1",
-            "--content", r"Line 1\nLine 2\tTabbed\\Backslash",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test Entry",
+                "--tags",
+                "tag1",
+                "--content",
+                r"Line 1\nLine 2\tTabbed\\Backslash",
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -600,13 +672,20 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test Entry",
-            "--tags", "tag1",
-            "--keywords", "concept1,concept2,concept3",
-            "--content", "# Test Content",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test Entry",
+                "--tags",
+                "tag1",
+                "--keywords",
+                "concept1,concept2,concept3",
+                "--content",
+                "# Test Content",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Created: test/entry.md" in result.output
@@ -627,12 +706,18 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test Entry",
-            "--tags", "tag1",
-            "--content", "# Test Content",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test Entry",
+                "--tags",
+                "tag1",
+                "--content",
+                "# Test Content",
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -646,13 +731,20 @@ class TestAddCommand:
             "suggested_tags": [],
         }
 
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test Entry",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--semantic-links", '[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test Entry",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--semantic-links",
+                '[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]',
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -660,39 +752,60 @@ class TestAddCommand:
 
     def test_add_semantic_links_invalid_json(self, runner):
         """Add fails with helpful error for invalid JSON."""
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--semantic-links", "not valid json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--semantic-links",
+                "not valid json",
+            ],
+        )
 
         assert result.exit_code == 1
         assert "not valid JSON" in result.output
 
     def test_add_semantic_links_not_array(self, runner):
         """Add fails when --semantic-links is not an array."""
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--semantic-links", '{"path": "foo.md", "score": 0.5, "reason": "test"}',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--semantic-links",
+                '{"path": "foo.md", "score": 0.5, "reason": "test"}',
+            ],
+        )
 
         assert result.exit_code == 1
         assert "must be a JSON array" in result.output
 
     def test_add_semantic_links_missing_fields(self, runner):
         """Add fails when semantic link object is missing required fields."""
-        result = runner.invoke(cli, [
-            "add",
-            "--title", "Test",
-            "--tags", "tag1",
-            "--content", "Content",
-            "--semantic-links", '[{"path": "foo.md"}]',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Test",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+                "--semantic-links",
+                '[{"path": "foo.md"}]',
+            ],
+        )
 
         assert result.exit_code == 1
         assert "missing required fields" in result.output
@@ -761,10 +874,15 @@ class TestAppendCommand:
             "appended_bytes": 100,
         }
 
-        result = runner.invoke(cli, [
-            "append", "Test Entry",
-            "--content", "Additional content",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "append",
+                "Test Entry",
+                "--content",
+                "Additional content",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Appended" in result.output or "test/entry.md" in result.output
@@ -785,17 +903,22 @@ class TestAppendCommand:
             "suggested_links": [],
         }
 
-        result = runner.invoke(cli, [
-            "append", "Test Entry",
-            "--content", r"Line 1\nLine 2\tTabbed\\Backslash",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "append",
+                "Test Entry",
+                "--content",
+                r"Line 1\nLine 2\tTabbed\\Backslash",
+            ],
+        )
 
         assert result.exit_code == 0
         # Verify the content passed to append_entry has decoded escapes
         call_args = mock_run_async.call_args
-        coro = call_args[0][0]
-        # The coroutine has content as a keyword argument
-        # We need to check it was called with decoded content
+        coro = call_args.args[0]
+        assert coro.cr_frame is not None
+        assert coro.cr_frame.f_locals["content"] == "Line 1\nLine 2\tTabbed\\Backslash"
         assert mock_run_async.called
 
 
@@ -843,10 +966,15 @@ class TestReplaceCommand:
         """Replace decodes \\n, \\t, \\\\ escape sequences in --content."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
 
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--content", r"New content\nwith newline",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--content",
+                r"New content\nwith newline",
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -856,10 +984,15 @@ class TestReplaceCommand:
         """Replace with --keywords updates entry keywords."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
 
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--keywords", "concept1,concept2,concept3",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--keywords",
+                "concept1,concept2,concept3",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Replaced" in result.output or "test.md" in result.output
@@ -870,10 +1003,15 @@ class TestReplaceCommand:
         """Update alias passes keywords to replace_cmd."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
 
-        result = runner.invoke(cli, [
-            "update", "test.md",
-            "--keywords", "key1,key2",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "update",
+                "test.md",
+                "--keywords",
+                "key1,key2",
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -883,10 +1021,15 @@ class TestReplaceCommand:
         """Replace with --semantic-links passes parsed links to update_entry."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
 
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--semantic-links", '[{"path": "ref/related.md", "score": 0.9, "reason": "manual"}]',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--semantic-links",
+                '[{"path": "ref/related.md", "score": 0.9, "reason": "manual"}]',
+            ],
+        )
 
         assert result.exit_code == 0
         assert mock_run_async.called
@@ -894,30 +1037,45 @@ class TestReplaceCommand:
 
     def test_replace_semantic_links_invalid_json(self, runner):
         """Replace fails with helpful error for invalid JSON."""
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--semantic-links", "not valid json",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--semantic-links",
+                "not valid json",
+            ],
+        )
 
         assert result.exit_code == 1
         assert "not valid JSON" in result.output
 
     def test_replace_semantic_links_not_array(self, runner):
         """Replace fails when --semantic-links is not an array."""
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--semantic-links", '{"path": "foo.md", "score": 0.5, "reason": "test"}',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--semantic-links",
+                '{"path": "foo.md", "score": 0.5, "reason": "test"}',
+            ],
+        )
 
         assert result.exit_code == 1
         assert "must be a JSON array" in result.output
 
     def test_replace_semantic_links_missing_fields(self, runner):
         """Replace fails when semantic link object is missing required fields."""
-        result = runner.invoke(cli, [
-            "replace", "test.md",
-            "--semantic-links", '[{"path": "foo.md", "score": 0.5}]',
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "replace",
+                "test.md",
+                "--semantic-links",
+                '[{"path": "foo.md", "score": 0.5}]',
+            ],
+        )
 
         assert result.exit_code == 1
         assert "missing required fields" in result.output
@@ -1347,7 +1505,14 @@ class TestInfoCommand:
     @patch("memex.core.get_valid_categories")
     @patch("memex.config.get_index_root")
     @patch("memex.config.get_kb_root")
-    def test_info_shows_config(self, mock_kb_root, mock_index_root, mock_categories, runner, tmp_path):
+    def test_info_shows_config(
+        self,
+        mock_kb_root,
+        mock_index_root,
+        mock_categories,
+        runner,
+        tmp_path,
+    ):
         """Info displays KB configuration."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
@@ -1366,7 +1531,14 @@ class TestInfoCommand:
     @patch("memex.core.get_valid_categories")
     @patch("memex.config.get_index_root")
     @patch("memex.config.get_kb_root")
-    def test_info_json_output(self, mock_kb_root, mock_index_root, mock_categories, runner, tmp_path):
+    def test_info_json_output(
+        self,
+        mock_kb_root,
+        mock_index_root,
+        mock_categories,
+        runner,
+        tmp_path,
+    ):
         """Info --json outputs valid JSON."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
@@ -1519,6 +1691,7 @@ class TestHistoryCommand:
     def test_history_shows_entries(self, mock_get_recent, runner):
         """History shows search history."""
         from datetime import datetime
+
         from memex.models import SearchHistoryEntry
 
         mock_get_recent.return_value = [
@@ -1635,11 +1808,17 @@ class TestPatchCommand:
             "exit_code": 0,
         }
 
-        result = runner.invoke(cli, [
-            "patch", "test.md",
-            "--find", "old text",
-            "--replace", "new text",
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "patch",
+                "test.md",
+                "--find",
+                "old text",
+                "--replace",
+                "new text",
+            ],
+        )
 
         assert result.exit_code == 0
         assert "Patched" in result.output
@@ -2015,8 +2194,15 @@ class TestPublishCommand:
 
         result = runner.invoke(
             cli,
-            ["publish", "--setup-github-actions", "--dry-run", "--kb-root", str(kb_dir),
-             "--base-url", "/my-project"],
+            [
+                "publish",
+                "--setup-github-actions",
+                "--dry-run",
+                "--kb-root",
+                str(kb_dir),
+                "--base-url",
+                "/my-project",
+            ],
             catch_exceptions=False,
         )
 
@@ -2096,6 +2282,7 @@ memory_evolution:
     def test_evolve_status_with_items(self, tmp_kb_with_queue, runner):
         """mx evolve --status shows queue statistics."""
         from memex.evolution_queue import queue_evolution
+
         queue_evolution("new.md", [("n1.md", 0.8), ("n2.md", 0.7)], tmp_kb_with_queue)
 
         result = runner.invoke(cli, ["evolve", "--status"])
@@ -2120,6 +2307,7 @@ memory_evolution:
     def test_evolve_dry_run_with_items(self, tmp_kb_with_queue, runner):
         """mx evolve --dry-run shows what would be processed."""
         from memex.evolution_queue import queue_evolution
+
         queue_evolution("new.md", [("n1.md", 0.8), ("n2.md", 0.7)], tmp_kb_with_queue)
 
         result = runner.invoke(cli, ["evolve", "--dry-run"])
@@ -2131,6 +2319,7 @@ memory_evolution:
     def test_evolve_clear(self, tmp_kb_with_queue, runner):
         """mx evolve --clear removes all items from queue."""
         from memex.evolution_queue import queue_evolution, queue_stats
+
         queue_evolution("new.md", [("n1.md", 0.8)], tmp_kb_with_queue)
 
         result = runner.invoke(cli, ["evolve", "--clear"])
@@ -2160,6 +2349,7 @@ Content
 """)
 
         from memex.evolution_queue import queue_evolution
+
         queue_evolution("new.md", [("neighbor.md", 0.8)], tmp_kb_with_queue)
 
         # Mock LLM to return no suggestions (simpler test)

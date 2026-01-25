@@ -25,6 +25,13 @@ This page connects wikilinks and typed relations into a single graph.
 
 See [[memex/relations-graph/wikilink-edge-behavior]] and [[memex/relations-graph/frontmatter-edge-types]] for details.
 
+## Published UI
+
+Published KB pages surface typed relations in two places:
+
+- **Entry panel**: "Typed Relations" shows outgoing vs incoming edges with direction arrows and type labels.
+- **Graph view**: Typed relations render as solid edges with arrowheads, and the controls let you filter by origin and relation type.
+
 ## Search neighbors
 
 `mx search --include-neighbors` expands results using both semantic links and typed relations.

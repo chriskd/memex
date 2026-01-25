@@ -46,7 +46,9 @@ class MatchContext:
             before = "..." + before[-30:]
         if len(after) > 30:
             after = after[:30] + "..."
-        return f"Match {self.match_number} (line {self.line_number}): ...{before}[{match}]{after}..."
+        return (
+            f"Match {self.match_number} (line {self.line_number}): ...{before}[{match}]{after}..."
+        )
 
 
 @dataclass

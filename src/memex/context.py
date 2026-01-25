@@ -367,8 +367,6 @@ def validate_context(context: KBContext, kb_root: Path) -> list[str]:
             # Check if it might be a file without .md extension
             md_path = kb_root / f"{pattern}.md"
             if not md_path.exists():
-                warnings.append(
-                    f"Path '{pattern}' does not exist in the knowledge base."
-                )
+                warnings.append(f"Path '{pattern}' does not exist in the knowledge base.")
 
     return warnings

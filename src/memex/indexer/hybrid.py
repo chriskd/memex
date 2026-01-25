@@ -82,10 +82,20 @@ class HybridSearcher:
             results = self._whoosh.search(query, limit=fetch_limit)
             results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         elif mode == "semantic":
-            results = self._chroma.search(query, limit=fetch_limit, min_similarity=min_similarity)
+            results = self._chroma.search(
+                query,
+                limit=fetch_limit,
+                min_similarity=min_similarity,
+            )
             results = self._apply_ranking_adjustments(query, results, project_context, kb_context)
         else:
-            results = self._hybrid_search(query, limit=fetch_limit, project_context=project_context, kb_context=kb_context, min_similarity=min_similarity)
+            results = self._hybrid_search(
+                query,
+                limit=fetch_limit,
+                project_context=project_context,
+                kb_context=kb_context,
+                min_similarity=min_similarity,
+            )
 
         # Deduplicate by path, keeping highest-scoring chunk per document
         return self._deduplicate_by_path(results, limit)
@@ -113,18 +123,39 @@ class HybridSearcher:
         # Get results from both indices (fetch more to have good RRF merge)
         fetch_limit = limit * 3
         whoosh_results = self._whoosh.search(query, limit=fetch_limit)
-        chroma_results = self._chroma.search(query, limit=fetch_limit, min_similarity=min_similarity)
+        chroma_results = self._chroma.search(
+            query,
+            limit=fetch_limit,
+            min_similarity=min_similarity,
+        )
 
         # If one index is empty, return the other
         if not whoosh_results and not chroma_results:
             return []
         if not whoosh_results:
-            return self._apply_ranking_adjustments(query, chroma_results[:limit], project_context, kb_context)
+            return self._apply_ranking_adjustments(
+                query,
+                chroma_results[:limit],
+                project_context,
+                kb_context,
+            )
         if not chroma_results:
-            return self._apply_ranking_adjustments(query, whoosh_results[:limit], project_context, kb_context)
+            return self._apply_ranking_adjustments(
+                query,
+                whoosh_results[:limit],
+                project_context,
+                kb_context,
+            )
 
         # Apply RRF
-        return self._rrf_merge(query, whoosh_results, chroma_results, limit, project_context, kb_context)
+        return self._rrf_merge(
+            query,
+            whoosh_results,
+            chroma_results,
+            limit,
+            project_context,
+            kb_context,
+        )
 
     def _rrf_merge(
         self,
@@ -260,9 +291,7 @@ class HybridSearcher:
 
         return results
 
-    def _deduplicate_by_path(
-        self, results: list[SearchResult], limit: int
-    ) -> list[SearchResult]:
+    def _deduplicate_by_path(self, results: list[SearchResult], limit: int) -> list[SearchResult]:
         """Deduplicate results by document path, keeping highest-scoring chunk.
 
         Args:
@@ -319,7 +348,11 @@ class HybridSearcher:
         self._whoosh.delete_document(path)
         self._chroma.delete_document(path)
 
-    def reindex(self, kb_root: Path | None = None, kb_roots: list[tuple[str | None, Path]] | None = None) -> int:
+    def reindex(
+        self,
+        kb_root: Path | None = None,
+        kb_roots: list[tuple[str | None, Path]] | None = None,
+    ) -> int:
         """Clear and rebuild indices from all markdown files.
 
         Args:

@@ -8,17 +8,13 @@ Design:
 
 import importlib.util
 import os
-import shutil
-import tempfile
+from collections.abc import Generator
 from pathlib import Path
-from typing import Generator
 
 import pytest
 from click.testing import CliRunner
 
 from memex.cli import cli
-from memex.config import get_kb_root
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Markers
@@ -108,6 +104,7 @@ tags:
     # Clear any cached KB context
     try:
         from memex.context import _context_cache
+
         _context_cache.clear()
     except (ImportError, AttributeError):
         pass
@@ -115,6 +112,7 @@ tags:
     # Reset the core module's searcher singleton
     try:
         from memex import core
+
         core._searcher = None
         core._searcher_ready = False
     except (ImportError, AttributeError):
@@ -136,6 +134,7 @@ tags:
     # Clear cache again
     try:
         from memex.context import _context_cache
+
         _context_cache.clear()
     except (ImportError, AttributeError):
         pass
@@ -143,6 +142,7 @@ tags:
     # Reset the core module's searcher singleton again
     try:
         from memex import core
+
         core._searcher = None
         core._searcher_ready = False
     except (ImportError, AttributeError):
@@ -159,21 +159,30 @@ def tmp_kb_with_entries(tmp_kb: Path) -> Path:
     - general/testing-patterns.md (tags: testing, python)
     """
     entries = [
-        ("general/python-tips.md", {
-            "title": "Python Tips",
-            "tags": ["python", "tips"],
-            "content": "# Python Tips\n\nUseful Python programming tips and tricks."
-        }),
-        ("general/rust-guide.md", {
-            "title": "Rust Guide",
-            "tags": ["rust", "guide"],
-            "content": "# Rust Guide\n\nGetting started with Rust programming."
-        }),
-        ("general/testing-patterns.md", {
-            "title": "Testing Patterns",
-            "tags": ["testing", "python"],
-            "content": "# Testing Patterns\n\nCommon patterns for writing effective tests."
-        }),
+        (
+            "general/python-tips.md",
+            {
+                "title": "Python Tips",
+                "tags": ["python", "tips"],
+                "content": "# Python Tips\n\nUseful Python programming tips and tricks.",
+            },
+        ),
+        (
+            "general/rust-guide.md",
+            {
+                "title": "Rust Guide",
+                "tags": ["rust", "guide"],
+                "content": "# Rust Guide\n\nGetting started with Rust programming.",
+            },
+        ),
+        (
+            "general/testing-patterns.md",
+            {
+                "title": "Testing Patterns",
+                "tags": ["testing", "python"],
+                "content": "# Testing Patterns\n\nCommon patterns for writing effective tests.",
+            },
+        ),
     ]
 
     for path, data in entries:
@@ -181,12 +190,12 @@ def tmp_kb_with_entries(tmp_kb: Path) -> Path:
         entry_path.parent.mkdir(parents=True, exist_ok=True)
 
         frontmatter = f"""---
-title: {data['title']}
-tags: [{', '.join(data['tags'])}]
+title: {data["title"]}
+tags: [{", ".join(data["tags"])}]
 created: 2024-01-15
 ---
 
-{data['content']}
+{data["content"]}
 """
         entry_path.write_text(frontmatter)
 
@@ -202,14 +211,16 @@ def cli_invoke(runner: CliRunner, tmp_kb: Path):
             result = cli_invoke(["search", "python"])
             assert result.exit_code == 0
     """
+
     def _invoke(args: list[str], input: str | None = None, catch_exceptions: bool = False):
         return runner.invoke(
             cli,
             args,
             input=input,
             catch_exceptions=catch_exceptions,
-            env={"MEMEX_USER_KB_ROOT": str(tmp_kb)}
+            env={"MEMEX_USER_KB_ROOT": str(tmp_kb)},
         )
+
     return _invoke
 
 
@@ -229,7 +240,13 @@ def anyio_backend():
 # ─────────────────────────────────────────────────────────────────────────────
 
 
-def create_entry(kb_root: Path, path: str, title: str, content: str, tags: list[str] | None = None) -> Path:
+def create_entry(
+    kb_root: Path,
+    path: str,
+    title: str,
+    content: str,
+    tags: list[str] | None = None,
+) -> Path:
     """Helper to create a test entry with frontmatter.
 
     Usage in tests:

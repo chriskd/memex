@@ -77,9 +77,7 @@ def save_views(views: dict[str, ViewStats], index_root: Path | None = None) -> N
     for entry_path, stats in views.items():
         # Filter out old daily entries
         pruned_by_day = {
-            day: count
-            for day, count in stats.views_by_day.items()
-            if day >= cutoff_date
+            day: count for day, count in stats.views_by_day.items() if day >= cutoff_date
         }
 
         payload["views"][entry_path] = {
@@ -90,9 +88,7 @@ def save_views(views: dict[str, ViewStats], index_root: Path | None = None) -> N
 
     # Atomic write
     dir_path = path.parent
-    with tempfile.NamedTemporaryFile(
-        mode="w", dir=dir_path, delete=False, suffix=".tmp"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", dir=dir_path, delete=False, suffix=".tmp") as f:
         json.dump(payload, f, indent=2)
         temp_path = Path(f.name)
 
@@ -147,11 +143,7 @@ def get_popular(
         cutoff_date = (datetime.now() - timedelta(days=days)).date().isoformat()
 
         def windowed_count(stats: ViewStats) -> int:
-            return sum(
-                count
-                for day, count in stats.views_by_day.items()
-                if day >= cutoff_date
-            )
+            return sum(count for day, count in stats.views_by_day.items() if day >= cutoff_date)
 
         sorted_views = sorted(
             views.items(),

@@ -877,6 +877,41 @@ body::before {
     color: var(--text-muted);
 }
 
+.relation-group {
+    margin-bottom: 16px;
+}
+
+.relation-subheader {
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+    margin: 8px 0;
+}
+
+.relation-item .relation-meta {
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.relation-type {
+    padding: 2px 6px;
+    border-radius: 6px;
+    background: var(--bg-deep);
+    border: 1px solid var(--border-subtle);
+    font-family: var(--font-mono);
+    font-size: 0.625rem;
+    color: var(--accent-bright);
+}
+
+.relation-direction {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
 .empty-state {
     font-family: var(--font-mono);
     font-size: 0.6875rem;
@@ -1045,6 +1080,70 @@ body::before {
 
 .graph-tooltip strong {
     color: var(--accent-bright);
+}
+
+.graph-controls {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    width: 220px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    color: var(--text-secondary);
+    z-index: 5;
+    box-shadow: var(--shadow-lg);
+}
+
+.graph-controls-header {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+}
+
+.graph-control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 12px;
+}
+
+.graph-control-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+
+.graph-control-item input {
+    accent-color: var(--accent-primary);
+}
+
+.graph-control-subheader {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-muted);
+}
+
+.graph-control-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 140px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.graph-control-empty {
+    font-size: 0.625rem;
+    color: var(--text-muted);
+    font-style: italic;
 }
 
 /* Mermaid diagrams */
@@ -1544,6 +1643,18 @@ body::before {
     .graph-container {
         position: relative;
         height: calc(100vh - 56px - 56px); /* Header + bottom nav */
+    }
+
+    .graph-controls {
+        left: 12px;
+        right: 12px;
+        top: auto;
+        bottom: 72px;
+        width: auto;
+    }
+
+    .graph-control-list {
+        max-height: 120px;
     }
 
     /* Tree items larger for touch */

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import NamedTuple
+from typing import Literal, NamedTuple, overload
 
 import frontmatter
 
@@ -30,6 +30,18 @@ class TitleIndex(NamedTuple):
 
     title_to_path: dict[str, str]
     filename_to_paths: dict[str, list[str]]
+
+
+@overload
+def build_title_index(
+    kb_root: Path, *, include_filename_index: Literal[True] = True
+) -> TitleIndex: ...
+
+
+@overload
+def build_title_index(
+    kb_root: Path, *, include_filename_index: Literal[False]
+) -> dict[str, str]: ...
 
 
 def build_title_index(

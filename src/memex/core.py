@@ -17,30 +17,11 @@ import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal
-
-log = logging.getLogger(__name__)
-
-
-def _ensure_aware(dt: datetime | None) -> datetime | None:
-    """Ensure a datetime is timezone-aware, assuming UTC for naive datetimes.
-
-    Args:
-        dt: A datetime that may be naive or aware, or None.
-
-    Returns:
-        Timezone-aware datetime (with UTC if originally naive), or None.
-    """
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=UTC)
-    return dt
+from typing import Literal, Protocol
 
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import (
     AMEM_STRICT_ERROR_MESSAGE,
-    AMEMStrictError,
     DUPLICATE_DETECTION_LIMIT,
     DUPLICATE_DETECTION_MIN_SCORE,
     LINK_SUGGESTION_MIN_SCORE,
@@ -50,6 +31,7 @@ from .config import (
     SEMANTIC_LINK_MIN_SCORE,
     SIMILAR_ENTRY_TAG_WEIGHT,
     TAG_SUGGESTION_MIN_SCORE,
+    AMEMStrictError,
     get_kb_root,
     get_kb_root_by_scope,
     get_memory_evolution_config,
@@ -82,6 +64,37 @@ from .models import (
     UpsertMatch,
 )
 from .parser import ParseError, extract_links, parse_entry, update_links_batch
+
+log = logging.getLogger(__name__)
+
+
+def _ensure_aware(dt: datetime | None) -> datetime | None:
+    """Ensure a datetime is timezone-aware, assuming UTC for naive datetimes.
+
+    Args:
+        dt: A datetime that may be naive or aware, or None.
+
+    Returns:
+        Timezone-aware datetime (with UTC if originally naive), or None.
+    """
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=UTC)
+    return dt
+
+
+class DuplicateSearcher(Protocol):
+    def search(
+        self,
+        query: str,
+        limit: int = ...,
+        mode: Literal["hybrid", "keyword", "semantic"] = ...,
+        project_context: str | None = ...,
+        kb_context: KBContext | None = ...,
+        strict: bool = ...,
+    ) -> list[SearchResult]: ...
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Module-level state (lazy initialization)
@@ -482,12 +495,14 @@ def compute_link_suggestions(
         else:
             reason = "Semantically similar content"
 
-        suggestions.append({
-            "path": result.path,
-            "title": result.title,
-            "score": round(result.score, 3),
-            "reason": reason,
-        })
+        suggestions.append(
+            {
+                "path": result.path,
+                "title": result.title,
+                "score": round(result.score, 3),
+                "reason": reason,
+            }
+        )
 
         if len(suggestions) >= limit:
             break
@@ -689,6 +704,7 @@ def _queue_evolution(
         return 0
 
     from .evolution_queue import queue_evolution
+
     return queue_evolution(new_entry_path, filtered, kb_root)
 
 
@@ -784,6 +800,7 @@ async def process_evolution_items(
 
     # Group items by new_entry for batched processing
     from collections import defaultdict
+
     groups: dict[str, list[QueueItem]] = defaultdict(list)
     for item in items:
         groups[item.new_entry].append(item)
@@ -883,11 +900,17 @@ async def process_evolution_items(
                     keywords_added = len(new_keywords_set - existing_keywords)
                     total_keywords += keywords_added
 
+                keywords_note = (
+                    f" keywords {list(metadata.keywords)} -> {update.new_keywords}"
+                    if keywords_changed
+                    else ""
+                )
+                description_note = f" description: {new_description}" if description_changed else ""
                 log.info(
                     "Evolving %s:%s%s",
                     update.path,
-                    f" keywords {list(metadata.keywords)} -> {update.new_keywords}" if keywords_changed else "",
-                    f" description: {new_description}" if description_changed else "",
+                    keywords_note,
+                    description_note,
                 )
 
                 # Record evolution history for auditing/debugging
@@ -1058,17 +1081,19 @@ def compute_tag_suggestions(
         # Summarize reasons
         reasons = tag_reasons.get(tag, [])
         if len(reasons) > 2:
-            reason = f"{reasons[0]} (+{len(reasons)-1} more)"
+            reason = f"{reasons[0]} (+{len(reasons) - 1} more)"
         elif reasons:
             reason = reasons[0]
         else:
             reason = "Taxonomy preference"
 
-        suggestions.append({
-            "tag": tag,
-            "score": round(normalized_score, 3),
-            "reason": reason,
-        })
+        suggestions.append(
+            {
+                "tag": tag,
+                "score": round(normalized_score, 3),
+                "reason": reason,
+            }
+        )
 
         if len(suggestions) >= limit:
             break
@@ -1079,7 +1104,7 @@ def compute_tag_suggestions(
 def detect_potential_duplicates(
     title: str,
     content: str,
-    searcher: HybridSearcher,
+    searcher: DuplicateSearcher,
     min_score: float = DUPLICATE_DETECTION_MIN_SCORE,
     limit: int = DUPLICATE_DETECTION_LIMIT,
 ) -> list[PotentialDuplicate]:
@@ -1164,7 +1189,7 @@ def _generate_description_from_content(
         # Check if clean_text starts with the title (possibly followed by whitespace)
         title_normalized = title.strip()
         if clean_text.startswith(title_normalized):
-            clean_text = clean_text[len(title_normalized):].strip()
+            clean_text = clean_text[len(title_normalized) :].strip()
             if not clean_text:
                 return ""
 
@@ -1229,7 +1254,12 @@ async def search(
     if kb_context is None:
         kb_context = get_kb_context()
     results = searcher.search(
-        query, limit=limit, mode=mode, project_context=project_context, kb_context=kb_context, strict=strict
+        query,
+        limit=limit,
+        mode=mode,
+        project_context=project_context,
+        kb_context=kb_context,
+        strict=strict,
     )
     warnings: list[str] = []
 
@@ -1329,9 +1359,7 @@ async def expand_search_with_neighbors(
             neighbor_links: list[tuple[str, float]] = [
                 (link.path, link.score) for link in semantic_links
             ]
-            neighbor_links.extend(
-                (relation.path, parent_score) for relation in relation_links
-            )
+            neighbor_links.extend((relation.path, parent_score) for relation in relation_links)
 
             for neighbor_path, link_score in neighbor_links:
                 if neighbor_path not in seen_paths:
@@ -1366,7 +1394,9 @@ async def expand_search_with_neighbors(
                             output.append(neighbor_item)
 
                             # Add to queue for further traversal
-                            queue.append((neighbor_path, current_depth + 1, link_score, current_path))
+                            queue.append(
+                                (neighbor_path, current_depth + 1, link_score, current_path)
+                            )
                     except (ValueError, ParseError) as e:
                         log.debug("Could not read neighbor entry %s: %s", neighbor_path, e)
                         continue
@@ -1449,7 +1479,9 @@ async def add_entry(
         # Use context primary directory
         abs_dir, normalized_dir = validate_nested_path(kb_context.primary)
         if abs_dir.exists() and not abs_dir.is_dir():
-            raise ValueError(f"Context primary path exists but is not a directory: {kb_context.primary}")
+            raise ValueError(
+                f"Context primary path exists but is not a directory: {kb_context.primary}"
+            )
         # Auto-create directory if it doesn't exist
         abs_dir.mkdir(parents=True, exist_ok=True)
         target_dir = abs_dir
@@ -1457,9 +1489,7 @@ async def add_entry(
     else:
         valid_categories = get_valid_categories()
         context_hint = (
-            " (no .kbcontext file found with 'primary' field)"
-            if kb_context is None
-            else ""
+            " (no .kbcontext file found with 'primary' field)" if kb_context is None else ""
         )
         raise ValueError(
             f"Either 'category' or 'directory' must be provided{context_hint}. "
@@ -1533,7 +1563,9 @@ async def add_entry(
         if linking_result.forward_links:
             # Re-save entry with auto-generated semantic links
             try:
-                updated_metadata = metadata.model_copy(update={"semantic_links": linking_result.forward_links})
+                updated_metadata = metadata.model_copy(
+                    update={"semantic_links": linking_result.forward_links}
+                )
                 updated_frontmatter = build_frontmatter(updated_metadata)
                 file_path.write_text(updated_frontmatter + final_content, encoding="utf-8")
 
@@ -1598,7 +1630,9 @@ async def add_entry(
                                     if p not in existing_link_paths
                                 ]
                                 if new_links:
-                                    all_links = list(current_metadata.semantic_links or []) + new_links
+                                    all_links = (
+                                        list(current_metadata.semantic_links or []) + new_links
+                                    )
                                     updates["semantic_links"] = all_links
 
                             # Re-save with strengthened metadata
@@ -1655,22 +1689,26 @@ async def add_entry(
     if kbconfig and kbconfig.default_tags:
         for tag in kbconfig.default_tags:
             if tag not in existing_tag_set and tag not in suggested_tag_set:
-                config_suggestions.append({
-                    "tag": tag,
-                    "score": 1.0,  # High priority for KB config tags
-                    "reason": "From .kbconfig",
-                })
+                config_suggestions.append(
+                    {
+                        "tag": tag,
+                        "score": 1.0,  # High priority for KB config tags
+                        "reason": "From .kbconfig",
+                    }
+                )
                 suggested_tag_set.add(tag)
 
     # Also check .kbcontext default_tags (project-level, for backwards compatibility)
     if kb_context and kb_context.default_tags:
         for tag in kb_context.default_tags:
             if tag not in existing_tag_set and tag not in suggested_tag_set:
-                config_suggestions.append({
-                    "tag": tag,
-                    "score": 1.0,  # High priority for context tags
-                    "reason": "From project .kbcontext",
-                })
+                config_suggestions.append(
+                    {
+                        "tag": tag,
+                        "score": 1.0,  # High priority for context tags
+                        "reason": "From project .kbcontext",
+                    }
+                )
                 suggested_tag_set.add(tag)
 
     # Prepend config suggestions to semantic suggestions
@@ -1826,7 +1864,7 @@ async def ingest_file(
         raise FileNotFoundError(f"File not found: {file_path}")
     if not source_path.is_file():
         raise ValueError(f"Path is not a file: {file_path}")
-    if source_path.suffix.lower() not in ('.md', '.markdown'):
+    if source_path.suffix.lower() not in (".md", ".markdown"):
         raise ValueError(f"File must be markdown (.md or .markdown): {file_path}")
 
     # Determine KB root
@@ -1838,7 +1876,7 @@ async def ingest_file(
     kb_root = kb_root.resolve()
 
     # Load file and check for existing frontmatter
-    raw_content = source_path.read_text(encoding='utf-8')
+    raw_content = source_path.read_text(encoding="utf-8")
     post = fm.loads(raw_content)
     has_frontmatter = bool(post.metadata)
 
@@ -1846,24 +1884,28 @@ async def ingest_file(
     entry_title: str
     if title:
         entry_title = title
-    elif has_frontmatter and post.metadata.get('title'):
-        entry_title = str(post.metadata['title'])
+    elif has_frontmatter and post.metadata.get("title"):
+        entry_title = str(post.metadata["title"])
     else:
         # Try to extract from first H1 heading
-        h1_match = re.match(r'^#\s+(.+)$', post.content.strip(), re.MULTILINE)
+        h1_match = re.match(r"^#\s+(.+)$", post.content.strip(), re.MULTILINE)
         if h1_match:
             entry_title = h1_match.group(1).strip()
         else:
             # Fall back to filename without extension
-            entry_title = source_path.stem.replace('-', ' ').replace('_', ' ').title()
+            entry_title = source_path.stem.replace("-", " ").replace("_", " ").title()
 
     # Determine tags
     entry_tags: list[str]
     if tags:
         entry_tags = tags
-    elif has_frontmatter and post.metadata.get('tags'):
-        existing_tags = post.metadata['tags']
-        entry_tags = [str(t) for t in existing_tags] if isinstance(existing_tags, list) else [str(existing_tags)]
+    elif has_frontmatter and post.metadata.get("tags"):
+        existing_tags = post.metadata["tags"]
+        entry_tags = (
+            [str(t) for t in existing_tags]
+            if isinstance(existing_tags, list)
+            else [str(existing_tags)]
+        )
     else:
         # Default to empty list - tags will be suggested
         entry_tags = []
@@ -1879,23 +1921,19 @@ async def ingest_file(
     if is_in_kb:
         # File is already in KB, keep it in place
         target_path = source_path
-        rel_dir = str(source_path.parent.relative_to(kb_root))
     else:
         # File needs to be moved into KB
         kb_context = get_kb_context()
 
         if directory:
-            abs_dir, normalized_dir = validate_nested_path(directory)
+            abs_dir, _ = validate_nested_path(directory)
             target_dir = abs_dir
-            rel_dir = normalized_dir
         elif kb_context and kb_context.primary:
-            abs_dir, normalized_dir = validate_nested_path(kb_context.primary)
+            abs_dir, _ = validate_nested_path(kb_context.primary)
             target_dir = abs_dir
-            rel_dir = normalized_dir
         else:
             # Default to root of KB
             target_dir = kb_root
-            rel_dir = ""
 
         # Generate slug for filename if moving
         slug = slugify(entry_title)
@@ -1928,20 +1966,23 @@ async def ingest_file(
         # If there was existing frontmatter with extra fields, preserve them
         if has_frontmatter:
             # Preserve fields that create_new_metadata doesn't set
-            if post.metadata.get('description'):
-                metadata.description = str(post.metadata['description'])
-            if post.metadata.get('aliases'):
-                aliases = post.metadata['aliases']
-                metadata.aliases = [str(a) for a in aliases] if isinstance(aliases, list) else [str(aliases)]
-            if post.metadata.get('status'):
-                status_val = post.metadata['status']
+            if post.metadata.get("description"):
+                metadata.description = str(post.metadata["description"])
+            if post.metadata.get("aliases"):
+                aliases = post.metadata["aliases"]
+                metadata.aliases = (
+                    [str(a) for a in aliases] if isinstance(aliases, list) else [str(aliases)]
+                )
+            if post.metadata.get("status"):
+                status_val = post.metadata["status"]
                 if status_val in ("draft", "published", "archived"):
                     metadata.status = status_val  # type: ignore[assignment]
             # Preserve original created date if present
-            if post.metadata.get('created'):
+            if post.metadata.get("created"):
                 try:
                     from datetime import datetime
-                    created = post.metadata['created']
+
+                    created = post.metadata["created"]
                     if isinstance(created, datetime):
                         metadata.created = created
                 except Exception:
@@ -1981,7 +2022,7 @@ async def ingest_file(
         # Create target directory if needed
         target_path.parent.mkdir(parents=True, exist_ok=True)
 
-    target_path.write_text(new_content, encoding='utf-8')
+    target_path.write_text(new_content, encoding="utf-8")
 
     # If moved, delete original
     if not is_in_kb and source_path.exists() and source_path != target_path:
@@ -2197,7 +2238,9 @@ async def update_entry(
         and semantic_links is None
         and relations is None
     ):
-        raise ValueError("Provide new content, section_updates, tags, keywords, semantic_links, or relations")
+        raise ValueError(
+            "Provide new content, section_updates, tags, keywords, semantic_links, or relations"
+        )
 
     # Parse existing entry to get metadata
     try:
@@ -2271,7 +2314,9 @@ async def update_entry(
         if linking_result.forward_links:
             # Re-save entry with auto-generated semantic links
             try:
-                final_metadata = updated_metadata.model_copy(update={"semantic_links": linking_result.forward_links})
+                final_metadata = updated_metadata.model_copy(
+                    update={"semantic_links": linking_result.forward_links}
+                )
                 final_frontmatter = build_frontmatter(final_metadata)
                 file_path.write_text(final_frontmatter + new_content, encoding="utf-8")
 
@@ -2283,8 +2328,7 @@ async def update_entry(
                     searcher.index_chunks(normalized_chunks)
             except (ParseError, OSError) as e:
                 log.warning(
-                    "Failed to update entry with auto semantic links %s: %s",
-                    relative_path, e
+                    "Failed to update entry with auto semantic links %s: %s", relative_path, e
                 )
 
         # Queue memory evolution for linked neighbors (non-blocking)
@@ -2316,7 +2360,11 @@ async def update_entry(
         min_score=0.3,
     )
 
-    return {"path": relative_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
+    return {
+        "path": relative_path,
+        "suggested_links": suggested_links,
+        "suggested_tags": suggested_tags,
+    }
 
 
 async def update_entry_relations(
@@ -2588,19 +2636,23 @@ async def find_entries_by_title(
         if exact:
             if entry_title_lower == title_lower:
                 rel_path = str(md_file.relative_to(kb_root))
-                results.append({
-                    "path": rel_path,
-                    "title": metadata.title,
-                    "tags": metadata.tags,
-                })
+                results.append(
+                    {
+                        "path": rel_path,
+                        "title": metadata.title,
+                        "tags": metadata.tags,
+                    }
+                )
         else:
             if title_lower in entry_title_lower:
                 rel_path = str(md_file.relative_to(kb_root))
-                results.append({
-                    "path": rel_path,
-                    "title": metadata.title,
-                    "tags": metadata.tags,
-                })
+                results.append(
+                    {
+                        "path": rel_path,
+                        "title": metadata.title,
+                        "tags": metadata.tags,
+                    }
+                )
 
     return results
 
@@ -2790,9 +2842,7 @@ async def popular(
                 "title": metadata.title,
                 "tags": metadata.tags,
                 "view_count": stats.total_views,
-                "last_viewed": stats.last_viewed.isoformat()
-                if stats.last_viewed
-                else None,
+                "last_viewed": stats.last_viewed.isoformat() if stats.last_viewed else None,
             }
         )
 
@@ -3040,7 +3090,8 @@ async def move(
     valid_categories = get_valid_categories()
     if dest_category not in valid_categories:
         raise ValueError(
-            f"Destination must be within a valid category. Valid categories: {', '.join(valid_categories)}"
+            "Destination must be within a valid category. "
+            f"Valid categories: {', '.join(valid_categories)}"
         )
 
     # Protect category root directories from being moved
@@ -3125,8 +3176,6 @@ async def rmdir(path: str, force: bool = False) -> str:
     Raises:
         ValueError: If directory contains entries, not empty (without force), or doesn't exist.
     """
-    kb_root = get_kb_root()
-
     # Validate path
     abs_path, normalized = validate_nested_path(path)
 
@@ -3141,9 +3190,7 @@ async def rmdir(path: str, force: bool = False) -> str:
     has_md_files = any(abs_path.rglob("*.md"))
 
     if has_md_files:
-        raise ValueError(
-            f"Directory contains entries: {path}. Move or delete entries first."
-        )
+        raise ValueError(f"Directory contains entries: {path}. Move or delete entries first.")
 
     if has_files and not force:
         raise ValueError(
@@ -3351,10 +3398,12 @@ async def health(
         for path_key, entry in all_entries.items():
             incoming = all_backlinks.get(path_key, [])
             if not incoming:
-                results["orphans"].append({
-                    "path": entry["path"],
-                    "title": entry["title"],
-                })
+                results["orphans"].append(
+                    {
+                        "path": entry["path"],
+                        "title": entry["title"],
+                    }
+                )
 
     # Check for broken links
     if check_broken_links:
@@ -3375,10 +3424,12 @@ async def health(
                     and link_normalized not in valid_targets
                     and link not in title_to_path
                 ):
-                    results["broken_links"].append({
-                        "source": entry["path"],
-                        "broken_link": link,
-                    })
+                    results["broken_links"].append(
+                        {
+                            "source": entry["path"],
+                            "broken_link": link,
+                        }
+                    )
 
     # Check for stale entries
     if check_stale:
@@ -3386,12 +3437,14 @@ async def health(
             last_activity = make_aware(entry["updated"]) or make_aware(entry["created"])
             if last_activity and last_activity < cutoff_datetime:
                 days_old = (datetime.now(UTC) - last_activity).days
-                results["stale"].append({
-                    "path": entry["path"],
-                    "title": entry["title"],
-                    "last_activity": last_activity.isoformat(),
-                    "days_old": days_old,
-                })
+                results["stale"].append(
+                    {
+                        "path": entry["path"],
+                        "title": entry["title"],
+                        "last_activity": last_activity.isoformat(),
+                        "days_old": days_old,
+                    }
+                )
 
     # Check for empty directories
     if check_empty_dirs:
@@ -3503,13 +3556,15 @@ async def hubs(limit: int = 10) -> list[dict]:
             except ParseError as e:
                 log.debug("Could not parse title from %s: %s", file_path, e)
 
-        results.append({
-            "path": f"{path_key}.md",
-            "title": title,
-            "incoming": counts["incoming"],
-            "outgoing": counts["outgoing"],
-            "total": total,
-        })
+        results.append(
+            {
+                "path": f"{path_key}.md",
+                "title": title,
+                "incoming": counts["incoming"],
+                "outgoing": counts["outgoing"],
+                "total": total,
+            }
+        )
 
     # Sort by total connections descending
     results.sort(key=lambda x: x["total"], reverse=True)
@@ -3551,11 +3606,13 @@ async def dead_ends(limit: int = 10) -> list[dict]:
 
         # Dead end: has incoming links but no outgoing
         if incoming_count > 0 and len(outgoing_links) == 0:
-            results.append({
-                "path": rel_path,
-                "title": metadata.title,
-                "incoming_count": incoming_count,
-            })
+            results.append(
+                {
+                    "path": rel_path,
+                    "title": metadata.title,
+                    "incoming_count": incoming_count,
+                }
+            )
 
     # Sort by incoming count descending (most linked-to dead ends first)
     results.sort(key=lambda x: x["incoming_count"], reverse=True)
@@ -3863,22 +3920,26 @@ async def generate_descriptions(
             description = _generate_description_from_content(content, title=metadata.title)
 
             if not description:
-                results.append({
-                    "path": rel_path,
-                    "title": entry["title"],
-                    "description": None,
-                    "status": "skipped",
-                    "reason": "Could not generate description from content",
-                })
+                results.append(
+                    {
+                        "path": rel_path,
+                        "title": entry["title"],
+                        "description": None,
+                        "status": "skipped",
+                        "reason": "Could not generate description from content",
+                    }
+                )
                 continue
 
             if dry_run:
-                results.append({
-                    "path": rel_path,
-                    "title": entry["title"],
-                    "description": description,
-                    "status": "preview",
-                })
+                results.append(
+                    {
+                        "path": rel_path,
+                        "title": entry["title"],
+                        "description": description,
+                        "status": "preview",
+                    }
+                )
             else:
                 # Update the file with new description
                 metadata.description = description
@@ -3891,23 +3952,27 @@ async def generate_descriptions(
                 new_content = f"{new_frontmatter}{content.lstrip()}"
                 file_path.write_text(new_content)
 
-                results.append({
-                    "path": rel_path,
-                    "title": entry["title"],
-                    "description": description,
-                    "status": "updated",
-                })
+                results.append(
+                    {
+                        "path": rel_path,
+                        "title": entry["title"],
+                        "description": description,
+                        "status": "updated",
+                    }
+                )
 
             processed += 1
 
         except Exception as e:
-            results.append({
-                "path": rel_path,
-                "title": entry["title"],
-                "description": None,
-                "status": "error",
-                "reason": str(e),
-            })
+            results.append(
+                {
+                    "path": rel_path,
+                    "title": entry["title"],
+                    "description": None,
+                    "status": "error",
+                    "reason": str(e),
+                }
+            )
 
     return results
 
@@ -3995,12 +4060,14 @@ def resolve_entry_by_title(
     matches: list[UpsertMatch] = []
     for r in results:
         if r.score >= min_score:
-            matches.append(UpsertMatch(
-                path=r.path,
-                title=r.title,
-                score=r.score,
-                match_type="fuzzy",
-            ))
+            matches.append(
+                UpsertMatch(
+                    path=r.path,
+                    title=r.title,
+                    score=r.score,
+                    match_type="fuzzy",
+                )
+            )
 
     if not matches:
         return None
@@ -4102,15 +4169,17 @@ async def amem_init_inventory(
             # Ensure created timestamp is timezone-aware
             created = _ensure_aware(metadata.created) or datetime.now(UTC)
 
-            entries.append(InitInventoryEntry(
-                path=display_path,
-                title=metadata.title,
-                created=created,
-                has_keywords=has_keywords,
-                keyword_status=keyword_status,
-                keywords=list(metadata.keywords) if metadata.keywords else [],
-                absolute_path=str(md_file),
-            ))
+            entries.append(
+                InitInventoryEntry(
+                    path=display_path,
+                    title=metadata.title,
+                    created=created,
+                    has_keywords=has_keywords,
+                    keyword_status=keyword_status,
+                    keywords=list(metadata.keywords) if metadata.keywords else [],
+                    absolute_path=str(md_file),
+                )
+            )
 
     # Sort by created timestamp (oldest first)
     entries.sort(key=lambda e: e.created)
@@ -4190,13 +4259,15 @@ async def amem_init_extract_keywords(
         if not entry.absolute_path:
             errors.append(f"{entry.path}: no absolute path available")
             entries_failed += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=[],
-                success=False,
-                error="No absolute path available",
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=[],
+                    success=False,
+                    error="No absolute path available",
+                )
+            )
             continue
 
         # Read entry content
@@ -4207,13 +4278,15 @@ async def amem_init_extract_keywords(
             error_msg = f"Failed to read entry: {e}"
             errors.append(f"{entry.path}: {error_msg}")
             entries_failed += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=[],
-                success=False,
-                error=error_msg,
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=[],
+                    success=False,
+                    error=error_msg,
+                )
+            )
             continue
 
         # Extract keywords using LLM
@@ -4230,25 +4303,29 @@ async def amem_init_extract_keywords(
             error_msg = f"LLM error: {e}"
             errors.append(f"{entry.path}: {error_msg}")
             entries_failed += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=[],
-                success=False,
-                error=error_msg,
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=[],
+                    success=False,
+                    error=error_msg,
+                )
+            )
             continue
 
         if not extraction_result.success:
             errors.append(f"{entry.path}: {extraction_result.error}")
             entries_failed += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=[],
-                success=False,
-                error=extraction_result.error,
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=[],
+                    success=False,
+                    error=extraction_result.error,
+                )
+            )
             continue
 
         # Update entry with extracted keywords
@@ -4264,23 +4341,27 @@ async def amem_init_extract_keywords(
                 keywords=extraction_result.keywords,
             )
             entries_updated += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=extraction_result.keywords,
-                success=True,
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=extraction_result.keywords,
+                    success=True,
+                )
+            )
         except Exception as e:
             error_msg = f"Failed to update entry: {e}"
             errors.append(f"{entry.path}: {error_msg}")
             entries_failed += 1
-            results.append(KeywordExtractionEntry(
-                path=entry.path,
-                title=entry.title,
-                keywords=extraction_result.keywords,
-                success=False,
-                error=error_msg,
-            ))
+            results.append(
+                KeywordExtractionEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    keywords=extraction_result.keywords,
+                    success=False,
+                    error=error_msg,
+                )
+            )
 
     return KeywordExtractionPhaseResult(
         entries_processed=len(needs_llm),
@@ -4336,10 +4417,7 @@ async def amem_init_link_entries(
         )
 
     # Get entries that can be processed (ready status, have keywords)
-    processable = [
-        e for e in inventory.entries
-        if e.keyword_status == "ready" and e.has_keywords
-    ]
+    processable = [e for e in inventory.entries if e.keyword_status == "ready" and e.has_keywords]
 
     if not processable:
         return LinkingPhaseResult(
@@ -4485,33 +4563,39 @@ async def amem_init_link_entries(
                     total_links += len(new_links)
                     entries_linked += 1
 
-                    results.append(LinkingPhaseEntry(
-                        path=entry.path,
-                        title=entry.title,
-                        links_created=len(new_links),
-                        evolution_items_queued=evolution_count,
-                        neighbors=[lnk.path for lnk in new_links],
-                    ))
+                    results.append(
+                        LinkingPhaseEntry(
+                            path=entry.path,
+                            title=entry.title,
+                            links_created=len(new_links),
+                            evolution_items_queued=evolution_count,
+                            neighbors=[lnk.path for lnk in new_links],
+                        )
+                    )
                 else:
                     # All links already existed
-                    results.append(LinkingPhaseEntry(
-                        path=entry.path,
-                        title=entry.title,
-                        links_created=0,
-                        evolution_items_queued=0,
-                        neighbors=[],
-                    ))
+                    results.append(
+                        LinkingPhaseEntry(
+                            path=entry.path,
+                            title=entry.title,
+                            links_created=0,
+                            evolution_items_queued=0,
+                            neighbors=[],
+                        )
+                    )
             except Exception as e:
                 errors.append(f"{entry.path}: failed to update links - {e}")
         else:
             # No matching neighbors found
-            results.append(LinkingPhaseEntry(
-                path=entry.path,
-                title=entry.title,
-                links_created=0,
-                evolution_items_queued=0,
-                neighbors=[],
-            ))
+            results.append(
+                LinkingPhaseEntry(
+                    path=entry.path,
+                    title=entry.title,
+                    links_created=0,
+                    evolution_items_queued=0,
+                    neighbors=[],
+                )
+            )
 
     return LinkingPhaseResult(
         entries_processed=len(processable),

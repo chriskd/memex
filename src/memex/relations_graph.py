@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Literal, cast
+from typing import Literal
 
 from .config import get_index_root, get_kb_roots_for_indexing, parse_scoped_path
 from .models import RelationEdge, RelationNode, RelationsGraph, RelationsQueryResult
@@ -93,15 +94,8 @@ def build_relations_graph(scope: str | None = None) -> RelationsGraph:
     known_nodes: set[str] = set()
 
     for scope_label, kb_root in kb_roots:
-        scope_indices[scope_label] = cast(
-            TitleIndex,
-            build_title_index(kb_root, include_filename_index=True),
-        )
-        files = [
-            md_file
-            for md_file in kb_root.rglob("*.md")
-            if not md_file.name.startswith("_")
-        ]
+        scope_indices[scope_label] = build_title_index(kb_root, include_filename_index=True)
+        files = [md_file for md_file in kb_root.rglob("*.md") if not md_file.name.startswith("_")]
         scope_files[scope_label] = files
         for md_file in files:
             rel_path = str(md_file.relative_to(kb_root))
@@ -290,4 +284,3 @@ def query_relations_graph(
 
     nodes = [graph.nodes[node] for node in visited_nodes if node in graph.nodes]
     return RelationsQueryResult(root=root, depth=depth, nodes=nodes, edges=collected_edges)
-

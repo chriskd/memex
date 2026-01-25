@@ -119,9 +119,7 @@ def save_session(
 
     # Atomic write
     dir_path = path.parent
-    with tempfile.NamedTemporaryFile(
-        mode="w", dir=dir_path, delete=False, suffix=".tmp"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", dir=dir_path, delete=False, suffix=".tmp") as f:
         json.dump(payload, f, indent=2)
         temp_path = Path(f.name)
 

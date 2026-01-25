@@ -11,16 +11,14 @@ from typing import TYPE_CHECKING
 from jinja2 import BaseLoader, Environment, select_autoescape
 
 if TYPE_CHECKING:
+    from ..models import RelationLink
     from .generator import EntryData
 
 
 def _escape_html(text: str) -> str:
     """Escape HTML special characters."""
     return (
-        text.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
+        text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
     )
 
 
@@ -61,6 +59,7 @@ def _format_date(value) -> str:
 def _safe(html: str) -> str:
     """Mark HTML as safe for Jinja2 (won't be escaped)."""
     from markupsafe import Markup
+
     return Markup(html)
 
 
@@ -93,40 +92,45 @@ def _build_file_tree(entries: list[EntryData], current_path: str = "", base_url:
 
     # Render folders
     for folder in sorted(folders.keys()):
-        html_parts.append(f'''
+        html_parts.append(f"""
             <div class="tree-folder">
                 <div class="tree-folder-header">
                     <span class="tree-icon folder">📁</span>
                     <span class="tree-label">{_escape_html(folder)}</span>
                 </div>
-                <div class="tree-children">''')
+                <div class="tree-children">""")
 
         for entry in folders[folder]:
-            active_class = ' active' if entry.path == current_path else ''
+            active_class = " active" if entry.path == current_path else ""
             html_parts.append(f'''
                     <a href="{base_url}/{entry.path}.html" class="tree-item{active_class}">
                         <span class="tree-icon file">◇</span>
                         <span class="tree-label">{_escape_html(entry.title)}</span>
                     </a>''')
 
-        html_parts.append('''
+        html_parts.append("""
                 </div>
-            </div>''')
+            </div>""")
 
     # Render root entries
     for entry in root_entries:
-        active_class = ' active' if entry.path == current_path else ''
+        active_class = " active" if entry.path == current_path else ""
         html_parts.append(f'''
             <a href="{base_url}/{entry.path}.html" class="tree-item{active_class}">
                 <span class="tree-icon file">◇</span>
                 <span class="tree-label">{_escape_html(entry.title)}</span>
             </a>''')
 
-    html_parts.append('</div>')
-    return ''.join(html_parts)
+    html_parts.append("</div>")
+    return "".join(html_parts)
 
 
-def _build_recent_list(entries: list[EntryData], current_path: str = "", base_url: str = "", limit: int = 20) -> str:
+def _build_recent_list(
+    entries: list[EntryData],
+    current_path: str = "",
+    base_url: str = "",
+    limit: int = 20,
+) -> str:
     """Build HTML for the recent entries list in sidebar.
 
     Args:
@@ -140,26 +144,28 @@ def _build_recent_list(entries: list[EntryData], current_path: str = "", base_ur
     """
     # Sort by created date, newest first
     sorted_entries = sorted(
-        entries,
-        key=lambda e: str(e.metadata.created) if e.metadata.created else "",
-        reverse=True
+        entries, key=lambda e: str(e.metadata.created) if e.metadata.created else "", reverse=True
     )[:limit]
 
     html_parts = ['<div class="tree" id="recent-list">']
 
     for entry in sorted_entries:
-        active_class = ' active' if entry.path == current_path else ''
+        active_class = " active" if entry.path == current_path else ""
         html_parts.append(f'''
             <a href="{base_url}/{entry.path}.html" class="tree-item{active_class}">
                 <span class="tree-icon file">◇</span>
                 <span class="tree-label">{_escape_html(entry.title)}</span>
             </a>''')
 
-    html_parts.append('</div>')
-    return ''.join(html_parts)
+    html_parts.append("</div>")
+    return "".join(html_parts)
 
 
-def _build_tabbed_sidebar(entries: list[EntryData], current_path: str = "", base_url: str = "") -> str:
+def _build_tabbed_sidebar(
+    entries: list[EntryData],
+    current_path: str = "",
+    base_url: str = "",
+) -> str:
     """Build HTML for the tabbed sidebar with Browse and Recent tabs.
 
     Args:
@@ -177,7 +183,7 @@ def _build_tabbed_sidebar(entries: list[EntryData], current_path: str = "", base
     has_folders = any("/" in e.path for e in entries)
     browse_heading = "Categories" if has_folders else "Entries"
 
-    return f'''
+    return f"""
             <div class="nav-tabs">
                 <button class="nav-tab active" data-tab="tree">Browse</button>
                 <button class="nav-tab" data-tab="recent">Recent</button>
@@ -191,20 +197,24 @@ def _build_tabbed_sidebar(entries: list[EntryData], current_path: str = "", base
             <div class="sidebar-section" id="recent-section" style="display: none;">
                 <div class="sidebar-header">Recent Updates</div>
                 {recent_html}
-            </div>'''
+            </div>"""
 
 
 def _build_link_panel(
     outlinks: list[str],
     backlinks: list[str],
+    relation_outgoing: list[RelationLink],
+    relation_backlinks: list[RelationLink],
     entries_dict: dict[str, EntryData],
     base_url: str,
 ) -> str:
-    """Build HTML for the right panel with outlinks and backlinks.
+    """Build HTML for the right panel with links and typed relations.
 
     Args:
         outlinks: List of outgoing link paths
         backlinks: List of incoming link paths
+        relation_outgoing: Typed relations originating from this entry
+        relation_backlinks: Typed relations pointing to this entry
         entries_dict: Dict mapping path to EntryData for title lookup
         base_url: Base URL for links
 
@@ -214,10 +224,10 @@ def _build_link_panel(
     html_parts = []
 
     # Outgoing links section
-    html_parts.append('''
+    html_parts.append("""
         <div class="panel-section">
             <div class="panel-header">Outgoing Links</div>
-            <ul class="link-list">''')
+            <ul class="link-list">""")
 
     if outlinks:
         for path in sorted(outlinks):
@@ -233,15 +243,15 @@ def _build_link_panel(
     else:
         html_parts.append('<li class="empty-state">No outgoing links</li>')
 
-    html_parts.append('''
+    html_parts.append("""
             </ul>
-        </div>''')
+        </div>""")
 
     # Backlinks section
-    html_parts.append('''
+    html_parts.append("""
         <div class="panel-section">
             <div class="panel-header">Backlinks</div>
-            <ul class="link-list">''')
+            <ul class="link-list">""")
 
     if backlinks:
         for path in sorted(backlinks):
@@ -257,11 +267,72 @@ def _build_link_panel(
     else:
         html_parts.append('<li class="empty-state">No backlinks</li>')
 
-    html_parts.append('''
+    html_parts.append("""
             </ul>
-        </div>''')
+        </div>""")
 
-    return ''.join(html_parts)
+    # Typed relations section
+    html_parts.append("""
+        <div class="panel-section">
+            <div class="panel-header">Typed Relations</div>""")
+
+    if relation_outgoing or relation_backlinks:
+        if relation_outgoing:
+            html_parts.append("""
+            <div class="relation-group">
+                <div class="relation-subheader">Outgoing</div>
+                <ul class="link-list">""")
+
+            for relation in sorted(relation_outgoing, key=lambda r: (r.path, r.type)):
+                title = entries_dict.get(relation.path, None)
+                title_text = title.title if title else relation.path.split("/")[-1]
+                html_parts.append(f'''
+                    <li class="link-item relation-item">
+                        <a href="{base_url}/{relation.path}.html">
+                            <div class="link-title">{_escape_html(title_text)}</div>
+                            <div class="link-path">{_escape_html(relation.path)}</div>
+                            <div class="relation-meta">
+                                <span class="relation-type">{_escape_html(relation.type)}</span>
+                                <span class="relation-direction" aria-hidden="true">→</span>
+                            </div>
+                        </a>
+                    </li>''')
+
+            html_parts.append("""
+                </ul>
+            </div>""")
+
+        if relation_backlinks:
+            html_parts.append("""
+            <div class="relation-group">
+                <div class="relation-subheader">Incoming</div>
+                <ul class="link-list">""")
+
+            for relation in sorted(relation_backlinks, key=lambda r: (r.path, r.type)):
+                title = entries_dict.get(relation.path, None)
+                title_text = title.title if title else relation.path.split("/")[-1]
+                html_parts.append(f'''
+                    <li class="link-item relation-item">
+                        <a href="{base_url}/{relation.path}.html">
+                            <div class="link-title">{_escape_html(title_text)}</div>
+                            <div class="link-path">{_escape_html(relation.path)}</div>
+                            <div class="relation-meta">
+                                <span class="relation-direction" aria-hidden="true">←</span>
+                                <span class="relation-type">{_escape_html(relation.type)}</span>
+                            </div>
+                        </a>
+                    </li>''')
+
+            html_parts.append("""
+                </ul>
+            </div>""")
+    else:
+        html_parts.append('<p class="empty-state">No typed relations</p>')
+
+    html_parts.append("""
+        </div>""")
+
+    return "".join(html_parts)
 
 
 def _base_layout(
@@ -284,8 +355,8 @@ def _base_layout(
         current_view: Current view for nav highlighting ("reader" or "graph")
         site_title: Site title for header and <title> tag
     """
-    reader_active = ' active' if current_view == 'reader' else ''
-    graph_active = ' active' if current_view == 'graph' else ''
+    reader_active = " active" if current_view == "reader" else ""
+    graph_active = " active" if current_view == "graph" else ""
 
     return f'''<!DOCTYPE html>
 <html lang="en">
@@ -296,7 +367,8 @@ def _base_layout(
     <title>{_escape_html(title)} - {_escape_html(site_title)}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
     <link rel="stylesheet" href="{base_url}/assets/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
     <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
@@ -321,11 +393,17 @@ def _base_layout(
             </a>
 
             <div class="search-container">
-                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                 </svg>
-                <input type="text" id="search-input" placeholder="Search knowledge base..." autocomplete="off">
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
                 <div id="search-results"></div>
             </div>
 
@@ -336,7 +414,8 @@ def _base_layout(
 
             <!-- Mobile search button -->
             <button class="mobile-search-btn" aria-label="Open search">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
                     <circle cx="11" cy="11" r="8"></circle>
                     <path d="m21 21-4.35-4.35"></path>
                 </svg>
@@ -350,7 +429,9 @@ def _base_layout(
         <aside class="sidebar">
             {sidebar_html}
             <div class="sidebar-footer">
-                <a href="https://github.com/chriskd/memex" target="_blank" rel="noopener">Powered by memex</a>
+                <a href="https://github.com/chriskd/memex"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
             </div>
         </aside>
 
@@ -369,12 +450,18 @@ def _base_layout(
     <div class="search-overlay">
         <div class="search-overlay-header">
             <button class="search-overlay-close" aria-label="Close search">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M18 6L6 18"></path>
                     <path d="M6 6l12 12"></path>
                 </svg>
             </button>
-            <input type="text" class="search-overlay-input" placeholder="Search..." autocomplete="off">
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
         </div>
         <div class="search-overlay-results"></div>
     </div>
@@ -426,10 +513,14 @@ ENTRY_TEMPLATE = """
             <a href="{{ base_url }}/{{ entry.path }}.html" class="entry-path">{{ entry.path }}</a>
             <div class="entry-meta">
                 {% if entry.metadata.created %}
-                <div class="entry-meta-item">Created: <span>{{ entry.metadata.created|datefmt }}</span></div>
+                <div class="entry-meta-item">
+                    Created: <span>{{ entry.metadata.created|datefmt }}</span>
+                </div>
                 {% endif %}
                 {% if entry.metadata.updated %}
-                <div class="entry-meta-item">Updated: <span>{{ entry.metadata.updated|datefmt }}</span></div>
+                <div class="entry-meta-item">
+                    Updated: <span>{{ entry.metadata.updated|datefmt }}</span>
+                </div>
                 {% endif %}
             </div>
             {% if entry.tags %}
@@ -545,6 +636,8 @@ def render_entry_page(
     panel_html = _build_link_panel(
         entry.outlinks,
         entry.backlinks,
+        entry.relation_outgoing,
+        entry.relation_backlinks,
         entries_dict,
         base_url,
     )
@@ -584,15 +677,12 @@ def render_index_page(
 
     # Sort entries by created date (newest first)
     recent_entries = sorted(
-        entries,
-        key=lambda e: str(e.metadata.created) if e.metadata.created else "",
-        reverse=True
+        entries, key=lambda e: str(e.metadata.created) if e.metadata.created else "", reverse=True
     )[:20]
 
     # Build tags with counts
     tags_with_counts = sorted(
-        [(tag, len(paths)) for tag, paths in tags_index.items()],
-        key=lambda x: (-x[1], x[0])
+        [(tag, len(paths)) for tag, paths in tags_index.items()], key=lambda x: (-x[1], x[0])
     )
 
     tmpl = env.from_string(INDEX_TEMPLATE)
@@ -603,12 +693,12 @@ def render_index_page(
     )
 
     # Empty panel for index page
-    panel_html = '''
+    panel_html = """
         <div class="panel-section">
             <div class="panel-header">Welcome</div>
             <p class="empty-state">Select an entry to view its connections</p>
         </div>
-    '''
+    """
 
     return _base_layout(
         title="Home",
@@ -657,12 +747,12 @@ def render_tag_page(
     )
 
     # Empty panel for tag page
-    panel_html = '''
+    panel_html = """
         <div class="panel-section">
             <div class="panel-header">Tag Info</div>
             <p class="empty-state">Entries tagged with this topic</p>
         </div>
-    '''
+    """
 
     return _base_layout(
         title=f"Tag: {tag}",
@@ -700,6 +790,23 @@ def render_graph_page(
 <div class="graph-container">
     <div id="graph"></div>
     <div id="graph-tooltip" class="graph-tooltip"></div>
+    <div id="graph-controls" class="graph-controls">
+        <div class="graph-controls-header">Relations</div>
+        <div class="graph-control-group">
+            <label class="graph-control-item">
+                <input type="checkbox" data-origin="wikilink" checked>
+                <span>Wikilinks</span>
+            </label>
+            <label class="graph-control-item">
+                <input type="checkbox" data-origin="relations" checked>
+                <span>Typed</span>
+            </label>
+        </div>
+        <div class="graph-control-group">
+            <div class="graph-control-subheader">Types</div>
+            <div id="graph-relation-types" class="graph-control-list"></div>
+        </div>
+    </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script>
@@ -711,6 +818,8 @@ def render_graph_page(
         .then(data => {
             const container = document.getElementById('graph');
             const tooltip = document.getElementById('graph-tooltip');
+            const controls = document.getElementById('graph-controls');
+            const relationTypesContainer = document.getElementById('graph-relation-types');
             const width = container.clientWidth || 960;
             const height = container.clientHeight || 600;
 
@@ -739,6 +848,22 @@ def render_graph_page(
                 'relations': '#5e81ac'
             };
 
+            const nodeRadius = 8;
+            const arrowOffset = nodeRadius + 6;
+
+            const defs = svg.append('defs');
+            defs.append('marker')
+                .attr('id', 'arrow-relations')
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 10)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', edgeColors['relations']);
+
             // Links
             const link = g.append('g')
                 .attr('class', 'links')
@@ -748,7 +873,10 @@ def render_graph_page(
                 .attr('stroke', d => edgeColors[d.origin] || '#262b3a')
                 .attr('stroke-opacity', 0.5)
                 .attr('stroke-width', d => d.score ? 1 + (d.score * 2) : 1)
-                .attr('stroke-dasharray', d => d.origin === 'wikilink' ? '2,2' : null);
+                .attr('stroke-dasharray', d => d.origin === 'wikilink' ? '2,2' : null)
+                .attr('marker-end', d => d.origin === 'relations' ? 'url(#arrow-relations)' : null)
+                .attr('data-origin', d => d.origin)
+                .attr('data-type', d => d.type || '');
 
             // Nodes
             const node = g.append('g')
@@ -806,6 +934,101 @@ def render_graph_page(
                 .attr('fill', '#9ca3af')
                 .attr('opacity', 0.8);
 
+            const relationTypes = Array.from(new Set(
+                data.edges
+                    .filter(edge => edge.origin === 'relations' && edge.type)
+                    .map(edge => edge.type)
+            )).sort();
+
+            const hasTypeFilters = relationTypes.length > 0;
+            const activeTypes = new Set(relationTypes);
+            const originEnabled = {
+                wikilink: true,
+                relations: true,
+            };
+
+            function isEdgeVisible(edge) {
+                if (!originEnabled[edge.origin]) {
+                    return false;
+                }
+                if (edge.origin === 'relations' && hasTypeFilters) {
+                    if (!edge.type) {
+                        return false;
+                    }
+                    return activeTypes.has(edge.type);
+                }
+                return true;
+            }
+
+            function updateLinkVisibility() {
+                link.style('display', d => isEdgeVisible(d) ? null : 'none');
+            }
+
+            function edgeTargetPosition(edge, offset) {
+                const dx = edge.target.x - edge.source.x;
+                const dy = edge.target.y - edge.source.y;
+                const length = Math.sqrt(dx * dx + dy * dy) || 1;
+                return {
+                    x: edge.target.x - (dx / length) * offset,
+                    y: edge.target.y - (dy / length) * offset,
+                };
+            }
+
+            if (relationTypesContainer) {
+                relationTypesContainer.textContent = '';
+                if (!relationTypes.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'graph-control-empty';
+                    empty.textContent = 'No typed relations';
+                    relationTypesContainer.appendChild(empty);
+                } else {
+                    relationTypes.forEach(type => {
+                        const label = document.createElement('label');
+                        label.className = 'graph-control-item';
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = true;
+                        input.dataset.type = type;
+                        const span = document.createElement('span');
+                        span.textContent = type;
+                        label.appendChild(input);
+                        label.appendChild(span);
+                        relationTypesContainer.appendChild(label);
+                    });
+                }
+            }
+
+            if (controls) {
+                const originInputs = controls.querySelectorAll('input[data-origin]');
+                originInputs.forEach(input => {
+                    input.addEventListener('change', event => {
+                        const target = event.target;
+                        if (!target || !target.dataset) {
+                            return;
+                        }
+                        originEnabled[target.dataset.origin] = target.checked;
+                        updateLinkVisibility();
+                    });
+                });
+            }
+
+            if (relationTypesContainer) {
+                relationTypesContainer.addEventListener('change', event => {
+                    const target = event.target;
+                    if (!target || !target.dataset || !target.dataset.type) {
+                        return;
+                    }
+                    if (target.checked) {
+                        activeTypes.add(target.dataset.type);
+                    } else {
+                        activeTypes.delete(target.dataset.type);
+                    }
+                    updateLinkVisibility();
+                });
+            }
+
+            updateLinkVisibility();
+
             // Hover effects
             node.on('mouseover', (event, d) => {
                     tooltip.style.display = 'block';
@@ -823,10 +1046,12 @@ def render_graph_page(
 
             link.on('mouseover', (event, d) => {
                     tooltip.style.display = 'block';
-                    const label = d.type ? d.type : 'wikilink';
+                    const label = d.origin === 'relations' ? (d.type || 'relation') : 'wikilink';
+                    const sourceLabel = d.source.title || d.source.id;
+                    const targetLabel = d.target.title || d.target.id;
                     const score = d.score ? ' (' + d.score.toFixed(2) + ')' : '';
                     tooltip.innerHTML = '<strong>' + label + '</strong>' +
-                        '<br>' + d.source.id + ' → ' + d.target.id + score;
+                        '<br>' + sourceLabel + ' → ' + targetLabel + score;
                     tooltip.style.left = (event.pageX + 10) + 'px';
                     tooltip.style.top = (event.pageY + 10) + 'px';
                 })
@@ -838,8 +1063,14 @@ def render_graph_page(
             simulation.on('tick', () => {
                 link.attr('x1', d => d.source.x)
                     .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
+                    .attr('x2', d => {
+                        const offset = d.origin === 'relations' ? arrowOffset : nodeRadius;
+                        return edgeTargetPosition(d, offset).x;
+                    })
+                    .attr('y2', d => {
+                        const offset = d.origin === 'relations' ? arrowOffset : nodeRadius;
+                        return edgeTargetPosition(d, offset).y;
+                    });
                 node.attr('transform', d => `translate(${d.x},${d.y})`);
             });
         });
@@ -848,12 +1079,12 @@ def render_graph_page(
 """
 
     # Empty panel for graph page
-    panel_html = '''
+    panel_html = """
         <div class="panel-section">
             <div class="panel-header">Graph View</div>
             <p class="empty-state">Click a node to navigate to that entry</p>
         </div>
-    '''
+    """
 
     return _base_layout(
         title="Graph",

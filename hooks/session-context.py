@@ -15,7 +15,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from memex.parser import parse_entry, ParseError
+from memex.parser import ParseError, parse_entry
 
 # Cache configuration
 CACHE_DIR = Path("/tmp")
@@ -48,9 +48,7 @@ def save_cached_context(project_name: str, context: str) -> None:
     """Save context to cache."""
     cache_path = get_cache_path(project_name)
     try:
-        cache_path.write_text(
-            json.dumps({"timestamp": time.time(), "context": context})
-        )
+        cache_path.write_text(json.dumps({"timestamp": time.time(), "context": context}))
     except OSError:
         pass  # Ignore cache write errors
 

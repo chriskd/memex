@@ -13,7 +13,7 @@ Target: <2 seconds execution time.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -32,7 +32,6 @@ from memex.parser.links import (
 from memex.parser.markdown import ParseError, _chunk_by_h2, parse_entry
 from memex.parser.md_renderer import MarkdownResult, normalize_link, render_markdown
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -46,9 +45,7 @@ def kb_root(tmp_path: Path) -> Path:
     return root
 
 
-def _create_entry(
-    kb_root: Path, rel_path: str, content: str, title: str | None = None
-) -> Path:
+def _create_entry(kb_root: Path, rel_path: str, content: str, title: str | None = None) -> Path:
     """Helper to create a KB entry with optional frontmatter."""
     path = kb_root / rel_path
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -386,11 +383,11 @@ class TestCreateNewMetadata:
 
     def test_creates_with_current_timestamp(self):
         """Created timestamp is set to current UTC time."""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         metadata = create_new_metadata(title="New Entry", tags=["test"])
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
-        assert metadata.created.tzinfo == timezone.utc
+        assert metadata.created.tzinfo == UTC
         assert before <= metadata.created <= after
         assert metadata.updated is None
 
@@ -452,12 +449,12 @@ class TestUpdateMetadataForEdit:
 
     def test_sets_updated_timestamp(self, base_metadata: EntryMetadata):
         """Updated timestamp is set to current UTC time."""
-        before = datetime.now(timezone.utc)
+        before = datetime.now(UTC)
         updated = update_metadata_for_edit(base_metadata)
-        after = datetime.now(timezone.utc)
+        after = datetime.now(UTC)
 
         assert updated.updated is not None
-        assert updated.updated.tzinfo == timezone.utc
+        assert updated.updated.tzinfo == UTC
         assert before <= updated.updated <= after
 
     def test_adds_new_contributor_without_duplicates(self, base_metadata: EntryMetadata):
@@ -511,9 +508,7 @@ class TestUpdateMetadataForEdit:
         base_metadata.semantic_links = [
             SemanticLink(path="old.md", score=0.5, reason="shared_tags")
         ]
-        new_links = [
-            SemanticLink(path="new.md", score=0.9, reason="bidirectional")
-        ]
+        new_links = [SemanticLink(path="new.md", score=0.9, reason="bidirectional")]
 
         updated = update_metadata_for_edit(base_metadata, semantic_links=new_links)
 
@@ -682,9 +677,7 @@ class TestUpdateLinksBatch:
         """Multiple path mappings are applied in a single pass."""
         _create_entry(kb_root, "a.md", "[[first]] and [[second]]", title="A")
 
-        count = update_links_batch(
-            kb_root, {"first": "first-new", "second": "second-new"}
-        )
+        count = update_links_batch(kb_root, {"first": "first-new", "second": "second-new"})
 
         assert count == 1
         content = (kb_root / "a.md").read_text()

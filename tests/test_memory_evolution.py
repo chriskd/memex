@@ -1,7 +1,6 @@
 """Tests for memory evolution (A-Mem style keyword/context evolution)."""
 
 import json
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -9,9 +8,9 @@ import pytest
 from memex import core
 from memex.config import MemoryEvolutionConfig, get_memory_evolution_config
 from memex.llm import (
-    EvolutionSuggestion,
     LLMConfigurationError,
     NeighborInfo,
+    StrengthenResult,
     evolve_neighbors_batched,
     evolve_single_neighbor,
 )
@@ -90,7 +89,7 @@ class TestEvolutionDecisionModel:
             ],
             "suggested_connections": [],
         }
-        decision = EvolutionDecision(**llm_response)
+        decision = EvolutionDecision.model_validate(llm_response)
         assert decision.should_evolve is True
         assert len(decision.neighbor_updates) == 1
         assert decision.neighbor_updates[0].new_keywords == ["keyword1", "keyword2"]
@@ -98,7 +97,7 @@ class TestEvolutionDecisionModel:
     def test_evolution_decision_validation_requires_should_evolve(self):
         """EvolutionDecision requires should_evolve field."""
         with pytest.raises(Exception):  # Pydantic ValidationError
-            EvolutionDecision()  # Missing required field
+            EvolutionDecision.model_validate({})  # Missing required field
 
 
 class TestMemoryEvolutionConfig:
@@ -177,7 +176,10 @@ class TestLLMEvolution:
             MagicMock(
                 message=MagicMock(
                     content=json.dumps(
-                        {"new_keywords": ["python", "testing"], "relationship": "Related to testing concepts"}
+                        {
+                            "new_keywords": ["python", "testing"],
+                            "relationship": "Related to testing concepts",
+                        }
                     )
                 )
             )
@@ -213,11 +215,13 @@ class TestLLMEvolution:
         mock_response.choices = [
             MagicMock(
                 message=MagicMock(
-                    content=json.dumps({
-                        "new_keywords": ["python", "testing"],
-                        "relationship": "Related to testing",
-                        "new_context": "A guide covering Python testing fundamentals."
-                    })
+                    content=json.dumps(
+                        {
+                            "new_keywords": ["python", "testing"],
+                            "relationship": "Related to testing",
+                            "new_context": "A guide covering Python testing fundamentals.",
+                        }
+                    )
                 )
             )
         ]
@@ -274,15 +278,25 @@ class TestLLMEvolution:
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
         mock_response = MagicMock()
-        mock_response.choices = [
-            MagicMock(message=MagicMock(content=json.dumps({"new_keywords": ["new", "existing"], "relationship": "test"})))
-        ]
+        response_payload = {
+            "new_keywords": ["new", "existing"],
+            "relationship": "test",
+        }
+        mock_response.choices = [MagicMock(message=MagicMock(content=json.dumps(response_payload)))]
 
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(return_value=mock_response)
 
         with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
-            neighbors = [NeighborInfo(path="test.md", title="Test", content="Content", keywords=["existing"], score=0.8)]
+            neighbors = [
+                NeighborInfo(
+                    path="test.md",
+                    title="Test",
+                    content="Content",
+                    keywords=["existing"],
+                    score=0.8,
+                )
+            ]
 
             results = await evolve_neighbors_batched(
                 new_entry_title="New Entry",
@@ -307,8 +321,16 @@ class TestLLMEvolution:
                 message=MagicMock(
                     content=json.dumps(
                         [
-                            {"path": "a.md", "new_keywords": ["kw1", "existing_a"], "relationship": "rel1"},
-                            {"path": "b.md", "new_keywords": ["kw2"], "relationship": "rel2"},
+                            {
+                                "path": "a.md",
+                                "new_keywords": ["kw1", "existing_a"],
+                                "relationship": "rel1",
+                            },
+                            {
+                                "path": "b.md",
+                                "new_keywords": ["kw2"],
+                                "relationship": "rel2",
+                            },
                         ]
                     )
                 )
@@ -320,8 +342,20 @@ class TestLLMEvolution:
 
         with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             neighbors = [
-                NeighborInfo(path="a.md", title="A", content="Content A", keywords=["existing_a"], score=0.8),
-                NeighborInfo(path="b.md", title="B", content="Content B", keywords=["old_b"], score=0.75),
+                NeighborInfo(
+                    path="a.md",
+                    title="A",
+                    content="Content A",
+                    keywords=["existing_a"],
+                    score=0.8,
+                ),
+                NeighborInfo(
+                    path="b.md",
+                    title="B",
+                    content="Content B",
+                    keywords=["old_b"],
+                    score=0.75,
+                ),
             ]
 
             results = await evolve_neighbors_batched(
@@ -345,20 +379,22 @@ class TestLLMEvolution:
         mock_response.choices = [
             MagicMock(
                 message=MagicMock(
-                    content=json.dumps([
-                        {
-                            "path": "a.md",
-                            "new_keywords": ["kw1"],
-                            "relationship": "rel1",
-                            "new_context": "Entry A describes core concepts.",
-                        },
-                        {
-                            "path": "b.md",
-                            "new_keywords": ["kw2"],
-                            "relationship": "rel2",
-                            "new_context": "Entry B covers advanced topics.",
-                        },
-                    ])
+                    content=json.dumps(
+                        [
+                            {
+                                "path": "a.md",
+                                "new_keywords": ["kw1"],
+                                "relationship": "rel1",
+                                "new_context": "Entry A describes core concepts.",
+                            },
+                            {
+                                "path": "b.md",
+                                "new_keywords": ["kw2"],
+                                "relationship": "rel2",
+                                "new_context": "Entry B covers advanced topics.",
+                            },
+                        ]
+                    )
                 )
             )
         ]
@@ -368,8 +404,20 @@ class TestLLMEvolution:
 
         with patch("memex.llm._get_client", return_value=(mock_client, "openrouter")):
             neighbors = [
-                NeighborInfo(path="a.md", title="A", content="Content A", keywords=["existing_a"], score=0.8),
-                NeighborInfo(path="b.md", title="B", content="Content B", keywords=["old_b"], score=0.75),
+                NeighborInfo(
+                    path="a.md",
+                    title="A",
+                    content="Content A",
+                    keywords=["existing_a"],
+                    score=0.8,
+                ),
+                NeighborInfo(
+                    path="b.md",
+                    title="B",
+                    content="Content B",
+                    keywords=["old_b"],
+                    score=0.75,
+                ),
             ]
 
             results = await evolve_neighbors_batched(
@@ -394,7 +442,8 @@ class TestLLMEvolution:
             MagicMock(
                 message=MagicMock(
                     content=json.dumps(
-                        # LLM returns complete new list (kept "existing", added "new", dropped "old")
+                        # LLM returns complete new list (kept "existing", added "new",
+                        # dropped "old")
                         {"new_keywords": ["existing", "new"], "relationship": ""}
                     )
                 )
@@ -485,6 +534,7 @@ class TestQueueEvolution:
 
         # Verify queue contents
         from memex.evolution_queue import read_queue
+
         items = read_queue(tmp_kb)
         assert len(items) == 1
         assert items[0].neighbor == "test/a.md"
@@ -547,15 +597,18 @@ Content about existing concepts.
             lambda: MemoryEvolutionConfig(enabled=False),
         )
 
-        from memex.evolution_queue import QueueItem
-        from datetime import datetime, UTC
+        from datetime import UTC, datetime
 
-        items = [QueueItem(
-            new_entry="test/new.md",
-            neighbor="test/neighbor.md",
-            score=0.8,
-            queued_at=datetime.now(UTC),
-        )]
+        from memex.evolution_queue import QueueItem
+
+        items = [
+            QueueItem(
+                new_entry="test/new.md",
+                neighbor="test/neighbor.md",
+                score=0.8,
+                queued_at=datetime.now(UTC),
+            )
+        ]
 
         result = await core.process_evolution_items(items, tmp_kb)
         assert result.processed == 0
@@ -584,15 +637,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
@@ -627,15 +683,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
@@ -647,7 +706,9 @@ Content about existing concepts.
         assert "description: A comprehensive guide to existing concepts" in neighbor_content
 
     @pytest.mark.asyncio
-    async def test_process_evolution_preserves_description_when_empty_context(self, tmp_kb, monkeypatch):
+    async def test_process_evolution_preserves_description_when_empty_context(
+        self, tmp_kb, monkeypatch
+    ):
         """Empty new_context from LLM preserves existing description."""
         monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
 
@@ -683,15 +744,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
@@ -724,15 +788,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
@@ -766,15 +833,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             await core.process_evolution_items(items, tmp_kb)
 
@@ -809,15 +879,18 @@ Content about existing concepts.
             return mock_decision1
 
         with patch("memex.llm.analyze_evolution", mock_analyze1):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/first-trigger.md",
-                neighbor="test/neighbor.md",
-                score=0.8,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/first-trigger.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             # Create the trigger entry first
             (tmp_kb / "test" / "first-trigger.md").write_text("""---
@@ -848,12 +921,14 @@ created: 2024-01-16T10:00:00+00:00
             return mock_decision2
 
         with patch("memex.llm.analyze_evolution", mock_analyze2):
-            items = [QueueItem(
-                new_entry="test/second-trigger.md",
-                neighbor="test/neighbor.md",
-                score=0.9,
-                queued_at=datetime.now(UTC),
-            )]
+            items = [
+                QueueItem(
+                    new_entry="test/second-trigger.md",
+                    neighbor="test/neighbor.md",
+                    score=0.9,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             # Create the second trigger entry
             (tmp_kb / "test" / "second-trigger.md").write_text("""---
@@ -908,15 +983,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.85,
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.85,
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             await core.process_evolution_items(items, tmp_kb)
 
@@ -952,15 +1030,18 @@ Content about existing concepts.
             return mock_decision
 
         with patch("memex.llm.analyze_evolution", mock_analyze):
-            from memex.evolution_queue import QueueItem
-            from datetime import datetime, UTC
+            from datetime import UTC, datetime
 
-            items = [QueueItem(
-                new_entry="test/new.md",
-                neighbor="test/neighbor.md",
-                score=0.8,  # High score, but LLM says no
-                queued_at=datetime.now(UTC),
-            )]
+            from memex.evolution_queue import QueueItem
+
+            items = [
+                QueueItem(
+                    new_entry="test/new.md",
+                    neighbor="test/neighbor.md",
+                    score=0.8,  # High score, but LLM says no
+                    queued_at=datetime.now(UTC),
+                )
+            ]
 
             result = await core.process_evolution_items(items, tmp_kb)
 
@@ -1071,7 +1152,10 @@ This is an existing entry with relevant content about testing.
             return mock_strengthen_result
 
         # Patch the dependencies
-        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+        with patch(
+            "memex.core.create_bidirectional_semantic_links",
+            return_value=mock_linking_result,
+        ):
             with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
                 with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
                     result = await core.add_entry(
@@ -1091,9 +1175,7 @@ This is an existing entry with relevant content about testing.
         assert "neighbor-related" in entry_content
 
     @pytest.mark.asyncio
-    async def test_strengthen_skipped_when_disabled(
-        self, tmp_path, monkeypatch
-    ):
+    async def test_strengthen_skipped_when_disabled(self, tmp_path, monkeypatch):
         """When strengthen_on_add is false, strengthen is not called."""
         # Create KB with strengthen disabled
         kb_path = tmp_path / "kb"
@@ -1137,7 +1219,10 @@ Neighbor content.
                 suggested_links=[],
             )
 
-        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+        with patch(
+            "memex.core.create_bidirectional_semantic_links",
+            return_value=mock_linking_result,
+        ):
             with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
                 with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
                     result = await core.add_entry(
@@ -1180,7 +1265,10 @@ Neighbor content.
         async def mock_analyze_strengthen(*args, **kwargs):
             return mock_strengthen_result
 
-        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+        with patch(
+            "memex.core.create_bidirectional_semantic_links",
+            return_value=mock_linking_result,
+        ):
             with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
                 with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
                     result = await core.add_entry(
@@ -1222,7 +1310,10 @@ Neighbor content.
         async def mock_analyze_strengthen(*args, **kwargs):
             return mock_strengthen_result
 
-        with patch("memex.core.create_bidirectional_semantic_links", return_value=mock_linking_result):
+        with patch(
+            "memex.core.create_bidirectional_semantic_links",
+            return_value=mock_linking_result,
+        ):
             with patch("memex.core.SEMANTIC_LINK_ENABLED", True):
                 with patch("memex.llm.analyze_for_strengthen", mock_analyze_strengthen):
                     result = await core.add_entry(

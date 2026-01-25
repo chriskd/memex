@@ -21,7 +21,6 @@ from memex.indexer.hybrid import HybridSearcher
 from memex.indexer.whoosh_index import WhooshIndex
 from memex.models import DocumentChunk, EntryMetadata
 
-
 # ─────────────────────────────────────────────────────────────────────────────
 # Fixtures
 # ─────────────────────────────────────────────────────────────────────────────
@@ -260,10 +259,7 @@ class TestWhooshLimitParameter:
 
     def test_limit_restricts_results(self, whoosh_index):
         """Limit parameter restricts number of results."""
-        chunks = [
-            _make_chunk(f"doc{i}.md", f"Python programming document {i}")
-            for i in range(20)
-        ]
+        chunks = [_make_chunk(f"doc{i}.md", f"Python programming document {i}") for i in range(20)]
         whoosh_index.index_documents(chunks)
 
         results = whoosh_index.search("Python", limit=5)
@@ -295,6 +291,7 @@ class TestSemanticSearch:
     def chroma_index(self, tmp_path):
         """Create a fresh ChromaIndex for each test."""
         from memex.indexer.chroma_index import ChromaIndex
+
         return ChromaIndex(index_dir=tmp_path / "chroma")
 
     def test_semantic_finds_conceptually_similar(self, chroma_index, sample_chunks):
@@ -351,10 +348,7 @@ class TestSemanticSearch:
 
     def test_semantic_respects_limit(self, chroma_index):
         """Semantic search respects limit parameter."""
-        chunks = [
-            _make_chunk(f"doc{i}.md", f"Python programming tutorial {i}")
-            for i in range(20)
-        ]
+        chunks = [_make_chunk(f"doc{i}.md", f"Python programming tutorial {i}") for i in range(20)]
         chroma_index.index_documents(chunks)
 
         results = chroma_index.search("Python programming", limit=5)
@@ -593,8 +587,7 @@ class TestHybridDeduplication:
     def test_deduplicate_respects_limit(self, hybrid_searcher):
         """Deduplication respects limit parameter."""
         chunks = [
-            _make_chunk(f"doc{i}.md", f"Document {i} about Python programming")
-            for i in range(15)
+            _make_chunk(f"doc{i}.md", f"Document {i} about Python programming") for i in range(15)
         ]
         hybrid_searcher.index_chunks(chunks)
 

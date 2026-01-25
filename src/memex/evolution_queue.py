@@ -143,7 +143,7 @@ def read_queue(kb_root: Path | None = None) -> list[QueueItem]:
         return []
 
     items = []
-    with open(queue_path, "r", encoding="utf-8") as f:
+    with open(queue_path, encoding="utf-8") as f:
         fcntl.flock(f.fileno(), fcntl.LOCK_SH)
         try:
             for line in f:
@@ -187,10 +187,7 @@ def remove_from_queue(
         return 0
 
     # Build a set of items to remove (by new_entry + neighbor)
-    remove_keys = {
-        (item.new_entry, item.neighbor)
-        for item in items_to_remove
-    }
+    remove_keys = {(item.new_entry, item.neighbor) for item in items_to_remove}
 
     # Read, filter, and rewrite with exclusive lock
     with open(queue_path, "r+", encoding="utf-8") as f:

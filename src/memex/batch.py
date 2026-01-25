@@ -221,8 +221,6 @@ async def execute_append(cmd: ParsedCommand) -> dict:
     tags_str = cmd.options.get("tags")
     tags = [t.strip() for t in str(tags_str).split(",") if t.strip()] if tags_str else None
     directory = cmd.options.get("directory")
-    no_timestamp = cmd.options.get("no-timestamp", False) is True
-    replace = cmd.options.get("replace", False) is True or cmd.options.get("replace") == "true"
 
     # Note: append_entry always appends. The 'replace' and 'no_timestamp' options
     # from CLI are handled at a higher level; the core function always appends.

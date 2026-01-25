@@ -76,9 +76,7 @@ class IndexManifest:
                 for path, state in self._files.items()
             },
         }
-        self._manifest_path.write_text(
-            json.dumps(data, indent=2), encoding="utf-8"
-        )
+        self._manifest_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         log.debug("Saved manifest with %d files", len(self._files))
 
     def get_file_state(self, relative_path: str) -> FileState | None:

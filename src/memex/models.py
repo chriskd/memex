@@ -25,7 +25,8 @@ class NeighborUpdate(BaseModel):
     """
 
     path: str  # Path to the neighbor entry
-    new_keywords: list[str] = Field(default_factory=list)  # Updated keyword list (replaces existing)
+    # Updated keyword list (replaces existing)
+    new_keywords: list[str] = Field(default_factory=list)
     new_context: str = ""  # Updated context/description (one sentence)
     relationship: str = ""  # One-sentence description of relationship to new entry
 
@@ -44,7 +45,8 @@ class EvolutionDecision(BaseModel):
     """
 
     should_evolve: bool  # LLM decision: should this entry trigger evolution?
-    actions: list[str] = Field(default_factory=list)  # Actions: update_keywords, update_context, add_links
+    # Actions: update_keywords, update_context, add_links
+    actions: list[str] = Field(default_factory=list)
     neighbor_updates: list[NeighborUpdate] = Field(default_factory=list)  # Per-neighbor updates
     suggested_connections: list[str] = Field(default_factory=list)  # New links to add
 

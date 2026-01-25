@@ -168,9 +168,7 @@ def _resolve_relative_link(source: str, target: str) -> str:
     return target
 
 
-def update_links_in_files(
-    kb_root: Path, old_path: str, new_path: str
-) -> int:
+def update_links_in_files(kb_root: Path, old_path: str, new_path: str) -> int:
     """Update [[links]] in all files when an entry moves.
 
     Replaces all occurrences of [[old_path]] with [[new_path]] across
@@ -190,9 +188,7 @@ def update_links_in_files(
 
     # Build patterns to match both with and without .md extension
     # Matches [[old/path]], [[old/path.md]]
-    pattern = re.compile(
-        rf"\[\[{re.escape(old_normalized)}(\.md)?\]\]"
-    )
+    pattern = re.compile(rf"\[\[{re.escape(old_normalized)}(\.md)?\]\]")
     replacement = f"[[{new_normalized}]]"
 
     updated_count = 0
@@ -214,9 +210,7 @@ def update_links_in_files(
     return updated_count
 
 
-def update_links_batch(
-    kb_root: Path, path_mapping: dict[str, str]
-) -> int:
+def update_links_batch(kb_root: Path, path_mapping: dict[str, str]) -> int:
     """Update multiple link mappings in a single pass through all files.
 
     More efficient than calling update_links_in_files() multiple times

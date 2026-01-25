@@ -2,14 +2,11 @@
 
 import json
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
 from memex.evolution_queue import (
     QueueItem,
-    QueueStats,
     clear_queue,
     get_queue_path,
     queue_evolution,
@@ -138,18 +135,28 @@ class TestQueueOperations:
 
         with open(queue_path, "w") as f:
             # Write newer first
-            f.write(json.dumps({
-                "new_entry": "newer.md",
-                "neighbor": "n.md",
-                "score": 0.8,
-                "queued_at": newer.isoformat(),
-            }) + "\n")
-            f.write(json.dumps({
-                "new_entry": "older.md",
-                "neighbor": "n.md",
-                "score": 0.7,
-                "queued_at": older.isoformat(),
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "new_entry": "newer.md",
+                        "neighbor": "n.md",
+                        "score": 0.8,
+                        "queued_at": newer.isoformat(),
+                    }
+                )
+                + "\n"
+            )
+            f.write(
+                json.dumps(
+                    {
+                        "new_entry": "older.md",
+                        "neighbor": "n.md",
+                        "score": 0.7,
+                        "queued_at": older.isoformat(),
+                    }
+                )
+                + "\n"
+            )
 
         items = read_queue(tmp_kb)
         assert len(items) == 2
@@ -162,12 +169,17 @@ class TestQueueOperations:
         queue_path = get_queue_path(tmp_kb)
         with open(queue_path, "w") as f:
             f.write("not valid json\n")
-            f.write(json.dumps({
-                "new_entry": "valid.md",
-                "neighbor": "n.md",
-                "score": 0.8,
-                "queued_at": datetime.now(UTC).isoformat(),
-            }) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "new_entry": "valid.md",
+                        "neighbor": "n.md",
+                        "score": 0.8,
+                        "queued_at": datetime.now(UTC).isoformat(),
+                    }
+                )
+                + "\n"
+            )
 
         items = read_queue(tmp_kb)
         assert len(items) == 1

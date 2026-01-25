@@ -62,9 +62,7 @@ def load_history(index_root: Path | None = None) -> list[SearchHistoryEntry]:
     return entries
 
 
-def save_history(
-    entries: list[SearchHistoryEntry], index_root: Path | None = None
-) -> None:
+def save_history(entries: list[SearchHistoryEntry], index_root: Path | None = None) -> None:
     """Save search history to disk.
 
     Uses atomic write pattern (write to temp, then rename).
@@ -95,9 +93,7 @@ def save_history(
 
     # Atomic write
     dir_path = path.parent
-    with tempfile.NamedTemporaryFile(
-        mode="w", dir=dir_path, delete=False, suffix=".tmp"
-    ) as f:
+    with tempfile.NamedTemporaryFile(mode="w", dir=dir_path, delete=False, suffix=".tmp") as f:
         json.dump(payload, f, indent=2)
         temp_path = Path(f.name)
 

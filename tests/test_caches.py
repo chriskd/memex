@@ -8,10 +8,7 @@ from __future__ import annotations
 import time
 from pathlib import Path
 
-import pytest
-
 from conftest import create_entry
-
 
 # =============================================================================
 # TestBacklinksCache - Build, Query, Invalidate

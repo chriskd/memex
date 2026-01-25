@@ -41,6 +41,7 @@ def _get_observer_class():
         return PollingObserver
     return Observer
 
+
 if TYPE_CHECKING:
     from .hybrid import HybridSearcher
 

@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from __future__ import annotations
 """
 mx: CLI for memex knowledge base
 
@@ -13,6 +12,8 @@ Usage:
     mx health                      # Audit KB health
 """
 
+from __future__ import annotations
+
 import asyncio
 import difflib
 import json
@@ -21,7 +22,7 @@ import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, NoReturn, Optional, cast
+from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 
 import click
 from click.exceptions import ClickException, UsageError
@@ -85,12 +86,17 @@ def _parse_relations_inputs(
                     sys.exit(1)
                 missing = [f for f in ("path", "type") if f not in relation_data]
                 if missing:
-                    click.echo(f"Error: --relations[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    click.echo(
+                        f"Error: --relations[{i}] missing required fields: {', '.join(missing)}",
+                        err=True,
+                    )
                     sys.exit(1)
-                relations.append(RelationLink(
-                    path=relation_data["path"],
-                    type=relation_data["type"],
-                ))
+                relations.append(
+                    RelationLink(
+                        path=relation_data["path"],
+                        type=relation_data["type"],
+                    )
+                )
         except json.JSONDecodeError as e:
             click.echo(f"Error: --relations is not valid JSON: {e}", err=True)
             sys.exit(1)
@@ -210,13 +216,17 @@ def _infer_error_code(error: Exception, message: str):
         return ErrorCode.INVALID_PATH
     if "ambiguous" in message_lower:
         return ErrorCode.AMBIGUOUS_MATCH
-    if "category" in message_lower and ("required" in message_lower or "not found" in message_lower):
+    if "category" in message_lower and (
+        "required" in message_lower or "not found" in message_lower
+    ):
         return ErrorCode.INVALID_CATEGORY
     if "tag" in message_lower and "required" in message_lower:
         return ErrorCode.INVALID_TAGS
     if "index" in message_lower and "unavailable" in message_lower:
         return ErrorCode.INDEX_UNAVAILABLE
-    if "semantic" in message_lower and ("unavailable" in message_lower or "not available" in message_lower):
+    if "semantic" in message_lower and (
+        "unavailable" in message_lower or "not available" in message_lower
+    ):
         return ErrorCode.SEMANTIC_SEARCH_UNAVAILABLE
     if "parse" in message_lower or "frontmatter" in message_lower:
         return ErrorCode.PARSE_ERROR
@@ -259,9 +269,7 @@ def _format_missing_category_error(tags: list[str], message: str) -> str:
         lines.append(f"Tags matched categories: {', '.join(matches)}")
     if valid_categories:
         lines.append(f"Available categories: {', '.join(valid_categories)}")
-    lines.append(
-        "Example: mx add --title=\"...\" --tags=\"...\" --category=... --content=\"...\""
-    )
+    lines.append('Example: mx add --title="..." --tags="..." --category=... --content="..."')
     return "\n".join(lines)
 
 
@@ -352,9 +360,7 @@ class JsonErrorGroup(click.Group):
                     cmd_name, self.list_commands(ctx), n=1, cutoff=0.6
                 )
                 if matches:
-                    raise UsageError(
-                        f"No such command '{cmd_name}'. Did you mean '{matches[0]}'?"
-                    )
+                    raise UsageError(f"No such command '{cmd_name}'. Did you mean '{matches[0]}'?")
             raise
 
     def invoke(self, ctx):
@@ -387,14 +393,10 @@ class JsonErrorGroup(click.Group):
         json_errors_requested = "--json-errors" in sys.argv
 
         if not json_errors_requested:
-            return super().main(
-                args, prog_name, complete_var, standalone_mode, **extra
-            )
+            return super().main(args, prog_name, complete_var, standalone_mode, **extra)
 
         try:
-            return super().main(
-                args, prog_name, complete_var, standalone_mode, **extra
-            )
+            return super().main(args, prog_name, complete_var, standalone_mode, **extra)
         except SystemExit:
             # Click calls sys.exit() on errors; re-raise to preserve exit code
             raise
@@ -560,12 +562,12 @@ def _output_status(
     else:
         if entries:
             # KB has content
-            lines.append("  mx search \"query\"   Search the knowledge base")
+            lines.append('  mx search "query"   Search the knowledge base')
             lines.append("  mx whats-new        Recent changes")
             lines.append("  mx tree             Browse structure")
         else:
             # Empty KB
-            lines.append("  mx add --title=\"...\" --tags=\"...\"  Add first entry")
+            lines.append('  mx add --title="..." --tags="..."  Add first entry')
             lines.append("  mx tree             Browse structure")
 
         if not context:
@@ -584,10 +586,15 @@ def _output_status(
 
 @click.group(cls=JsonErrorGroup, invoke_without_command=True)
 @click.version_option(version="0.1.0", prog_name="mx")
-@click.option("--json-errors", "json_errors", is_flag=True,
-              help="Output errors as JSON (for programmatic use)")
 @click.option(
-    "--quiet", "-q",
+    "--json-errors",
+    "json_errors",
+    is_flag=True,
+    help="Output errors as JSON (for programmatic use)",
+)
+@click.option(
+    "--quiet",
+    "-q",
     is_flag=True,
     envvar="MEMEX_QUIET",
     help="Suppress warnings, show only errors and essential output",
@@ -802,20 +809,21 @@ def init(path: str | None, user: bool, force: bool, as_json: bool):
     # Determine target directory based on scope
     if user:
         kb_path = USER_KB_DIR
-        scope = "user"
     else:
         kb_path = Path(path) if path else Path.cwd() / LOCAL_KB_DIR
-        scope = "project"
 
     # Check if already exists
     if kb_path.exists():
         if not force:
             scope_label = "User" if user else "Project"
             if as_json:
-                output({
-                    "error": f"{scope_label} KB already exists at {kb_path}",
-                    "hint": "Use --force to reinitialize"
-                }, as_json=True)
+                output(
+                    {
+                        "error": f"{scope_label} KB already exists at {kb_path}",
+                        "hint": "Use --force to reinitialize",
+                    },
+                    as_json=True,
+                )
             else:
                 click.echo(f"Error: {scope_label} KB already exists at {kb_path}", err=True)
                 click.echo("Use --force to reinitialize.", err=True)
@@ -954,24 +962,27 @@ kb_path: ./{relative_kb_path}
         files_created = [f"{kb_path.name}/README.md", ".kbconfig"]
 
     if as_json:
-        output({
-            "created": str(kb_path),
-            "config": str(config_path),
-            "scope": scope_label,
-            "files": files_created,
-            "hint": "Use 'mx add' to add entries to this KB"
-        }, as_json=True)
+        output(
+            {
+                "created": str(kb_path),
+                "config": str(config_path),
+                "scope": scope_label,
+                "files": files_created,
+                "hint": "Use 'mx add' to add entries to this KB",
+            },
+            as_json=True,
+        )
     else:
         click.echo(f"✓ Initialized {scope_label} KB at {kb_path}")
         click.echo(f"  Config: {config_path}")
         click.echo()
         click.echo("Next steps:")
         if user:
-            click.echo("  mx add --title=\"Entry\" --tags=\"...\" --content=\"...\"")
-            click.echo("  mx search \"query\"")
+            click.echo('  mx add --title="Entry" --tags="..." --content="..."')
+            click.echo('  mx search "query"')
         else:
-            click.echo("  mx add --title=\"Entry\" --tags=\"...\" --content=\"...\" --local")
-            click.echo("  mx search \"query\"   # Searches local KB first")
+            click.echo('  mx add --title="Entry" --tags="..." --content="..." --local')
+            click.echo('  mx search "query"   # Searches local KB first')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1009,8 +1020,12 @@ def _score_confidence_short(score: float) -> str:
 @click.option("--tag", "--tags", "tags", help="Filter by tags (comma-separated)")
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
-@click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
-              help="Minimum score threshold (0.0-1.0). Scores: >=0.7 high, 0.4-0.7 moderate, <0.4 weak")
+@click.option(
+    "--min-score",
+    type=click.FloatRange(min=0.0, max=1.0),
+    default=None,
+    help=("Minimum score threshold (0.0-1.0). Scores: >=0.7 high, 0.4-0.7 moderate, <0.4 weak"),
+)
 @click.option("--content", is_flag=True, help="Include full content in results")
 @click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
@@ -1021,8 +1036,12 @@ def _score_confidence_short(score: float) -> str:
     is_flag=True,
     help="Include semantically linked entries and typed relations",
 )
-@click.option("--neighbor-depth", type=click.IntRange(min=1, max=5), default=1,
-              help="Max hops for neighbor traversal (default 1)")
+@click.option(
+    "--neighbor-depth",
+    type=click.IntRange(min=1, max=5),
+    default=1,
+    help="Max hops for neighbor traversal (default 1)",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
 def search(
@@ -1099,18 +1118,21 @@ def search(
     # Cast mode to literal type (validated by click.Choice above)
     mode_literal = cast(Literal["hybrid", "keyword", "semantic"], mode)
 
-    result = run_async(core_search(
-        query=query,
-        limit=limit,
-        mode=mode_literal,
-        tags=tag_list,
-        include_content=content,
-        strict=strict,
-        scope=scope,
-    ))
+    result = run_async(
+        core_search(
+            query=query,
+            limit=limit,
+            mode=mode_literal,
+            tags=tag_list,
+            include_content=content,
+            strict=strict,
+            scope=scope,
+        )
+    )
 
     # Record search in history
     from . import search_history
+
     search_history.record_search(
         query=query,
         result_count=len(result.results),
@@ -1125,11 +1147,13 @@ def search(
 
     # Expand with neighbors if requested
     if include_neighbors:
-        expanded_results = run_async(expand_search_with_neighbors(
-            results=filtered_results,
-            depth=neighbor_depth,
-            include_content=content,
-        ))
+        expanded_results = run_async(
+            expand_search_with_neighbors(
+                results=filtered_results,
+                depth=neighbor_depth,
+                include_content=content,
+            )
+        )
 
         if as_json:
             # JSON output with is_neighbor and linked_from fields
@@ -1162,13 +1186,15 @@ def search(
             rows = []
             for item in expanded_results:
                 neighbor_mark = "*" if item["is_neighbor"] else ""
-                rows.append({
-                    "path": item["path"],
-                    "title": item["title"],
-                    "score": f"{item['score']:.2f}",
-                    "conf": _score_confidence_short(item["score"]),
-                    "nbr": neighbor_mark,
-                })
+                rows.append(
+                    {
+                        "path": item["path"],
+                        "title": item["title"],
+                        "score": f"{item['score']:.2f}",
+                        "conf": _score_confidence_short(item["score"]),
+                        "nbr": neighbor_mark,
+                    }
+                )
             title_width = 10000 if full_titles else 30
             columns = ["path", "title", "score", "conf", "nbr"]
             widths = {"path": 40, "title": title_width}
@@ -1209,17 +1235,31 @@ def search(
         else:
             if not filtered_results:
                 if min_score is not None and result.results:
-                    click.echo(f"No results above score threshold {min_score:.2f}. ({len(result.results)} results filtered out)")
+                    click.echo(
+                        f"No results above score threshold {min_score:.2f}. "
+                        f"({len(result.results)} results filtered out)"
+                    )
                 else:
                     click.echo("No results found.")
                 return
 
             rows = [
-                {"path": r.path, "title": r.title, "score": f"{r.score:.2f}", "conf": _score_confidence_short(r.score)}
+                {
+                    "path": r.path,
+                    "title": r.title,
+                    "score": f"{r.score:.2f}",
+                    "conf": _score_confidence_short(r.score),
+                }
                 for r in filtered_results
             ]
             title_width = 10000 if full_titles else 30
-            click.echo(format_table(rows, ["path", "title", "score", "conf"], {"path": 40, "title": title_width}))
+            click.echo(
+                format_table(
+                    rows,
+                    ["path", "title", "score", "conf"],
+                    {"path": 40, "title": title_width},
+                )
+            )
 
             # Show full content below table when --content flag is used
             if content:
@@ -1328,7 +1368,12 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
 
 @cli.command()
 @click.argument("path", required=False)
-@click.option("--depth", type=click.IntRange(min=0, max=5), default=1, help="Hops to traverse (default 1)")
+@click.option(
+    "--depth",
+    type=click.IntRange(min=0, max=5),
+    default=1,
+    help="Hops to traverse (default 1)",
+)
 @click.option(
     "--direction",
     type=click.Choice(["outgoing", "incoming", "both"]),
@@ -1413,7 +1458,13 @@ def relations(
         )
 
     click.echo()
-    click.echo(format_table(rows, ["source", "target", "origin", "type", "score"], {"source": 40, "target": 40}))
+    click.echo(
+        format_table(
+            rows,
+            ["source", "target", "origin", "type", "score"],
+            {"source": 40, "target": 40},
+        )
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1423,8 +1474,19 @@ def relations(
 
 @cli.command("relations-add")
 @click.argument("path")
-@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
-@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option(
+    "--relation",
+    "relation_items",
+    multiple=True,
+    help="Typed relation as path=type (repeatable)",
+)
+@click.option(
+    "--relations",
+    "relations_json",
+    help=(
+        'Typed relations as JSON array (e.g., \'[{"path": "ref/other.md", "type": "implements"}]\')'
+    ),
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def relations_add(
     path: str,
@@ -1458,8 +1520,19 @@ def relations_add(
 
 @cli.command("relations-remove")
 @click.argument("path")
-@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
-@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option(
+    "--relation",
+    "relation_items",
+    multiple=True,
+    help="Typed relation as path=type (repeatable)",
+)
+@click.option(
+    "--relations",
+    "relations_json",
+    help=(
+        'Typed relations as JSON array (e.g., \'[{"path": "ref/other.md", "type": "implements"}]\')'
+    ),
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def relations_remove(
     path: str,
@@ -1501,13 +1574,47 @@ def relations_remove(
 @click.option("--tag", "--tags", "tags", required=True, help="Tags (comma-separated)")
 @click.option("--category", default="", help="Category/directory")
 @click.option("--content", help="Content (or use --file/--stdin)")
-@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option(
+    "--file",
+    "-f",
+    "file_path",
+    type=click.Path(exists=True),
+    help="Read content from file",
+)
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
-@click.option("--scope", type=click.Choice(["project", "user"]), help="Target KB scope (default: auto-detect)")
-@click.option("--keywords", help="Key concepts for semantic linking (comma-separated). Required when amem_strict: true in .kbconfig")
-@click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
-@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
-@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option(
+    "--scope",
+    type=click.Choice(["project", "user"]),
+    help="Target KB scope (default: auto-detect)",
+)
+@click.option(
+    "--keywords",
+    help=(
+        "Key concepts for semantic linking (comma-separated). "
+        "Required when amem_strict: true in .kbconfig"
+    ),
+)
+@click.option(
+    "--semantic-links",
+    "semantic_links_json",
+    help=(
+        "Semantic links as JSON array "
+        '(e.g., \'[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]\')'
+    ),
+)
+@click.option(
+    "--relation",
+    "relation_items",
+    multiple=True,
+    help="Typed relation as path=type (repeatable)",
+)
+@click.option(
+    "--relations",
+    "relations_json",
+    help=(
+        'Typed relations as JSON array (e.g., \'[{"path": "ref/other.md", "type": "implements"}]\')'
+    ),
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def add(
     title: str,
@@ -1604,14 +1711,20 @@ def add(
                     sys.exit(1)
                 missing = [f for f in ("path", "score", "reason") if f not in link_data]
                 if missing:
-                    click.echo(f"Error: --semantic-links[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    click.echo(
+                        f"Error: --semantic-links[{i}] missing required fields: "
+                        f"{', '.join(missing)}",
+                        err=True,
+                    )
                     sys.exit(1)
                 try:
-                    semantic_links.append(SemanticLink(
-                        path=link_data["path"],
-                        score=float(link_data["score"]),
-                        reason=link_data["reason"],
-                    ))
+                    semantic_links.append(
+                        SemanticLink(
+                            path=link_data["path"],
+                            score=float(link_data["score"]),
+                            reason=link_data["reason"],
+                        )
+                    )
                 except (ValueError, TypeError) as e:
                     click.echo(f"Error: --semantic-links[{i}] invalid: {e}", err=True)
                     sys.exit(1)
@@ -1622,16 +1735,18 @@ def add(
     relations = _parse_relations_inputs(relation_items, relations_json)
 
     try:
-        result = run_async(add_entry(
-            title=title,
-            content=content,
-            tags=tag_list,
-            category=category,
-            scope=scope,
-            keywords=keyword_list,
-            semantic_links=semantic_links,
-            relations=relations,
-        ))
+        result = run_async(
+            add_entry(
+                title=title,
+                content=content,
+                tags=tag_list,
+                category=category,
+                scope=scope,
+                keywords=keyword_list,
+                semantic_links=semantic_links,
+                relations=relations,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1639,19 +1754,19 @@ def add(
     if as_json:
         # Include scope in JSON output if explicitly set
         if scope:
-            result['scope'] = scope
+            result["scope"] = scope
         output(result, as_json=True)
     else:
         # Show path with scope prefix if explicitly set
-        path_display = f"@{scope}/{result['path']}" if scope else result['path']
+        path_display = f"@{scope}/{result['path']}" if scope else result["path"]
         click.echo(f"Created: {path_display}")
-        if result.get('suggested_links'):
+        if result.get("suggested_links"):
             click.echo("\nSuggested links:")
-            for link in result['suggested_links'][:5]:
+            for link in result["suggested_links"][:5]:
                 click.echo(f"  - {link['path']} ({link['score']:.2f})")
-        if result.get('suggested_tags'):
+        if result.get("suggested_tags"):
             click.echo("\nSuggested tags:")
-            for tag in result['suggested_tags'][:5]:
+            for tag in result["suggested_tags"][:5]:
                 click.echo(f"  - {tag['tag']} ({tag['reason']})")
 
     # Check auto-triggers for background evolution processing
@@ -1690,7 +1805,8 @@ def _maybe_trigger_evolution() -> None:
             should_trigger = True
             _log.debug(
                 "Auto-trigger: queue size %d exceeds threshold %d",
-                stats.count, config.auto_queue_threshold
+                stats.count,
+                config.auto_queue_threshold,
             )
 
     if should_trigger:
@@ -1725,10 +1841,10 @@ _log = logging.getLogger(__name__)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def ingest(
     file: str,
-    title: Optional[str],
-    tags: Optional[str],
-    directory: Optional[str],
-    scope: Optional[str],
+    title: str | None,
+    tags: str | None,
+    directory: str | None,
+    scope: str | None,
     dry_run: bool,
     as_json: bool,
 ):
@@ -1763,14 +1879,16 @@ def ingest(
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
     try:
-        result = run_async(ingest_file(
-            file_path=file,
-            title=title,
-            tags=tag_list,
-            directory=directory,
-            scope=scope,
-            dry_run=dry_run,
-        ))
+        result = run_async(
+            ingest_file(
+                file_path=file,
+                title=title,
+                tags=tag_list,
+                directory=directory,
+                scope=scope,
+                dry_run=dry_run,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1806,7 +1924,13 @@ def ingest(
 @cli.command()
 @click.argument("title")
 @click.option("--content", help="Content to append (or use --file/--stdin)")
-@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
+@click.option(
+    "--file",
+    "-f",
+    "file_path",
+    type=click.Path(exists=True),
+    help="Read content from file",
+)
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--tag", "--tags", "tags", help="Tags (comma-separated, required for new entries)")
 @click.option("--category", help="Category for new entries")
@@ -1866,13 +1990,15 @@ def append(
     tag_list = [t.strip() for t in tags.split(",")] if tags else None
 
     try:
-        result = run_async(append_entry(
-            title=title,
-            content=content,
-            tags=tag_list,
-            category=category or "",
-            no_create=no_create,
-        ))
+        result = run_async(
+            append_entry(
+                title=title,
+                content=content,
+                tags=tag_list,
+                category=category or "",
+                no_create=no_create,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -1886,13 +2012,13 @@ def append(
         else:
             click.echo(f"Appended to: {result['path']}")
 
-        if result.get('suggested_links'):
+        if result.get("suggested_links"):
             click.echo("\nSuggested links:")
-            for link in result['suggested_links'][:5]:
+            for link in result["suggested_links"][:5]:
                 click.echo(f"  - {link['path']} ({link['score']:.2f})")
-        if result.get('suggested_tags'):
+        if result.get("suggested_tags"):
             click.echo("\nSuggested tags:")
-            for tag in result['suggested_tags'][:5]:
+            for tag in result["suggested_tags"][:5]:
                 click.echo(f"  - {tag['tag']} ({tag['reason']})")
 
 
@@ -1905,13 +2031,43 @@ def append(
 @click.argument("path")
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content (replaces existing)")
-@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
-@click.option("--keywords", help="New keywords for semantic linking (comma-separated). Required with content changes when amem_strict: true")
+@click.option(
+    "--file",
+    "-f",
+    "file_path",
+    type=click.Path(exists=True),
+    help="Read content from file",
+)
+@click.option(
+    "--keywords",
+    help=(
+        "New keywords for semantic linking (comma-separated). "
+        "Required with content changes when amem_strict: true"
+    ),
+)
 @click.option("--find", "find_flag", hidden=True, help="(Intent detection)")
 @click.option("--replace", "replace_flag", hidden=True, help="(Intent detection)")
-@click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"score\": 0.8, \"reason\": \"related\"}]')")
-@click.option("--relation", "relation_items", multiple=True, help="Typed relation as path=type (repeatable)")
-@click.option("--relations", "relations_json", help="Typed relations as JSON array (e.g., '[{\"path\": \"ref/other.md\", \"type\": \"implements\"}]')")
+@click.option(
+    "--semantic-links",
+    "semantic_links_json",
+    help=(
+        "Semantic links as JSON array "
+        '(e.g., \'[{"path": "ref/other.md", "score": 0.8, "reason": "related"}]\')'
+    ),
+)
+@click.option(
+    "--relation",
+    "relation_items",
+    multiple=True,
+    help="Typed relation as path=type (repeatable)",
+)
+@click.option(
+    "--relations",
+    "relations_json",
+    help=(
+        'Typed relations as JSON array (e.g., \'[{"path": "ref/other.md", "type": "implements"}]\')'
+    ),
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def replace_cmd(
     path: str,
@@ -1935,7 +2091,8 @@ def replace_cmd(
       mx replace path/entry.md --tags="new,tags"
       mx replace path/entry.md --content="New content here"
       mx replace path/entry.md --file=updated-content.md
-      mx replace path/entry.md --semantic-links='[{"path": "ref/related.md", "score": 0.9, "reason": "manual"}]'
+      mx replace path/entry.md --semantic-links='[{"path": "ref/related.md", "score": 0.9, \
+"reason": "manual"}]'
 
     \b
     Semantic Links:
@@ -1994,14 +2151,20 @@ def replace_cmd(
                     sys.exit(1)
                 missing = [f for f in ("path", "score", "reason") if f not in link_data]
                 if missing:
-                    click.echo(f"Error: --semantic-links[{i}] missing required fields: {', '.join(missing)}", err=True)
+                    click.echo(
+                        f"Error: --semantic-links[{i}] missing required fields: "
+                        f"{', '.join(missing)}",
+                        err=True,
+                    )
                     sys.exit(1)
                 try:
-                    semantic_links.append(SemanticLink(
-                        path=link_data["path"],
-                        score=float(link_data["score"]),
-                        reason=link_data["reason"],
-                    ))
+                    semantic_links.append(
+                        SemanticLink(
+                            path=link_data["path"],
+                            score=float(link_data["score"]),
+                            reason=link_data["reason"],
+                        )
+                    )
                 except (ValueError, TypeError) as e:
                     click.echo(f"Error: --semantic-links[{i}] invalid: {e}", err=True)
                     sys.exit(1)
@@ -2012,14 +2175,16 @@ def replace_cmd(
     relations = _parse_relations_inputs(relation_items, relations_json)
 
     try:
-        result = run_async(update_entry(
-            path=path,
-            content=content,
-            tags=tag_list,
-            keywords=keyword_list,
-            semantic_links=semantic_links,
-            relations=relations,
-        ))
+        result = run_async(
+            update_entry(
+                path=path,
+                content=content,
+                tags=tag_list,
+                keywords=keyword_list,
+                semantic_links=semantic_links,
+                relations=relations,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -2035,8 +2200,20 @@ def replace_cmd(
 @click.argument("path")
 @click.option("--tag", "--tags", "tags", help="New tags (comma-separated)")
 @click.option("--content", help="New content")
-@click.option("--file", "-f", "file_path", type=click.Path(exists=True), help="Read content from file")
-@click.option("--keywords", help="New keywords for semantic linking (comma-separated). Required with content changes when amem_strict: true")
+@click.option(
+    "--file",
+    "-f",
+    "file_path",
+    type=click.Path(exists=True),
+    help="Read content from file",
+)
+@click.option(
+    "--keywords",
+    help=(
+        "New keywords for semantic linking (comma-separated). "
+        "Required with content changes when amem_strict: true"
+    ),
+)
 @click.option("--semantic-links", "semantic_links_json", help="Semantic links as JSON array")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
@@ -2120,7 +2297,14 @@ def tree(path: str, depth: int, scope: str | None, as_json: bool):
 @click.option("--full-titles", is_flag=True, help="Show full titles without truncation")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def list_entries(tag: str | None, category: str | None, limit: int, full_titles: bool, scope: str | None, as_json: bool):
+def list_entries(
+    tag: str | None,
+    category: str | None,
+    limit: int,
+    full_titles: bool,
+    scope: str | None,
+    as_json: bool,
+):
     """List knowledge base entries.
 
     \b
@@ -2147,7 +2331,10 @@ def list_entries(tag: str | None, category: str | None, limit: int, full_titles:
                     err=True,
                 )
             else:
-                click.echo(f"Error: Invalid category '{category}'. No categories exist yet.", err=True)
+                click.echo(
+                    f"Error: Invalid category '{category}'. No categories exist yet.",
+                    err=True,
+                )
         else:
             click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -2349,7 +2536,15 @@ def hubs(ctx: click.Context, limit: int, as_json: bool):
             click.echo("No hub entries found.")
             return
 
-        rows = [{"path": h["path"], "incoming": h["incoming"], "outgoing": h["outgoing"], "total": h["total"]} for h in result]
+        rows = [
+            {
+                "path": h["path"],
+                "incoming": h["incoming"],
+                "outgoing": h["outgoing"],
+                "total": h["total"],
+            }
+            for h in result
+        ]
         click.echo(format_table(rows, ["path", "incoming", "outgoing", "total"], {"path": 50}))
 
 
@@ -2425,14 +2620,20 @@ def reindex(ctx: click.Context, scope: str | None, as_json: bool):
     result = run_async(core_reindex(scope=scope))
 
     if as_json:
-        output({
-            "kb_files": result.kb_files,
-            "whoosh_docs": result.whoosh_docs,
-            "chroma_docs": result.chroma_docs,
-            "scope": scope,
-        }, as_json=True)
+        output(
+            {
+                "kb_files": result.kb_files,
+                "whoosh_docs": result.whoosh_docs,
+                "chroma_docs": result.chroma_docs,
+                "scope": scope,
+            },
+            as_json=True,
+        )
     else:
-        click.echo(f"✓ Indexed {result.kb_files} entries, {result.whoosh_docs} keyword docs, {result.chroma_docs} semantic docs")
+        click.echo(
+            f"✓ Indexed {result.kb_files} entries, {result.whoosh_docs} keyword docs, "
+            f"{result.chroma_docs} semantic docs"
+        )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2485,14 +2686,17 @@ def context_show(as_json: bool):
         return
 
     if as_json:
-        output({
-            "found": True,
-            "source_file": str(ctx.source_file) if ctx.source_file else None,
-            "primary": ctx.primary,
-            "paths": ctx.paths,
-            "default_tags": ctx.default_tags,
-            "project": ctx.project,
-        }, as_json=True)
+        output(
+            {
+                "found": True,
+                "source_file": str(ctx.source_file) if ctx.source_file else None,
+                "primary": ctx.primary,
+                "paths": ctx.paths,
+                "default_tags": ctx.default_tags,
+                "project": ctx.project,
+            },
+            as_json=True,
+        )
     else:
         click.echo(f"Context file: {ctx.source_file}")
         click.echo(f"Primary:      {ctx.primary or '(not set)'}")
@@ -2542,11 +2746,14 @@ def context_validate(as_json: bool):
 
     assert ctx is not None
     if as_json:
-        output({
-            "valid": True,
-            "source_file": str(ctx.source_file),
-            "warnings": warnings,
-        }, as_json=True)
+        output(
+            {
+                "valid": True,
+                "source_file": str(ctx.source_file),
+                "warnings": warnings,
+            },
+            as_json=True,
+        )
     else:
         click.echo(f"Validating: {ctx.source_file}")
 
@@ -2787,7 +2994,7 @@ def _suggest_tags_from_content(content: str, existing_tags: set) -> list[str]:
     import re
 
     # Extract words from content
-    words = re.findall(r'\b[a-zA-Z][a-zA-Z0-9-]+\b', content.lower())
+    words = re.findall(r"\b[a-zA-Z][a-zA-Z0-9-]+\b", content.lower())
     word_counts: dict[str, int] = {}
     for word in words:
         if len(word) >= 3:
@@ -2834,8 +3041,11 @@ def _suggest_category_from_content(content: str, categories: list[str]) -> str |
 
 @cli.command("quick-add")
 @click.option(
-    "--file", "-f", "file_path",
-    type=click.Path(exists=True), help="Read content from file",
+    "--file",
+    "-f",
+    "file_path",
+    type=click.Path(exists=True),
+    help="Read content from file",
 )
 @click.option("--stdin", is_flag=True, help="Read content from stdin")
 @click.option("--content", help="Raw content to add")
@@ -2913,13 +3123,16 @@ def quick_add(
 
     if as_json:
         # In JSON mode, output suggestions and let caller decide
-        output({
-            "title": auto_title,
-            "tags": auto_tags,
-            "category": auto_category,
-            "content_preview": content[:200] + "..." if len(content) > 200 else content,
-            "categories_available": valid_categories,
-        }, as_json=True)
+        output(
+            {
+                "title": auto_title,
+                "tags": auto_tags,
+                "category": auto_category,
+                "content_preview": content[:200] + "..." if len(content) > 200 else content,
+                "categories_available": valid_categories,
+            },
+            as_json=True,
+        )
         return
 
     # Interactive mode - show suggestions and prompt
@@ -2941,17 +3154,19 @@ def quick_add(
 
     # Create the entry
     try:
-        result = run_async(add_entry(
-            title=auto_title,
-            content=content,
-            tags=auto_tags,
-            category=auto_category,
-        ))
+        result = run_async(
+            add_entry(
+                title=auto_title,
+                content=content,
+                tags=auto_tags,
+                category=auto_category,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
-    path = result.get('path') if isinstance(result, dict) else result.path
+    path = result.get("path") if isinstance(result, dict) else result.path
     click.echo(f"\nCreated: {path}")
 
 
@@ -3000,13 +3215,16 @@ def templates(action: str, name: str | None, as_json: bool):
 
         assert template is not None  # Checked above
         if as_json:
-            output({
-                "name": template.name,
-                "description": template.description,
-                "content": template.content,
-                "suggested_tags": template.suggested_tags,
-                "source": template.source,
-            }, as_json=True)
+            output(
+                {
+                    "name": template.name,
+                    "description": template.description,
+                    "content": template.content,
+                    "suggested_tags": template.suggested_tags,
+                    "source": template.source,
+                },
+                as_json=True,
+            )
             return
 
         click.echo(f"Template: {template.name}")
@@ -3024,12 +3242,18 @@ def templates(action: str, name: str | None, as_json: bool):
     all_templates = list_templates()
 
     if as_json:
-        output([{
-            "name": t.name,
-            "description": t.description,
-            "source": t.source,
-            "suggested_tags": t.suggested_tags,
-        } for t in all_templates], as_json=True)
+        output(
+            [
+                {
+                    "name": t.name,
+                    "description": t.description,
+                    "source": t.source,
+                    "suggested_tags": t.suggested_tags,
+                }
+                for t in all_templates
+            ],
+            as_json=True,
+        )
         return
 
     click.echo("Available templates:\n")
@@ -3185,13 +3409,15 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
         # Import and run search
         from .core import search as core_search
 
-        result = run_async(core_search(
-            query=entry.query,
-            limit=10,
-            mode=cast(Literal["hybrid", "keyword", "semantic"], entry.mode),
-            tags=entry.tags if entry.tags else None,
-            include_content=False,
-        ))
+        result = run_async(
+            core_search(
+                query=entry.query,
+                limit=10,
+                mode=cast(Literal["hybrid", "keyword", "semantic"], entry.mode),
+                tags=entry.tags if entry.tags else None,
+                include_content=False,
+            )
+        )
 
         # Record this re-run in history
         search_history.record_search(
@@ -3203,9 +3429,10 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
 
         if as_json:
             output(
-                [{"path": r.path, "title": r.title,
-                  "score": r.score, "snippet": r.snippet}
-                 for r in result.results],
+                [
+                    {"path": r.path, "title": r.title, "score": r.score, "snippet": r.snippet}
+                    for r in result.results
+                ],
                 as_json=True,
             )
         else:
@@ -3224,17 +3451,20 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
     entries = search_history.get_recent(limit=limit)
 
     if as_json:
-        output([
-            {
-                "position": i + 1,
-                "query": e.query,
-                "timestamp": e.timestamp.isoformat(),
-                "result_count": e.result_count,
-                "mode": e.mode,
-                "tags": e.tags,
-            }
-            for i, e in enumerate(entries)
-        ], as_json=True)
+        output(
+            [
+                {
+                    "position": i + 1,
+                    "query": e.query,
+                    "timestamp": e.timestamp.isoformat(),
+                    "result_count": e.result_count,
+                    "mode": e.mode,
+                    "tags": e.tags,
+                }
+                for i, e in enumerate(entries)
+            ],
+            as_json=True,
+        )
         return
 
     if not entries:
@@ -3288,13 +3518,16 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
     if status:
         stats = queue_stats()
         if as_json:
-            output({
-                "count": stats.count,
-                "oldest_at": stats.oldest_at.isoformat() if stats.oldest_at else None,
-                "newest_at": stats.newest_at.isoformat() if stats.newest_at else None,
-                "unique_new_entries": stats.unique_new_entries,
-                "unique_neighbors": stats.unique_neighbors,
-            }, as_json=True)
+            output(
+                {
+                    "count": stats.count,
+                    "oldest_at": stats.oldest_at.isoformat() if stats.oldest_at else None,
+                    "newest_at": stats.newest_at.isoformat() if stats.newest_at else None,
+                    "unique_new_entries": stats.unique_new_entries,
+                    "unique_neighbors": stats.unique_neighbors,
+                },
+                as_json=True,
+            )
         else:
             if stats.count == 0:
                 click.echo("Evolution queue is empty.")
@@ -3303,9 +3536,13 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
                 click.echo(f"Unique sources:    {stats.unique_new_entries} entries")
                 click.echo(f"Unique neighbors:  {stats.unique_neighbors} entries")
                 if stats.oldest_at:
-                    click.echo(f"Oldest queued:     {stats.oldest_at.strftime('%Y-%m-%d %H:%M:%S')}")
+                    click.echo(
+                        f"Oldest queued:     {stats.oldest_at.strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
                 if stats.newest_at:
-                    click.echo(f"Newest queued:     {stats.newest_at.strftime('%Y-%m-%d %H:%M:%S')}")
+                    click.echo(
+                        f"Newest queued:     {stats.newest_at.strftime('%Y-%m-%d %H:%M:%S')}"
+                    )
         return
 
     if clear:
@@ -3323,7 +3560,15 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
 
     if not items:
         if as_json:
-            output({"processed": 0, "keywords_added": 0, "errors": 0, "message": "Queue is empty"}, as_json=True)
+            output(
+                {
+                    "processed": 0,
+                    "keywords_added": 0,
+                    "errors": 0,
+                    "message": "Queue is empty",
+                },
+                as_json=True,
+            )
         else:
             click.echo("Evolution queue is empty. Nothing to process.")
         return
@@ -3331,19 +3576,23 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
     if dry_run:
         # Group by new_entry for display
         from collections import defaultdict
+
         groups: dict[str, list] = defaultdict(list)
         for item in items:
             groups[item.new_entry].append(item)
 
         if as_json:
-            output({
-                "dry_run": True,
-                "items": len(items),
-                "groups": [
-                    {"new_entry": new_entry, "neighbors": [i.neighbor for i in neighbors]}
-                    for new_entry, neighbors in groups.items()
-                ],
-            }, as_json=True)
+            output(
+                {
+                    "dry_run": True,
+                    "items": len(items),
+                    "groups": [
+                        {"new_entry": new_entry, "neighbors": [i.neighbor for i in neighbors]}
+                        for new_entry, neighbors in groups.items()
+                    ],
+                },
+                as_json=True,
+            )
         else:
             click.echo(f"Would process {len(items)} items:\n")
             for new_entry, neighbors in groups.items():
@@ -3360,11 +3609,14 @@ def evolve(dry_run: bool, limit: int | None, status: bool, clear: bool, as_json:
     remove_from_queue(items)
 
     if as_json:
-        output({
-            "processed": result.processed,
-            "keywords_added": result.keywords_added,
-            "errors": result.errors,
-        }, as_json=True)
+        output(
+            {
+                "processed": result.processed,
+                "keywords_added": result.keywords_added,
+                "errors": result.errors,
+            },
+            as_json=True,
+        )
     else:
         click.echo(f"\nProcessed:       {result.processed} neighbors")
         click.echo(f"Keywords added:  {result.keywords_added}")
@@ -3430,11 +3682,13 @@ def a_mem_init(
     from .core import amem_init_inventory
 
     # Run inventory phase
-    result = run_async(amem_init_inventory(
-        scope=scope,  # type: ignore
-        missing_keywords=missing_keywords,  # type: ignore
-        limit=limit,
-    ))
+    result = run_async(
+        amem_init_inventory(
+            scope=scope,  # type: ignore
+            missing_keywords=missing_keywords,  # type: ignore
+            limit=limit,
+        )
+    )
 
     # JSON output mode
     if as_json:
@@ -3581,10 +3835,12 @@ def a_mem_init(
                         click.echo(f"    ... and {len(phase2_result.errors) - 5} more errors")
 
                 # Update counts for final summary
-                result = result.model_copy(update={
-                    "with_keywords": result.with_keywords + phase2_result.entries_updated,
-                    "needs_llm_count": phase2_result.entries_failed,
-                })
+                result = result.model_copy(
+                    update={
+                        "with_keywords": result.with_keywords + phase2_result.entries_updated,
+                        "needs_llm_count": phase2_result.entries_failed,
+                    }
+                )
 
             except LLMConfigurationError as e:
                 click.echo(f"\n❌ LLM configuration error: {e}")
@@ -3598,8 +3854,12 @@ def a_mem_init(
             from .core import amem_init_link_entries
 
             phase3_result = run_async(amem_init_link_entries(result))
-            click.echo(f"  Processed:          {phase3_result.entries_processed} (chronological order)")
-            click.echo(f"  Links created:      {phase3_result.total_links_created} bidirectional pairs")
+            click.echo(
+                f"  Processed:          {phase3_result.entries_processed} (chronological order)"
+            )
+            click.echo(
+                f"  Links created:      {phase3_result.total_links_created} bidirectional pairs"
+            )
             click.echo(f"  Entries with links: {phase3_result.entries_linked}")
 
             if phase3_result.errors:
@@ -3631,7 +3891,9 @@ def a_mem_init(
 
 @cli.command()
 @click.option(
-    "--file", "-f", "file_path",
+    "--file",
+    "-f",
+    "file_path",
     type=click.Path(exists=True),
     help="Read commands from file instead of stdin",
 )
@@ -3678,10 +3940,15 @@ def batch(file_path: str | None, continue_on_error: bool):
     try:
         from .batch import run_batch
     except ImportError:
-        click.echo(json.dumps({
-            "error": "Batch module not available",
-            "hint": "The batch module needs to be restored from v0.1.0"
-        }), err=True)
+        click.echo(
+            json.dumps(
+                {
+                    "error": "Batch module not available",
+                    "hint": "The batch module needs to be restored from v0.1.0",
+                }
+            ),
+            err=True,
+        )
         sys.exit(1)
 
     # Read input
@@ -3691,16 +3958,10 @@ def batch(file_path: str | None, continue_on_error: bool):
         lines = sys.stdin.read().strip().split("\n")
 
     # Filter empty lines and comments
-    commands = [
-        line.strip()
-        for line in lines
-        if line.strip() and not line.strip().startswith("#")
-    ]
+    commands = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
 
     if not commands:
-        click.echo(
-            json.dumps({"error": "No commands provided"}), err=True
-        )
+        click.echo(json.dumps({"error": "No commands provided"}), err=True)
         sys.exit(1)
 
     result = run_async(run_batch(commands, continue_on_error=continue_on_error))
@@ -3798,45 +4059,107 @@ def _build_schema() -> dict:
                 "description": "Search the knowledge base with hybrid keyword + semantic search",
                 "aliases": [],
                 "arguments": [
-                    {"name": "query", "required": True, "description": "Search query text"}
+                    {
+                        "name": "query",
+                        "required": True,
+                        "description": "Search query text",
+                    }
                 ],
                 "options": [
-                    {"name": "--tags", "type": "string", "description": "Filter by tags (comma-separated)"},
-                    {"name": "--mode", "type": "choice", "choices": ["hybrid", "keyword", "semantic"], "default": "hybrid", "description": "Search mode"},
-                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
-                    {"name": "--min-score", "type": "float", "description": "Minimum score threshold (0.0-1.0)"},
-                    {"name": "--content", "type": "flag", "description": "Include full content in results"},
-                    {"name": "--strict", "type": "flag", "description": "Disable semantic fallback for keyword mode"},
-                    {"name": "--terse", "type": "flag", "description": "Output paths only (one per line)"},
-                    {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
-                    {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
+                    {
+                        "name": "--tags",
+                        "type": "string",
+                        "description": "Filter by tags (comma-separated)",
+                    },
+                    {
+                        "name": "--mode",
+                        "type": "choice",
+                        "choices": ["hybrid", "keyword", "semantic"],
+                        "default": "hybrid",
+                        "description": "Search mode",
+                    },
+                    {
+                        "name": "--limit",
+                        "short": "-n",
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Max results",
+                    },
+                    {
+                        "name": "--min-score",
+                        "type": "float",
+                        "description": "Minimum score threshold (0.0-1.0)",
+                    },
+                    {
+                        "name": "--content",
+                        "type": "flag",
+                        "description": "Include full content in results",
+                    },
+                    {
+                        "name": "--strict",
+                        "type": "flag",
+                        "description": "Disable semantic fallback for keyword mode",
+                    },
+                    {
+                        "name": "--terse",
+                        "type": "flag",
+                        "description": "Output paths only (one per line)",
+                    },
+                    {
+                        "name": "--full-titles",
+                        "type": "flag",
+                        "description": "Show full titles without truncation",
+                    },
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["get", "list"],
                 "common_mistakes": {
                     "empty query": "Query cannot be empty. Provide a non-whitespace search term.",
-                    "--tags without value": "Tags must be comma-separated, e.g., --tags=infra,docker",
+                    "--tags without value": (
+                        "Tags must be comma-separated, e.g., --tags=infra,docker"
+                    ),
                 },
                 "examples": [
-                    "mx search \"deployment\"",
-                    "mx search \"docker\" --tags=infrastructure",
-                    "mx search \"api\" --scope=project",
+                    'mx search "deployment"',
+                    'mx search "docker" --tags=infrastructure',
+                    'mx search "api" --scope=project',
                 ],
             },
             "get": {
                 "description": "Read a knowledge base entry by path",
                 "aliases": [],
                 "arguments": [
-                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                    {
+                        "name": "path",
+                        "required": True,
+                        "description": "Path to entry relative to KB root",
+                    }
                 ],
                 "options": [
-                    {"name": "--json", "type": "flag", "description": "Output as JSON with metadata"},
-                    {"name": "--metadata", "short": "-m", "type": "flag", "description": "Show only metadata"},
+                    {
+                        "name": "--json",
+                        "type": "flag",
+                        "description": "Output as JSON with metadata",
+                    },
+                    {
+                        "name": "--metadata",
+                        "short": "-m",
+                        "type": "flag",
+                        "description": "Show only metadata",
+                    },
                 ],
                 "related": ["search", "list"],
                 "common_mistakes": {
                     "absolute path": "Use relative path from KB root, not absolute filesystem path",
-                    "missing .md extension": "Include the .md extension: 'tooling/entry.md' not 'tooling/entry'",
+                    "missing .md extension": (
+                        "Include the .md extension: 'tooling/entry.md' not 'tooling/entry'"
+                    ),
                 },
                 "examples": [
                     "mx get tooling/beads-issue-tracker.md",
@@ -3848,68 +4171,143 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--title", "type": "string", "required": True, "description": "Entry title"},
-                    {"name": "--tags", "type": "string", "required": True, "description": "Tags (comma-separated)"},
-                    {"name": "--category", "type": "string", "description": "Category/directory"},
-                    {"name": "--content", "type": "string", "description": "Content (or use --file/--stdin)"},
-                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {
+                        "name": "--title",
+                        "type": "string",
+                        "required": True,
+                        "description": "Entry title",
+                    },
+                    {
+                        "name": "--tags",
+                        "type": "string",
+                        "required": True,
+                        "description": "Tags (comma-separated)",
+                    },
+                    {
+                        "name": "--category",
+                        "type": "string",
+                        "description": "Category/directory",
+                    },
+                    {
+                        "name": "--content",
+                        "type": "string",
+                        "description": "Content (or use --file/--stdin)",
+                    },
+                    {
+                        "name": "--file",
+                        "short": "-f",
+                        "type": "path",
+                        "description": "Read content from file",
+                    },
                     {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["append", "update"],
                 "common_mistakes": {
                     "missing content source": "Must provide --content, --file, or --stdin",
-                    "tags without value": "Tags are required: --tags=\"tag1,tag2\"",
+                    "tags without value": 'Tags are required: --tags="tag1,tag2"',
                 },
                 "examples": [
-                    "mx add --title=\"My Entry\" --tags=\"foo,bar\" --content=\"# Content\"",
-                    "mx add --title=\"My Entry\" --tags=\"foo,bar\" --file=content.md",
+                    'mx add --title="My Entry" --tags="foo,bar" --content="# Content"',
+                    'mx add --title="My Entry" --tags="foo,bar" --file=content.md',
                 ],
             },
             "append": {
-                "description": "Append content to existing entry by title, or create new if not found",
+                "description": (
+                    "Append content to existing entry by title, or create new if not found"
+                ),
                 "aliases": [],
                 "arguments": [
-                    {"name": "title", "required": True, "description": "Title of entry to append to (case-insensitive)"}
+                    {
+                        "name": "title",
+                        "required": True,
+                        "description": "Title of entry to append to (case-insensitive)",
+                    }
                 ],
                 "options": [
-                    {"name": "--content", "type": "string", "description": "Content to append"},
-                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {
+                        "name": "--content",
+                        "type": "string",
+                        "description": "Content to append",
+                    },
+                    {
+                        "name": "--file",
+                        "short": "-f",
+                        "type": "path",
+                        "description": "Read content from file",
+                    },
                     {"name": "--stdin", "type": "flag", "description": "Read content from stdin"},
-                    {"name": "--tags", "type": "string", "description": "Tags (required for new entries)"},
-                    {"name": "--category", "type": "string", "description": "Category for new entries"},
-                    {"name": "--no-create", "type": "flag", "description": "Error if entry not found"},
+                    {
+                        "name": "--tags",
+                        "type": "string",
+                        "description": "Tags (required for new entries)",
+                    },
+                    {
+                        "name": "--category",
+                        "type": "string",
+                        "description": "Category for new entries",
+                    },
+                    {
+                        "name": "--no-create",
+                        "type": "flag",
+                        "description": "Error if entry not found",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["add", "update", "patch"],
                 "common_mistakes": {
-                    "using path instead of title": "append takes title, not path. Use 'mx append \"Entry Title\"' not 'mx append path/entry.md'",
+                    "using path instead of title": (
+                        "append takes title, not path. Use 'mx append \"Entry Title\"' "
+                        "not 'mx append path/entry.md'"
+                    ),
                     "missing content": "Must provide --content, --file, or --stdin",
                 },
                 "examples": [
-                    "mx append \"Daily Log\" --content=\"Session summary\"",
-                    "mx append \"API Docs\" --file=api.md --tags=\"api,docs\"",
+                    'mx append "Daily Log" --content="Session summary"',
+                    'mx append "API Docs" --file=api.md --tags="api,docs"',
                 ],
             },
             "replace": {
                 "description": "Replace content or tags in an existing entry (overwrites)",
                 "aliases": ["update"],
                 "arguments": [
-                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                    {
+                        "name": "path",
+                        "required": True,
+                        "description": "Path to entry relative to KB root",
+                    }
                 ],
                 "options": [
-                    {"name": "--tags", "type": "string", "description": "New tags (comma-separated)"},
-                    {"name": "--content", "type": "string", "description": "New content (replaces existing)"},
-                    {"name": "--file", "short": "-f", "type": "path", "description": "Read content from file"},
+                    {
+                        "name": "--tags",
+                        "type": "string",
+                        "description": "New tags (comma-separated)",
+                    },
+                    {
+                        "name": "--content",
+                        "type": "string",
+                        "description": "New content (replaces existing)",
+                    },
+                    {
+                        "name": "--file",
+                        "short": "-f",
+                        "type": "path",
+                        "description": "Read content from file",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["patch", "append"],
                 "common_mistakes": {
-                    "confusing with append": "replace overwrites content. Use 'mx append' to add to existing content.",
-                    "confusing with patch": "replace overwrites entire content. Use 'mx patch' for surgical find-replace.",
+                    "confusing with append": (
+                        "replace overwrites content. Use 'mx append' to add to existing content."
+                    ),
+                    "confusing with patch": (
+                        "replace overwrites entire content. Use 'mx patch' for surgical "
+                        "find-replace."
+                    ),
                 },
                 "examples": [
-                    "mx replace path/entry.md --tags=\"new,tags\"",
+                    'mx replace path/entry.md --tags="new,tags"',
                     "mx replace path/entry.md --file=updated-content.md",
                 ],
             },
@@ -3917,23 +4315,60 @@ def _build_schema() -> dict:
                 "description": "Apply surgical find-replace edits to a KB entry",
                 "aliases": [],
                 "arguments": [
-                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                    {
+                        "name": "path",
+                        "required": True,
+                        "description": "Path to entry relative to KB root",
+                    }
                 ],
                 "options": [
-                    {"name": "--find", "type": "string", "description": "Exact text to find and replace"},
-                    {"name": "--replace", "type": "string", "description": "Replacement text"},
-                    {"name": "--find-file", "type": "path", "description": "Read --find text from file"},
-                    {"name": "--replace-file", "type": "path", "description": "Read --replace text from file"},
-                    {"name": "--replace-all", "type": "flag", "description": "Replace all occurrences"},
-                    {"name": "--dry-run", "type": "flag", "description": "Preview changes without writing"},
-                    {"name": "--backup", "type": "flag", "description": "Create .bak backup before patching"},
+                    {
+                        "name": "--find",
+                        "type": "string",
+                        "description": "Exact text to find and replace",
+                    },
+                    {
+                        "name": "--replace",
+                        "type": "string",
+                        "description": "Replacement text",
+                    },
+                    {
+                        "name": "--find-file",
+                        "type": "path",
+                        "description": "Read --find text from file",
+                    },
+                    {
+                        "name": "--replace-file",
+                        "type": "path",
+                        "description": "Read --replace text from file",
+                    },
+                    {
+                        "name": "--replace-all",
+                        "type": "flag",
+                        "description": "Replace all occurrences",
+                    },
+                    {
+                        "name": "--dry-run",
+                        "type": "flag",
+                        "description": "Preview changes without writing",
+                    },
+                    {
+                        "name": "--backup",
+                        "type": "flag",
+                        "description": "Create .bak backup before patching",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["replace", "append"],
                 "common_mistakes": {
                     "--find without --replace": "Both --find and --replace are required",
-                    "multiple matches without --replace-all": "If text matches multiple times, use --replace-all or provide more context in --find",
-                    "using for append": "patch is for replacement. Use 'mx append' to add content to an entry.",
+                    "multiple matches without --replace-all": (
+                        "If text matches multiple times, use --replace-all or provide more "
+                        "context in --find"
+                    ),
+                    "using for append": (
+                        "patch is for replacement. Use 'mx append' to add content to an entry."
+                    ),
                 },
                 "exit_codes": {
                     "0": "Success",
@@ -3942,23 +4377,35 @@ def _build_schema() -> dict:
                     "3": "File error (not found, permission, encoding)",
                 },
                 "examples": [
-                    "mx patch tooling/notes.md --find \"old text\" --replace \"new text\"",
-                    "mx patch tooling/notes.md --find \"TODO\" --replace \"DONE\" --replace-all",
+                    'mx patch tooling/notes.md --find "old text" --replace "new text"',
+                    'mx patch tooling/notes.md --find "TODO" --replace "DONE" --replace-all',
                 ],
             },
             "delete": {
                 "description": "Delete a knowledge base entry",
                 "aliases": [],
                 "arguments": [
-                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                    {
+                        "name": "path",
+                        "required": True,
+                        "description": "Path to entry relative to KB root",
+                    }
                 ],
                 "options": [
-                    {"name": "--force", "short": "-f", "type": "flag", "description": "Delete even if has backlinks"},
+                    {
+                        "name": "--force",
+                        "short": "-f",
+                        "type": "flag",
+                        "description": "Delete even if has backlinks",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": [],
                 "common_mistakes": {
-                    "deleting with backlinks": "Entries with backlinks require --force. Check backlinks first with 'mx get path.md --metadata'",
+                    "deleting with backlinks": (
+                        "Entries with backlinks require --force. Check backlinks first "
+                        "with 'mx get path.md --metadata'"
+                    ),
                 },
                 "examples": [
                     "mx delete path/to/entry.md",
@@ -3971,15 +4418,36 @@ def _build_schema() -> dict:
                 "arguments": [],
                 "options": [
                     {"name": "--tags", "type": "string", "description": "Filter by tag"},
-                    {"name": "--category", "type": "string", "description": "Filter by category"},
-                    {"name": "--limit", "short": "-n", "type": "integer", "default": 20, "description": "Max results"},
-                    {"name": "--full-titles", "type": "flag", "description": "Show full titles without truncation"},
-                    {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
+                    {
+                        "name": "--category",
+                        "type": "string",
+                        "description": "Filter by category",
+                    },
+                    {
+                        "name": "--limit",
+                        "short": "-n",
+                        "type": "integer",
+                        "default": 20,
+                        "description": "Max results",
+                    },
+                    {
+                        "name": "--full-titles",
+                        "type": "flag",
+                        "description": "Show full titles without truncation",
+                    },
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["search", "tree", "tags"],
                 "common_mistakes": {
-                    "invalid category": "Category must exist in KB. Use 'mx tree' to see valid categories.",
+                    "invalid category": (
+                        "Category must exist in KB. Use 'mx tree' to see valid categories."
+                    ),
                 },
                 "examples": [
                     "mx list",
@@ -3991,11 +4459,27 @@ def _build_schema() -> dict:
                 "description": "Display knowledge base directory structure",
                 "aliases": [],
                 "arguments": [
-                    {"name": "path", "required": False, "default": "", "description": "Starting path (default: root)"}
+                    {
+                        "name": "path",
+                        "required": False,
+                        "default": "",
+                        "description": "Starting path (default: root)",
+                    }
                 ],
                 "options": [
-                    {"name": "--depth", "short": "-d", "type": "integer", "default": 3, "description": "Max depth"},
-                    {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
+                    {
+                        "name": "--depth",
+                        "short": "-d",
+                        "type": "integer",
+                        "default": 3,
+                        "description": "Max depth",
+                    },
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["list"],
@@ -4011,7 +4495,12 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--min-count", "type": "integer", "default": 1, "description": "Minimum usage count"},
+                    {
+                        "name": "--min-count",
+                        "type": "integer",
+                        "default": 1,
+                        "description": "Minimum usage count",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["list", "search"],
@@ -4022,7 +4511,9 @@ def _build_schema() -> dict:
                 ],
             },
             "health": {
-                "description": "Audit knowledge base for problems (orphans, broken links, stale content)",
+                "description": (
+                    "Audit knowledge base for problems (orphans, broken links, stale content)"
+                ),
                 "aliases": [],
                 "arguments": [],
                 "options": [
@@ -4040,7 +4531,13 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
+                    {
+                        "name": "--limit",
+                        "short": "-n",
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Max results",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["health", "suggest-links"],
@@ -4054,10 +4551,20 @@ def _build_schema() -> dict:
                 "description": "Suggest entries to link to based on semantic similarity",
                 "aliases": [],
                 "arguments": [
-                    {"name": "path", "required": True, "description": "Path to entry relative to KB root"}
+                    {
+                        "name": "path",
+                        "required": True,
+                        "description": "Path to entry relative to KB root",
+                    }
                 ],
                 "options": [
-                    {"name": "--limit", "short": "-n", "type": "integer", "default": 5, "description": "Max suggestions"},
+                    {
+                        "name": "--limit",
+                        "short": "-n",
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Max suggestions",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["health", "hubs"],
@@ -4071,9 +4578,26 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--days", "short": "-d", "type": "integer", "default": 30, "description": "Look back N days"},
-                    {"name": "--limit", "short": "-n", "type": "integer", "default": 10, "description": "Max results"},
-                    {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
+                    {
+                        "name": "--days",
+                        "short": "-d",
+                        "type": "integer",
+                        "default": 30,
+                        "description": "Look back N days",
+                    },
+                    {
+                        "name": "--limit",
+                        "short": "-n",
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Max results",
+                    },
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["list", "search"],
@@ -4089,8 +4613,16 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--full", "type": "flag", "description": "Force full CLI output"},
-                    {"name": "--mcp", "type": "flag", "description": "Force MCP mode (minimal output)"},
+                    {
+                        "name": "--full",
+                        "type": "flag",
+                        "description": "Force full CLI output",
+                    },
+                    {
+                        "name": "--mcp",
+                        "type": "flag",
+                        "description": "Force MCP mode (minimal output)",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["schema"],
@@ -4106,9 +4638,24 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--path", "short": "-p", "type": "path", "description": "Custom location for KB (default: kb/)"},
-                    {"name": "--user", "short": "-u", "type": "flag", "description": "Create user-scope KB at ~/.memex/kb/"},
-                    {"name": "--force", "short": "-f", "type": "flag", "description": "Reinitialize existing KB"},
+                    {
+                        "name": "--path",
+                        "short": "-p",
+                        "type": "path",
+                        "description": "Custom location for KB (default: kb/)",
+                    },
+                    {
+                        "name": "--user",
+                        "short": "-u",
+                        "type": "flag",
+                        "description": "Create user-scope KB at ~/.memex/kb/",
+                    },
+                    {
+                        "name": "--force",
+                        "short": "-f",
+                        "type": "flag",
+                        "description": "Reinitialize existing KB",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["add", "search"],
@@ -4125,12 +4672,20 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--scope", "type": "choice", "choices": ["project", "user"], "description": "Limit to specific KB scope"},
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
                 "related": ["search"],
                 "common_mistakes": {
-                    "running unnecessarily": "Only needed after bulk imports or if search seems stale. Normal operations auto-index.",
+                    "running unnecessarily": (
+                        "Only needed after bulk imports or if search seems stale. "
+                        "Normal operations auto-index."
+                    ),
                 },
                 "examples": [
                     "mx reindex",
@@ -4156,8 +4711,17 @@ def _build_schema() -> dict:
                 "aliases": [],
                 "arguments": [],
                 "options": [
-                    {"name": "--command", "short": "-c", "type": "string", "description": "Show schema for specific command only"},
-                    {"name": "--compact", "type": "flag", "description": "Minimal output (commands and options only)"},
+                    {
+                        "name": "--command",
+                        "short": "-c",
+                        "type": "string",
+                        "description": "Show schema for specific command only",
+                    },
+                    {
+                        "name": "--compact",
+                        "type": "flag",
+                        "description": "Minimal output (commands and options only)",
+                    },
                 ],
                 "related": ["prime"],
                 "common_mistakes": {},
@@ -4169,26 +4733,33 @@ def _build_schema() -> dict:
             },
         },
         "global_options": [
-            {"name": "--json-errors", "type": "flag", "description": "Output errors as JSON (for programmatic use)"},
+            {
+                "name": "--json-errors",
+                "type": "flag",
+                "description": "Output errors as JSON (for programmatic use)",
+            },
             {"name": "--version", "type": "flag", "description": "Show version"},
             {"name": "--help", "type": "flag", "description": "Show help"},
         ],
         "workflows": {
             "search_and_read": {
                 "description": "Find and read an entry",
-                "steps": ["mx search \"query\"", "mx get path/from/results.md"],
+                "steps": ['mx search "query"', "mx get path/from/results.md"],
             },
             "create_entry": {
                 "description": "Create a new KB entry",
-                "steps": ["mx add --title=\"Title\" --tags=\"tag1,tag2\" --content=\"...\""],
+                "steps": ['mx add --title="Title" --tags="tag1,tag2" --content="..."'],
             },
             "surgical_edit": {
                 "description": "Make precise edits to existing content",
-                "steps": ["mx get path.md  # Read current content", "mx patch path.md --find \"old\" --replace \"new\""],
+                "steps": [
+                    "mx get path.md  # Read current content",
+                    'mx patch path.md --find "old" --replace "new"',
+                ],
             },
             "append_to_log": {
                 "description": "Add content to an ongoing log entry",
-                "steps": ["mx append \"Log Title\" --content=\"New entry...\""],
+                "steps": ['mx append "Log Title" --content="New entry..."'],
             },
         },
     }
@@ -4376,28 +4947,34 @@ jobs:
 
 @cli.command()
 @click.option(
-    "--kb-root", "-k",
+    "--kb-root",
+    "-k",
     type=click.Path(exists=True),
     help="KB source directory (overrides auto-detected KB)",
 )
 @click.option(
-    "--scope", "-s",
+    "--scope",
+    "-s",
     type=click.Choice(["project", "user"]),
     help="KB scope: project (from .kbcontext) or user (~/.memex/kb/)",
 )
 @click.option(
-    "--yes", "-y",
+    "--yes",
+    "-y",
     is_flag=True,
     help="Skip confirmation prompt when publishing from user KB",
 )
 @click.option(
-    "--output", "-o", "output_dir",
+    "--output",
+    "-o",
+    "output_dir",
     type=click.Path(),
     default="_site",
     help="Output directory (default: _site)",
 )
 @click.option(
-    "--base-url", "-b",
+    "--base-url",
+    "-b",
     default="",
     help="Base URL for links (e.g., /my-kb for subdirectory hosting)",
 )
@@ -4407,7 +4984,9 @@ jobs:
     help="Site title for header and page titles (default: Memex)",
 )
 @click.option(
-    "--index", "-i", "index_entry",
+    "--index",
+    "-i",
+    "index_entry",
     default=None,
     help="Path to entry to use as landing page (e.g., guides/welcome)",
 )
@@ -4522,7 +5101,10 @@ def publish(
 
         # Warn and require confirmation when publishing from user KB
         if scope == "user" and not yes:
-            click.echo(f"Warning: You are about to publish content from your user KB at {resolved_kb}", err=True)
+            click.echo(
+                f"Warning: You are about to publish content from your user KB at {resolved_kb}",
+                err=True,
+            )
             click.echo("This may include personal or private content.", err=True)
             click.echo("", err=True)
             if not click.confirm("Continue?", default=False):
@@ -4567,16 +5149,18 @@ def publish(
         click.echo(f"Base URL: {resolved_base_url}")
 
     try:
-        result = run_async(core_publish(
-            output_dir=output_dir,
-            base_url=resolved_base_url,
-            site_title=title,
-            index_entry=index_entry,
-            include_drafts=include_drafts,
-            include_archived=include_archived,
-            clean=not no_clean,
-            kb_root=resolved_kb,
-        ))
+        result = run_async(
+            core_publish(
+                output_dir=output_dir,
+                base_url=resolved_base_url,
+                site_title=title,
+                index_entry=index_entry,
+                include_drafts=include_drafts,
+                include_archived=include_archived,
+                clean=not no_clean,
+                kb_root=resolved_kb,
+            )
+        )
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
@@ -4620,8 +5204,12 @@ def show_alias(ctx, path: str | None, by_title: str | None, as_json: bool, metad
 @click.option("--tag", "--tags", "tags", help="Filter by tags (comma-separated)")
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--limit", "-n", default=10, type=click.IntRange(min=1), help="Max results")
-@click.option("--min-score", type=click.FloatRange(min=0.0, max=1.0), default=None,
-              help="Minimum score threshold (0.0-1.0)")
+@click.option(
+    "--min-score",
+    type=click.FloatRange(min=0.0, max=1.0),
+    default=None,
+    help="Minimum score threshold (0.0-1.0)",
+)
 @click.option("--content", is_flag=True, help="Include full content in results")
 @click.option("--strict", is_flag=True, help="Disable semantic fallback for keyword mode")
 @click.option("--terse", is_flag=True, help="Output paths only (one per line)")
@@ -4629,11 +5217,35 @@ def show_alias(ctx, path: str | None, by_title: str | None, as_json: bool, metad
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def find_alias(ctx, query: str, tags: str | None, mode: str, limit: int, min_score: float | None,
-               content: bool, strict: bool, terse: bool, full_titles: bool, scope: str | None, as_json: bool):
+def find_alias(
+    ctx,
+    query: str,
+    tags: str | None,
+    mode: str,
+    limit: int,
+    min_score: float | None,
+    content: bool,
+    strict: bool,
+    terse: bool,
+    full_titles: bool,
+    scope: str | None,
+    as_json: bool,
+):
     """Alias for mx search."""
-    ctx.invoke(search, query=query, tags=tags, mode=mode, limit=limit, min_score=min_score,
-               content=content, strict=strict, terse=terse, full_titles=full_titles, scope=scope, as_json=as_json)
+    ctx.invoke(
+        search,
+        query=query,
+        tags=tags,
+        mode=mode,
+        limit=limit,
+        min_score=min_score,
+        content=content,
+        strict=strict,
+        terse=terse,
+        full_titles=full_titles,
+        scope=scope,
+        as_json=as_json,
+    )
 
 
 @cli.command("recent", hidden=True)
@@ -4655,11 +5267,25 @@ def recent_alias(ctx, days: int, limit: int, scope: str | None, as_json: bool):
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def ls_alias(ctx, tag: str | None, category: str | None, limit: int, full_titles: bool,
-             scope: str | None, as_json: bool):
+def ls_alias(
+    ctx,
+    tag: str | None,
+    category: str | None,
+    limit: int,
+    full_titles: bool,
+    scope: str | None,
+    as_json: bool,
+):
     """Alias for mx list."""
-    ctx.invoke(list_entries, tag=tag, category=category, limit=limit, full_titles=full_titles,
-               scope=scope, as_json=as_json)
+    ctx.invoke(
+        list_entries,
+        tag=tag,
+        category=category,
+        limit=limit,
+        full_titles=full_titles,
+        scope=scope,
+        as_json=as_json,
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4670,6 +5296,7 @@ def ls_alias(ctx, tag: str | None, category: str | None, limit: int, full_titles
 def main():
     """Entry point for mx CLI."""
     from ._logging import configure_logging
+
     configure_logging()
     cli()
 

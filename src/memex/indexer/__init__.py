@@ -7,7 +7,13 @@ from .hybrid import HybridSearcher
 from .watcher import FileWatcher
 from .whoosh_index import WhooshIndex
 
-__all__ = ["HybridSearcher", "WhooshIndex", "ChromaIndex", "FileWatcher", "strip_markdown_for_snippet"]
+__all__ = [
+    "HybridSearcher",
+    "WhooshIndex",
+    "ChromaIndex",
+    "FileWatcher",
+    "strip_markdown_for_snippet",
+]
 
 
 def strip_markdown_for_snippet(text: str, max_length: int = 200) -> str:

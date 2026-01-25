@@ -238,9 +238,7 @@ def _incremental_update(
     return updated_files
 
 
-def ensure_health_cache(
-    kb_root: Path, index_root: Path | None = None
-) -> dict[str, dict[str, Any]]:
+def ensure_health_cache(kb_root: Path, index_root: Path | None = None) -> dict[str, dict[str, Any]]:
     """Get health metadata for all entries, using cache when valid.
 
     Uses incremental update strategy:
@@ -291,9 +289,7 @@ def ensure_health_cache(
     return cached_files
 
 
-def get_entry_metadata(
-    kb_root: Path, index_root: Path | None = None
-) -> dict[str, dict[str, Any]]:
+def get_entry_metadata(kb_root: Path, index_root: Path | None = None) -> dict[str, dict[str, Any]]:
     """Get entry metadata suitable for health checks.
 
     Convenience wrapper that ensures cache is up to date and converts

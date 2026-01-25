@@ -32,12 +32,14 @@ def build_search_index(entries: dict[str, EntryData]) -> str:
 
     for path, entry in entries.items():
         # Document for indexing - strip HTML for plain text search
-        documents.append({
-            "id": path,
-            "title": entry.title,
-            "tags": " ".join(entry.tags),
-            "content": _strip_html(entry.html_content)[:10000],  # Limit content size
-        })
+        documents.append(
+            {
+                "id": path,
+                "title": entry.title,
+                "tags": " ".join(entry.tags),
+                "content": _strip_html(entry.html_content)[:10000],  # Limit content size
+            }
+        )
 
         # Metadata for result display
         metadata[path] = {
@@ -46,10 +48,14 @@ def build_search_index(entries: dict[str, EntryData]) -> str:
             "path": f"{path}.html",
         }
 
-    return json.dumps({
-        "documents": documents,
-        "metadata": metadata,
-    }, ensure_ascii=False, indent=2)
+    return json.dumps(
+        {
+            "documents": documents,
+            "metadata": metadata,
+        },
+        ensure_ascii=False,
+        indent=2,
+    )
 
 
 def _strip_html(html_content: str) -> str:

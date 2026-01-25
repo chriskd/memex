@@ -125,6 +125,7 @@ class TestSearchNeighborFlags:
         # With depth=1, should find A (direct) and B (neighbor), but NOT C
         if result.exit_code == 0 and "results" in result.output:
             import json
+
             data = json.loads(result.output)
             paths = [r["path"] for r in data["results"]]
             # B should be included as direct neighbor of A

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from markdown_it import MarkdownIt
 
 if TYPE_CHECKING:
-    from ..models import EntryMetadata
+    from ..models import EntryMetadata, RelationLink
 
 
 @dataclass
@@ -41,6 +41,8 @@ class EntryData:
     tags: list[str]
     backlinks: list[str] = field(default_factory=list)
     outlinks: list[str] = field(default_factory=list)  # Resolved outgoing links
+    relation_outgoing: list[RelationLink] = field(default_factory=list)
+    relation_backlinks: list[RelationLink] = field(default_factory=list)
 
 
 @dataclass
@@ -98,6 +100,9 @@ class SiteGenerator:
 
         # Phase 3: Process all entries
         await self._process_entries(backlinks_index)
+
+        # Phase 3b: Index typed relations (outgoing + incoming)
+        self._index_relation_edges()
 
         # Phase 4: Render all pages
         self._render_all_pages()
@@ -227,6 +232,38 @@ class SiteGenerator:
 
         return result
 
+    @staticmethod
+    def _normalize_relation_target(raw_path: str) -> str:
+        """Normalize a typed relation path to match published entry paths."""
+        from ..config import parse_scoped_path
+
+        _, relative = parse_scoped_path(raw_path)
+        target = relative
+        if target.endswith(".md"):
+            target = target[:-3]
+        return target
+
+    def _index_relation_edges(self) -> None:
+        """Build normalized relation indices for outgoing + incoming edges."""
+        from ..models import RelationLink
+
+        relation_backlinks: dict[str, list[RelationLink]] = {path: [] for path in self.entries}
+
+        for source_path, entry in self.entries.items():
+            outgoing: list[RelationLink] = []
+            for relation in entry.metadata.relations:
+                target = self._normalize_relation_target(relation.path)
+                if target not in self.entries:
+                    continue
+                outgoing.append(RelationLink(path=target, type=relation.type))
+                relation_backlinks[target].append(
+                    RelationLink(path=source_path, type=relation.type)
+                )
+            entry.relation_outgoing = outgoing
+
+        for path, entry in self.entries.items():
+            entry.relation_backlinks = relation_backlinks.get(path, [])
+
     def _render_all_pages(self) -> None:
         """Render all HTML pages."""
         from .templates import render_entry_page, render_index_page, render_tag_page
@@ -301,7 +338,6 @@ class SiteGenerator:
         """Generate graph data (JSON) and visualization page (HTML)."""
         import json
 
-        from ..config import parse_scoped_path
         from .templates import render_graph_page
 
         # Build nodes and edges for D3.js force graph
@@ -311,43 +347,42 @@ class SiteGenerator:
 
         for path, entry in self.entries.items():
             # Add node
-            nodes.append({
-                "id": path,
-                "title": entry.title,
-                "tags": entry.tags,
-                "url": f"{path}.html",
-            })
+            nodes.append(
+                {
+                    "id": path,
+                    "title": entry.title,
+                    "tags": entry.tags,
+                    "url": f"{path}.html",
+                }
+            )
             node_ids.add(path)
-
-        def normalize_target(raw_path: str) -> str:
-            scope, relative = parse_scoped_path(raw_path)
-            target = relative
-            if target.endswith(".md"):
-                target = target[:-3]
-            return target
 
         # Add edges from outlinks (only to nodes that exist)
         for path, entry in self.entries.items():
             for target in entry.outlinks:
                 if target in node_ids:
-                    edges.append({
-                        "source": path,
-                        "target": target,
-                        "origin": "wikilink",
-                        "type": None,
-                        "score": None,
-                    })
+                    edges.append(
+                        {
+                            "source": path,
+                            "target": target,
+                            "origin": "wikilink",
+                            "type": None,
+                            "score": None,
+                        }
+                    )
 
             for relation in entry.metadata.relations:
-                target = normalize_target(relation.path)
+                target = self._normalize_relation_target(relation.path)
                 if target in node_ids:
-                    edges.append({
-                        "source": path,
-                        "target": target,
-                        "origin": "relations",
-                        "type": relation.type,
-                        "score": None,
-                    })
+                    edges.append(
+                        {
+                            "source": path,
+                            "target": target,
+                            "origin": "relations",
+                            "type": relation.type,
+                            "score": None,
+                        }
+                    )
 
         graph_data = {
             "nodes": nodes,

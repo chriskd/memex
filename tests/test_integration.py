@@ -16,13 +16,12 @@ Design:
 import asyncio
 
 import pytest
+from conftest import create_entry
 
 from memex import core
 from memex.backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
+from memex.parser import parse_entry
 from memex.tags_cache import ensure_tags_cache, rebuild_tags_cache
-from memex.parser import parse_entry, extract_links
-from conftest import create_entry
-
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper Functions
@@ -44,12 +43,14 @@ class TestAddSearchFlow:
 
     def test_added_entry_is_searchable_by_title(self, tmp_kb):
         """Entry added via core.add_entry is findable by title."""
-        result = run_async(core.add_entry(
-            title="Unique Integration Test Entry",
-            content="# Unique Integration Test Entry\n\nThis tests the add->search flow.",
-            tags=["integration", "testing"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Unique Integration Test Entry",
+                content="# Unique Integration Test Entry\n\nThis tests the add->search flow.",
+                tags=["integration", "testing"],
+                category="general",
+            )
+        )
 
         assert "path" in result
         assert result["path"].endswith(".md")
@@ -61,12 +62,14 @@ class TestAddSearchFlow:
 
     def test_added_entry_is_searchable_by_content(self, tmp_kb):
         """Entry is searchable by content keywords."""
-        result = run_async(core.add_entry(
-            title="Content Search Test",
-            content="# Content Search Test\n\nThis contains xylophone and zzzunique keywords.",
-            tags=["search"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Content Search Test",
+                content="# Content Search Test\n\nThis contains xylophone and zzzunique keywords.",
+                tags=["search"],
+                category="general",
+            )
+        )
 
         # Search by unique content keyword
         search_results = run_async(core.search(query="xylophone zzzunique", limit=10))
@@ -76,12 +79,14 @@ class TestAddSearchFlow:
     def test_get_retrieves_added_entry(self, tmp_kb):
         """get_entry returns the added entry with correct content."""
         original_content = "# Get Test\n\nThis content should be retrievable."
-        result = run_async(core.add_entry(
-            title="Get Test Entry",
-            content=original_content,
-            tags=["retrieve"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Get Test Entry",
+                content=original_content,
+                tags=["retrieve"],
+                category="general",
+            )
+        )
 
         entry = run_async(core.get_entry(result["path"]))
 
@@ -91,12 +96,14 @@ class TestAddSearchFlow:
 
     def test_added_entry_has_correct_metadata(self, tmp_kb):
         """Added entry has correct frontmatter metadata."""
-        result = run_async(core.add_entry(
-            title="Metadata Test",
-            content="# Metadata Test\n\nTesting metadata.",
-            tags=["meta", "test"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Metadata Test",
+                content="# Metadata Test\n\nTesting metadata.",
+                tags=["meta", "test"],
+                category="general",
+            )
+        )
 
         entry = run_async(core.get_entry(result["path"]))
 
@@ -106,28 +113,33 @@ class TestAddSearchFlow:
 
     def test_search_with_tag_filter(self, tmp_kb):
         """Search can filter by tags."""
-        run_async(core.add_entry(
-            title="Tag Filter Entry One",
-            content="# Entry One\n\nFirst entry.",
-            tags=["filter-tag", "alpha"],
-            category="general",
-        ))
-        run_async(core.add_entry(
-            title="Tag Filter Entry Two",
-            content="# Entry Two\n\nSecond entry.",
-            tags=["filter-tag", "beta"],
-            category="general",
-        ))
-        run_async(core.add_entry(
-            title="Tag Filter Entry Three",
-            content="# Entry Three\n\nThird entry no filter tag.",
-            tags=["other"],
-            category="general",
-        ))
+        run_async(
+            core.add_entry(
+                title="Tag Filter Entry One",
+                content="# Entry One\n\nFirst entry.",
+                tags=["filter-tag", "alpha"],
+                category="general",
+            )
+        )
+        run_async(
+            core.add_entry(
+                title="Tag Filter Entry Two",
+                content="# Entry Two\n\nSecond entry.",
+                tags=["filter-tag", "beta"],
+                category="general",
+            )
+        )
+        run_async(
+            core.add_entry(
+                title="Tag Filter Entry Three",
+                content="# Entry Three\n\nThird entry no filter tag.",
+                tags=["other"],
+                category="general",
+            )
+        )
 
         # Search with tag filter
         results = run_async(core.search(query="Entry", tags=["filter-tag"], limit=10))
-        paths = [r.path for r in results.results]
 
         assert len(results.results) == 2
         assert all("filter-tag" in r.tags for r in results.results)
@@ -144,18 +156,22 @@ class TestUpdatePropagation:
     def test_update_content_reflects_in_search(self, tmp_kb):
         """Updated content is searchable."""
         # Create entry
-        result = run_async(core.add_entry(
-            title="Update Search Test",
-            content="# Update Search Test\n\nOriginal content here.",
-            tags=["update"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Update Search Test",
+                content="# Update Search Test\n\nOriginal content here.",
+                tags=["update"],
+                category="general",
+            )
+        )
 
         # Update with new keyword
-        run_async(core.update_entry(
-            path=result["path"],
-            content="# Update Search Test\n\nUpdated with elephant keyword.",
-        ))
+        run_async(
+            core.update_entry(
+                path=result["path"],
+                content="# Update Search Test\n\nUpdated with elephant keyword.",
+            )
+        )
 
         # Search should find new content
         results = run_async(core.search(query="elephant", limit=10))
@@ -164,19 +180,23 @@ class TestUpdatePropagation:
 
     def test_update_tags_reflects_in_cache(self, tmp_kb):
         """Updated tags appear in tags cache."""
-        result = run_async(core.add_entry(
-            title="Tag Update Test",
-            content="# Tag Update Test\n\nContent.",
-            tags=["original-tag"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Tag Update Test",
+                content="# Tag Update Test\n\nContent.",
+                tags=["original-tag"],
+                category="general",
+            )
+        )
 
         # Update with new tags (must also provide content or section_updates)
-        run_async(core.update_entry(
-            path=result["path"],
-            content="# Tag Update Test\n\nContent with updated tags.",
-            tags=["new-tag-one", "new-tag-two"],
-        ))
+        run_async(
+            core.update_entry(
+                path=result["path"],
+                content="# Tag Update Test\n\nContent with updated tags.",
+                tags=["new-tag-one", "new-tag-two"],
+            )
+        )
 
         # Tags cache should include new tags
         tags_counts = ensure_tags_cache(tmp_kb)
@@ -188,27 +208,33 @@ class TestUpdatePropagation:
     def test_update_with_link_creates_backlink(self, tmp_kb):
         """Adding a link via update creates a backlink."""
         # Create target entry
-        target = run_async(core.add_entry(
-            title="Backlink Target",
-            content="# Backlink Target\n\nThis will be linked to.",
-            tags=["target"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Backlink Target",
+                content="# Backlink Target\n\nThis will be linked to.",
+                tags=["target"],
+                category="general",
+            )
+        )
 
         # Create source entry
-        source = run_async(core.add_entry(
-            title="Backlink Source",
-            content="# Backlink Source\n\nNo links yet.",
-            tags=["source"],
-            category="general",
-        ))
+        source = run_async(
+            core.add_entry(
+                title="Backlink Source",
+                content="# Backlink Source\n\nNo links yet.",
+                tags=["source"],
+                category="general",
+            )
+        )
 
         # Update source to link to target
         target_link = target["path"].replace(".md", "")
-        run_async(core.update_entry(
-            path=source["path"],
-            content=f"# Backlink Source\n\nNow links to [[{target_link}]].",
-        ))
+        run_async(
+            core.update_entry(
+                path=source["path"],
+                content=f"# Backlink Source\n\nNow links to [[{target_link}]].",
+            )
+        )
 
         # Check backlinks (backlinks are stored without .md extension)
         backlinks = ensure_backlink_cache(tmp_kb)
@@ -220,34 +246,42 @@ class TestUpdatePropagation:
     def test_update_removing_link_clears_backlink(self, tmp_kb):
         """Removing a link via update clears the backlink."""
         # Create target entry
-        target = run_async(core.add_entry(
-            title="Link Target",
-            content="# Link Target\n\nTarget entry.",
-            tags=["target"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Link Target",
+                content="# Link Target\n\nTarget entry.",
+                tags=["target"],
+                category="general",
+            )
+        )
 
         target_link = target["path"].replace(".md", "")
 
         # Create source entry with link
-        source = run_async(core.add_entry(
-            title="Link Source",
-            content=f"# Link Source\n\nLinks to [[{target_link}]].",
-            tags=["source"],
-            category="general",
-        ))
+        source = run_async(
+            core.add_entry(
+                title="Link Source",
+                content=f"# Link Source\n\nLinks to [[{target_link}]].",
+                tags=["source"],
+                category="general",
+            )
+        )
 
         # Verify backlink exists (backlinks are stored without .md extension)
         backlinks = ensure_backlink_cache(tmp_kb)
         target_key = target["path"].replace(".md", "")
         source_key = source["path"].replace(".md", "")
-        assert source_key in backlinks.get(target_key, []) or source["path"] in backlinks.get(target_key, [])
+        assert source_key in backlinks.get(target_key, []) or source["path"] in backlinks.get(
+            target_key, []
+        )
 
         # Update source to remove link
-        run_async(core.update_entry(
-            path=source["path"],
-            content="# Link Source\n\nNo more links.",
-        ))
+        run_async(
+            core.update_entry(
+                path=source["path"],
+                content="# Link Source\n\nNo more links.",
+            )
+        )
 
         # Backlink should be cleared
         backlinks = rebuild_backlink_cache(tmp_kb)
@@ -256,18 +290,26 @@ class TestUpdatePropagation:
 
     def test_section_update_preserves_other_sections(self, tmp_kb):
         """Section updates only modify the target section."""
-        result = run_async(core.add_entry(
-            title="Section Test",
-            content="# Section Test\n\n## Section One\n\nOriginal one.\n\n## Section Two\n\nOriginal two.",
-            tags=["sections"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Section Test",
+                content=(
+                    "# Section Test\n\n"
+                    "## Section One\n\nOriginal one.\n\n"
+                    "## Section Two\n\nOriginal two."
+                ),
+                tags=["sections"],
+                category="general",
+            )
+        )
 
         # Update only Section One
-        run_async(core.update_entry(
-            path=result["path"],
-            section_updates={"Section One": "Updated one."},
-        ))
+        run_async(
+            core.update_entry(
+                path=result["path"],
+                section_updates={"Section One": "Updated one."},
+            )
+        )
 
         entry = run_async(core.get_entry(result["path"]))
         assert "Updated one" in entry.content
@@ -284,12 +326,14 @@ class TestDeleteCleanup:
 
     def test_deleted_entry_not_in_search(self, tmp_kb):
         """Deleted entry no longer appears in search results."""
-        result = run_async(core.add_entry(
-            title="Delete Search Test",
-            content="# Delete Search Test\n\nUnique deleteme content.",
-            tags=["delete"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Delete Search Test",
+                content="# Delete Search Test\n\nUnique deleteme content.",
+                tags=["delete"],
+                category="general",
+            )
+        )
 
         # Verify it's searchable
         pre_results = run_async(core.search(query="deleteme", limit=10))
@@ -304,12 +348,14 @@ class TestDeleteCleanup:
 
     def test_deleted_entry_not_retrievable(self, tmp_kb):
         """Deleted entry cannot be retrieved."""
-        result = run_async(core.add_entry(
-            title="Delete Get Test",
-            content="# Delete Get Test\n\nContent.",
-            tags=["delete"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Delete Get Test",
+                content="# Delete Get Test\n\nContent.",
+                tags=["delete"],
+                category="general",
+            )
+        )
 
         run_async(core.delete_entry(result["path"], force=True))
 
@@ -319,20 +365,24 @@ class TestDeleteCleanup:
     def test_delete_with_backlinks_requires_force(self, tmp_kb):
         """Deleting entry with backlinks requires force=True."""
         # Create target and source
-        target = run_async(core.add_entry(
-            title="Delete Target",
-            content="# Delete Target\n\nTarget.",
-            tags=["target"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Delete Target",
+                content="# Delete Target\n\nTarget.",
+                tags=["target"],
+                category="general",
+            )
+        )
 
         target_link = target["path"].replace(".md", "")
-        run_async(core.add_entry(
-            title="Delete Source",
-            content=f"# Delete Source\n\nLinks to [[{target_link}]].",
-            tags=["source"],
-            category="general",
-        ))
+        run_async(
+            core.add_entry(
+                title="Delete Source",
+                content=f"# Delete Source\n\nLinks to [[{target_link}]].",
+                tags=["source"],
+                category="general",
+            )
+        )
 
         # Delete without force should fail
         with pytest.raises(ValueError, match="backlink"):
@@ -343,12 +393,14 @@ class TestDeleteCleanup:
 
     def test_delete_updates_tags_cache(self, tmp_kb):
         """Deleted entry's tags are removed from cache."""
-        result = run_async(core.add_entry(
-            title="Tag Delete Test",
-            content="# Tag Delete Test\n\nContent.",
-            tags=["unique-delete-tag"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Tag Delete Test",
+                content="# Tag Delete Test\n\nContent.",
+                tags=["unique-delete-tag"],
+                category="general",
+            )
+        )
 
         # Verify tag exists
         tags_before = ensure_tags_cache(tmp_kb)
@@ -363,20 +415,24 @@ class TestDeleteCleanup:
 
     def test_delete_returns_had_backlinks(self, tmp_kb):
         """Delete returns list of entries that linked to deleted entry."""
-        target = run_async(core.add_entry(
-            title="Backlink Delete Target",
-            content="# Backlink Delete Target\n\nTarget.",
-            tags=["target"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Backlink Delete Target",
+                content="# Backlink Delete Target\n\nTarget.",
+                tags=["target"],
+                category="general",
+            )
+        )
 
         target_link = target["path"].replace(".md", "")
-        source = run_async(core.add_entry(
-            title="Backlink Delete Source",
-            content=f"# Backlink Delete Source\n\nLinks to [[{target_link}]].",
-            tags=["source"],
-            category="general",
-        ))
+        source = run_async(
+            core.add_entry(
+                title="Backlink Delete Source",
+                content=f"# Backlink Delete Source\n\nLinks to [[{target_link}]].",
+                tags=["source"],
+                category="general",
+            )
+        )
 
         result = run_async(core.delete_entry(target["path"], force=True))
 
@@ -396,20 +452,24 @@ class TestComplexWorkflows:
 
     def test_create_linked_entries_verify_backlinks(self, tmp_kb):
         """Create A linking to B, verify backlinks on B."""
-        entry_b = run_async(core.add_entry(
-            title="Entry B",
-            content="# Entry B\n\nThis is entry B.",
-            tags=["workflow"],
-            category="general",
-        ))
+        entry_b = run_async(
+            core.add_entry(
+                title="Entry B",
+                content="# Entry B\n\nThis is entry B.",
+                tags=["workflow"],
+                category="general",
+            )
+        )
 
         b_link = entry_b["path"].replace(".md", "")
-        entry_a = run_async(core.add_entry(
-            title="Entry A",
-            content=f"# Entry A\n\nThis links to [[{b_link}]].",
-            tags=["workflow"],
-            category="general",
-        ))
+        entry_a = run_async(
+            core.add_entry(
+                title="Entry A",
+                content=f"# Entry A\n\nThis links to [[{b_link}]].",
+                tags=["workflow"],
+                category="general",
+            )
+        )
 
         # Verify backlink on B (backlinks stored without .md extension)
         entry_b_data = run_async(core.get_entry(entry_b["path"]))
@@ -418,28 +478,34 @@ class TestComplexWorkflows:
 
     def test_multiple_entries_linking_same_target(self, tmp_kb):
         """Multiple entries can link to the same target."""
-        target = run_async(core.add_entry(
-            title="Multi Link Target",
-            content="# Multi Link Target\n\nTarget.",
-            tags=["multi"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Multi Link Target",
+                content="# Multi Link Target\n\nTarget.",
+                tags=["multi"],
+                category="general",
+            )
+        )
 
         target_link = target["path"].replace(".md", "")
 
-        source1 = run_async(core.add_entry(
-            title="Source One",
-            content=f"# Source One\n\nLinks to [[{target_link}]].",
-            tags=["source"],
-            category="general",
-        ))
+        source1 = run_async(
+            core.add_entry(
+                title="Source One",
+                content=f"# Source One\n\nLinks to [[{target_link}]].",
+                tags=["source"],
+                category="general",
+            )
+        )
 
-        source2 = run_async(core.add_entry(
-            title="Source Two",
-            content=f"# Source Two\n\nAlso links to [[{target_link}]].",
-            tags=["source"],
-            category="general",
-        ))
+        source2 = run_async(
+            core.add_entry(
+                title="Source Two",
+                content=f"# Source Two\n\nAlso links to [[{target_link}]].",
+                tags=["source"],
+                category="general",
+            )
+        )
 
         target_data = run_async(core.get_entry(target["path"]))
         # Backlinks may be stored without .md extension
@@ -450,27 +516,33 @@ class TestComplexWorkflows:
 
     def test_circular_links(self, tmp_kb):
         """Entries can have circular links."""
-        entry_a = run_async(core.add_entry(
-            title="Circular A",
-            content="# Circular A\n\nWill link to B.",
-            tags=["circular"],
-            category="general",
-        ))
+        entry_a = run_async(
+            core.add_entry(
+                title="Circular A",
+                content="# Circular A\n\nWill link to B.",
+                tags=["circular"],
+                category="general",
+            )
+        )
 
         a_link = entry_a["path"].replace(".md", "")
-        entry_b = run_async(core.add_entry(
-            title="Circular B",
-            content=f"# Circular B\n\nLinks back to [[{a_link}]].",
-            tags=["circular"],
-            category="general",
-        ))
+        entry_b = run_async(
+            core.add_entry(
+                title="Circular B",
+                content=f"# Circular B\n\nLinks back to [[{a_link}]].",
+                tags=["circular"],
+                category="general",
+            )
+        )
 
         # Update A to link to B
         b_link = entry_b["path"].replace(".md", "")
-        run_async(core.update_entry(
-            path=entry_a["path"],
-            content=f"# Circular A\n\nNow links to [[{b_link}]].",
-        ))
+        run_async(
+            core.update_entry(
+                path=entry_a["path"],
+                content=f"# Circular A\n\nNow links to [[{b_link}]].",
+            )
+        )
 
         # Both should have backlinks (stored without .md extension)
         a_data = run_async(core.get_entry(entry_a["path"]))
@@ -483,23 +555,30 @@ class TestComplexWorkflows:
 
     def test_add_with_links_parameter(self, tmp_kb):
         """add_entry with links parameter creates proper [[links]]."""
-        target = run_async(core.add_entry(
-            title="Links Param Target",
-            content="# Links Param Target\n\nTarget.",
-            tags=["links"],
-            category="general",
-        ))
+        target = run_async(
+            core.add_entry(
+                title="Links Param Target",
+                content="# Links Param Target\n\nTarget.",
+                tags=["links"],
+                category="general",
+            )
+        )
 
-        source = run_async(core.add_entry(
-            title="Links Param Source",
-            content="# Links Param Source\n\nSource.",
-            tags=["links"],
-            category="general",
-            links=[target["path"]],
-        ))
+        source = run_async(
+            core.add_entry(
+                title="Links Param Source",
+                content="# Links Param Source\n\nSource.",
+                tags=["links"],
+                category="general",
+                links=[target["path"]],
+            )
+        )
 
         source_data = run_async(core.get_entry(source["path"]))
-        assert target["path"] in source_data.links or target["path"].replace(".md", "") in source_data.links
+        assert (
+            target["path"] in source_data.links
+            or target["path"].replace(".md", "") in source_data.links
+        )
 
     def test_list_entries_by_category(self, tmp_kb):
         """list_entries filters by category correctly."""
@@ -518,18 +597,22 @@ class TestComplexWorkflows:
 
     def test_search_with_content_hydration(self, tmp_kb):
         """Search with include_content returns full content."""
-        result = run_async(core.add_entry(
-            title="Content Hydration Test",
-            content="# Content Hydration Test\n\nFull content should be here.",
-            tags=["hydrate"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Content Hydration Test",
+                content="# Content Hydration Test\n\nFull content should be here.",
+                tags=["hydrate"],
+                category="general",
+            )
+        )
 
-        search_results = run_async(core.search(
-            query="Hydration Test",
-            limit=5,
-            include_content=True,
-        ))
+        search_results = run_async(
+            core.search(
+                query="Hydration Test",
+                limit=5,
+                include_content=True,
+            )
+        )
 
         matched = next((r for r in search_results.results if r.path == result["path"]), None)
         assert matched is not None
@@ -550,19 +633,23 @@ class TestEdgeCases:
         (tmp_kb / "dir1").mkdir(exist_ok=True)
         (tmp_kb / "dir2").mkdir(exist_ok=True)
 
-        result1 = run_async(core.add_entry(
-            title="Duplicate Title",
-            content="# Duplicate Title\n\nFirst entry.",
-            tags=["dup"],
-            directory="dir1",
-        ))
+        result1 = run_async(
+            core.add_entry(
+                title="Duplicate Title",
+                content="# Duplicate Title\n\nFirst entry.",
+                tags=["dup"],
+                directory="dir1",
+            )
+        )
 
-        result2 = run_async(core.add_entry(
-            title="Duplicate Title",
-            content="# Duplicate Title\n\nSecond entry.",
-            tags=["dup"],
-            directory="dir2",
-        ))
+        result2 = run_async(
+            core.add_entry(
+                title="Duplicate Title",
+                content="# Duplicate Title\n\nSecond entry.",
+                tags=["dup"],
+                directory="dir2",
+            )
+        )
 
         assert result1["path"] != result2["path"]
         assert "dir1" in result1["path"]
@@ -572,29 +659,35 @@ class TestEdgeCases:
         """add_entry without category or directory fails."""
         monkeypatch.setenv("VL_KB_CONTEXT", "/nonexistent")
         with pytest.raises(ValueError, match="category.*directory"):
-            run_async(core.add_entry(
-                title="No Category",
-                content="# No Category\n\nContent.",
-                tags=["test"],
-            ))
+            run_async(
+                core.add_entry(
+                    title="No Category",
+                    content="# No Category\n\nContent.",
+                    tags=["test"],
+                )
+            )
 
     def test_add_without_tags_fails(self, tmp_kb):
         """add_entry without tags fails."""
         with pytest.raises(ValueError, match="tag"):
-            run_async(core.add_entry(
-                title="No Tags",
-                content="# No Tags\n\nContent.",
-                tags=[],
-                category="general",
-            ))
+            run_async(
+                core.add_entry(
+                    title="No Tags",
+                    content="# No Tags\n\nContent.",
+                    tags=[],
+                    category="general",
+                )
+            )
 
     def test_update_nonexistent_fails(self, tmp_kb):
         """update_entry on nonexistent path fails."""
         with pytest.raises(ValueError, match="not found"):
-            run_async(core.update_entry(
-                path="nonexistent.md",
-                content="# New Content",
-            ))
+            run_async(
+                core.update_entry(
+                    path="nonexistent.md",
+                    content="# New Content",
+                )
+            )
 
     def test_get_nonexistent_fails(self, tmp_kb):
         """get_entry on nonexistent path fails."""
@@ -608,12 +701,14 @@ class TestEdgeCases:
 
     def test_special_characters_in_title(self, tmp_kb):
         """Titles with special characters are slugified correctly."""
-        result = run_async(core.add_entry(
-            title="Special: Characters! Are @#$ Here",
-            content="# Special Characters\n\nContent.",
-            tags=["special"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Special: Characters! Are @#$ Here",
+                content="# Special Characters\n\nContent.",
+                tags=["special"],
+                category="general",
+            )
+        )
 
         # Path should be slugified
         assert ".md" in result["path"]
@@ -632,12 +727,14 @@ class TestFileSystemConsistency:
 
     def test_add_creates_file(self, tmp_kb):
         """add_entry creates actual file on disk."""
-        result = run_async(core.add_entry(
-            title="File Creation Test",
-            content="# File Creation Test\n\nContent.",
-            tags=["file"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="File Creation Test",
+                content="# File Creation Test\n\nContent.",
+                tags=["file"],
+                category="general",
+            )
+        )
 
         file_path = tmp_kb / result["path"]
         assert file_path.exists()
@@ -645,12 +742,14 @@ class TestFileSystemConsistency:
 
     def test_file_content_matches_entry(self, tmp_kb):
         """File content matches what parse_entry returns."""
-        result = run_async(core.add_entry(
-            title="Content Match Test",
-            content="# Content Match Test\n\nSpecific content here.",
-            tags=["match"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Content Match Test",
+                content="# Content Match Test\n\nSpecific content here.",
+                tags=["match"],
+                category="general",
+            )
+        )
 
         file_path = tmp_kb / result["path"]
         metadata, content, _ = parse_entry(file_path)
@@ -661,17 +760,21 @@ class TestFileSystemConsistency:
 
     def test_update_modifies_file(self, tmp_kb):
         """update_entry modifies actual file on disk."""
-        result = run_async(core.add_entry(
-            title="Update File Test",
-            content="# Update File Test\n\nOriginal.",
-            tags=["update"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Update File Test",
+                content="# Update File Test\n\nOriginal.",
+                tags=["update"],
+                category="general",
+            )
+        )
 
-        run_async(core.update_entry(
-            path=result["path"],
-            content="# Update File Test\n\nModified content.",
-        ))
+        run_async(
+            core.update_entry(
+                path=result["path"],
+                content="# Update File Test\n\nModified content.",
+            )
+        )
 
         file_path = tmp_kb / result["path"]
         _, content, _ = parse_entry(file_path)
@@ -680,12 +783,14 @@ class TestFileSystemConsistency:
 
     def test_delete_removes_file(self, tmp_kb):
         """delete_entry removes actual file from disk."""
-        result = run_async(core.add_entry(
-            title="Delete File Test",
-            content="# Delete File Test\n\nContent.",
-            tags=["delete"],
-            category="general",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Delete File Test",
+                content="# Delete File Test\n\nContent.",
+                tags=["delete"],
+                category="general",
+            )
+        )
 
         file_path = tmp_kb / result["path"]
         assert file_path.exists()
@@ -696,12 +801,14 @@ class TestFileSystemConsistency:
 
     def test_add_creates_nested_directories(self, tmp_kb):
         """add_entry creates nested directories if needed."""
-        result = run_async(core.add_entry(
-            title="Nested Dir Test",
-            content="# Nested Dir Test\n\nContent.",
-            tags=["nested"],
-            directory="deep/nested/path",
-        ))
+        result = run_async(
+            core.add_entry(
+                title="Nested Dir Test",
+                content="# Nested Dir Test\n\nContent.",
+                tags=["nested"],
+                directory="deep/nested/path",
+            )
+        )
 
         assert "deep/nested/path" in result["path"]
         assert (tmp_kb / "deep" / "nested" / "path").is_dir()
