@@ -8,13 +8,13 @@ tags:
   - agents
   - integration
 created: 2026-01-06T00:00:00
-updated: 2026-01-15T03:22:55.480350+00:00
+updated: 2026-01-25T18:55:55+00:00
 semantic_links: []
 ---
 
 # AI Agent Integration
 
-Memex is designed for AI coding assistants. The CLI is the recommended interface - it uses ~0 tokens vs MCP's schema overhead.
+Memex is designed for AI coding assistants. The CLI is the recommended interface.
 
 ## Claude Code
 
@@ -48,8 +48,7 @@ For automatic context injection, use hooks:
 
 The `mx prime` command:
 - Injects KB workflow guidance at session start
-- Auto-detects MCP vs CLI mode
-- Adapts output format accordingly
+- Provides a concise workflow reminder
 
 ### Workflow Pattern
 
@@ -143,5 +142,4 @@ This creates a `.kbcontext` file that:
 ## See Also
 
 - [[reference/cli|CLI Reference]]
-- [[guides/mcp-setup|MCP Server Setup]]
 - [[reference/entry-format|Entry Format]]

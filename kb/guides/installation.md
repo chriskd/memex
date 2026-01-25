@@ -26,7 +26,6 @@ mx --version
 
 This gives you:
 - Full CLI functionality (`mx` command)
-- MCP server for Claude Desktop
 - BM25 keyword search via Whoosh
 - ~100MB footprint
 
@@ -82,4 +81,4 @@ uv sync --all-extras --index pytorch-gpu=https://download.pytorch.org/whl/cu124
 After installation:
 1. [[guides/quick-start|Quick Start Guide]] - Create your first KB
 2. [[reference/cli|CLI Reference]] - Full command documentation
-3. [[guides/mcp-setup|MCP Server Setup]] - Configure for Claude Desktop
+3. [[guides/ai-integration|AI Agent Integration]] - Configure AI assistants
