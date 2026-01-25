@@ -799,6 +799,7 @@ def init(path: str | None, user: bool, force: bool, as_json: bool):
       mx init --force            # Reinitialize existing
     """
     from .context import LOCAL_KB_CONFIG_FILENAME, USER_KB_DIR
+    from .frontmatter import build_frontmatter, create_new_metadata
 
     # Validate mutually exclusive options
     if user and path:
@@ -837,7 +838,12 @@ def init(path: str | None, user: bool, force: bool, as_json: bool):
     # Create README with scope-appropriate content
     readme_path = kb_path / "README.md"
     if user:
-        readme_content = """# User Knowledge Base
+        readme_metadata = create_new_metadata(
+            title="User Knowledge Base",
+            tags=["kb", "meta", "user"],
+        )
+        readme_frontmatter = build_frontmatter(readme_metadata)
+        readme_body = """# User Knowledge Base
 
 This directory contains your personal knowledge base entries managed by `mx`.
 This KB is available everywhere and is not shared with collaborators.
@@ -845,9 +851,9 @@ This KB is available everywhere and is not shared with collaborators.
 ## Usage
 
 ```bash
-mx add --title="Entry" --tags="tag1,tag2" --content="..."
-mx search "query"
-mx list
+mx add --title="Entry" --tags="tag1,tag2" --content="..." --scope=user
+mx search "query" --scope=user
+mx list --scope=user
 ```
 
 ## Structure
@@ -871,8 +877,14 @@ Your content here.
 User KB entries are personal and available in all projects.
 They are stored at ~/.memex/kb/ and are not committed to git.
 """
+        readme_content = f"{readme_frontmatter}{readme_body}"
     else:
-        readme_content = """# Project Knowledge Base
+        readme_metadata = create_new_metadata(
+            title="Project Knowledge Base",
+            tags=["kb", "meta", "project"],
+        )
+        readme_frontmatter = build_frontmatter(readme_metadata)
+        readme_body = """# Project Knowledge Base
 
 This directory contains project-specific knowledge base entries managed by `mx`.
 Commit this directory to share knowledge with collaborators.
@@ -880,9 +892,9 @@ Commit this directory to share knowledge with collaborators.
 ## Usage
 
 ```bash
-mx add --title="Entry" --tags="tag1,tag2" --content="..." --local
-mx search "query"   # Searches local KB first
-mx list --local     # List only local entries
+mx add --title="Entry" --tags="tag1,tag2" --content="..." --scope=project
+mx search "query" --scope=project
+mx list --scope=project
 ```
 
 ## Structure
@@ -906,6 +918,7 @@ Your content here.
 Project KB entries take precedence over global KB entries in search results.
 This keeps project-specific knowledge close to the code.
 """
+        readme_content = f"{readme_frontmatter}{readme_body}"
     readme_path.write_text(readme_content, encoding="utf-8")
 
     # Create config file with scope-appropriate defaults
@@ -980,11 +993,11 @@ kb_path: ./{relative_kb_path}
         click.echo()
         click.echo("Next steps:")
         if user:
-            click.echo('  mx add --title="Entry" --tags="..." --content="..."')
-            click.echo('  mx search "query"')
+            click.echo('  mx add --title="Entry" --tags="..." --content="..." --scope=user')
+            click.echo('  mx search "query" --scope=user')
         else:
-            click.echo('  mx add --title="Entry" --tags="..." --content="..." --local')
-            click.echo('  mx search "query"   # Searches local KB first')
+            click.echo('  mx add --title="Entry" --tags="..." --content="..." --scope=project')
+            click.echo('  mx search "query" --scope=project')
 
 
 # ─────────────────────────────────────────────────────────────────────────────

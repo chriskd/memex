@@ -1429,10 +1429,18 @@ class TestInitCommand:
 
         assert result.exit_code == 0
         assert "Initialized" in result.output
+        assert "--local" not in result.output
         assert (tmp_path / "kb").exists()
         assert (tmp_path / "kb" / "README.md").exists()
         # Verify .kbconfig was written to tmp_path, not project root
         assert (tmp_path / ".kbconfig").exists()
+
+        from memex.parser import parse_entry
+
+        metadata, content, _chunks = parse_entry(tmp_path / "kb" / "README.md")
+        assert metadata.title == "Project Knowledge Base"
+        assert "project" in metadata.tags
+        assert content.lstrip().startswith("# Project Knowledge Base")
 
     def test_init_already_exists(self, runner, tmp_path, monkeypatch):
         """Init fails if KB already exists (without --force)."""
