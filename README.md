@@ -30,7 +30,7 @@ For semantic search, install with extras: `pip install memex-kb[semantic]`
 mx init
 
 # Add an entry
-mx add --title="Setup Guide" --tags="docs" --content="# Setup\n\nInstructions here."
+mx add --title="Setup Guide" --tags="docs" --category=guides --content="# Setup\n\nInstructions here."
 
 # Search
 mx search "setup"
@@ -40,6 +40,8 @@ mx get guides/setup-guide.md
 ```
 
 This creates a `kb/` directory for entries and `.kbconfig` at your project root.
+
+Note: `mx add` requires `--category` unless `primary` is set in `.kbconfig`.
 
 ## Project and User KBs
 
@@ -77,13 +79,13 @@ When adding entries, use `--scope` to explicitly choose which KB:
 
 ```bash
 # Add to project KB (shared with team)
-mx add --title="API Guide" --tags="api" --scope=project --content="..."
+mx add --title="API Guide" --tags="api" --category=guides --scope=project --content="..."
 
 # Add to user KB (personal notes)
-mx add --title="My Notes" --tags="personal" --scope=user --content="..."
+mx add --title="My Notes" --tags="personal" --category=notes --scope=user --content="..."
 
 # Auto-detect (default): project KB if in project, else user KB
-mx add --title="Note" --tags="test" --content="..."
+mx add --title="Note" --tags="test" --category=notes --content="..."
 ```
 
 **When to use each scope:**
@@ -112,7 +114,7 @@ mx whats-new --days=7              # Recent changes
 mx tags                            # All tags
 
 # Write
-mx add --title="Title" --tags="a,b" --content="..."
+mx add --title="Title" --tags="a,b" --category=guides --content="..."
 mx replace path/entry.md --content="new content"
 mx patch path/entry.md --find="old" --replace="new"
 
@@ -149,7 +151,7 @@ Environment variables:
 
 | Variable | Description |
 |----------|-------------|
-| `MEMEX_KB_ROOT` | Override KB discovery |
+| `MEMEX_USER_KB_ROOT` | Override user KB root (default: `~/.memex/kb/`) |
 | `MEMEX_INDEX_ROOT` | Index directory (default: `{kb}/.indices`) |
 
 ## Development

@@ -11,16 +11,24 @@ Get productive with memex in 5 minutes.
 
 ## 1. Set Up Your Knowledge Base
 
+Choose a KB scope:
+
 ```bash
-# Create a directory for your KB
-mkdir -p ~/kb
-
-# Set environment variables (add to shell profile for persistence)
-export MEMEX_KB_ROOT=~/kb
-export MEMEX_INDEX_ROOT=~/.memex-indices
-
-# Initialize the KB
+# Project KB (shared with your repo)
 mx init
+
+# User KB (personal, available everywhere)
+mx init --user
+```
+
+Optional overrides:
+
+```bash
+# Point to an existing user KB in a custom location
+export MEMEX_USER_KB_ROOT=~/kb
+
+# Store indices outside the KB directory
+export MEMEX_INDEX_ROOT=~/.memex-indices
 ```
 
 ## 2. Create Your First Entry
@@ -44,6 +52,8 @@ Use \`git stash apply\` to keep the stash after applying."
 
 This creates `tooling/git-stash-workflow.md` in your KB.
 
+**Note:** `mx add` requires `--category` unless you set `primary` in `.kbconfig` (project) or your user KB `.kbconfig`.
+
 ## 3. Search for It
 
 ```bash
@@ -55,7 +65,13 @@ mx search "save work in progress"
 
 # Filter by tag
 mx search "git" --tags=workflow
+
+# Limit to a specific KB
+mx search "stash" --scope=project
+mx search "stash" --scope=user
 ```
+
+When both KBs exist, results are prefixed with `@project/...` and `@user/...`.
 
 ## 4. Read It Back
 
