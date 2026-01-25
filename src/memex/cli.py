@@ -27,6 +27,8 @@ from typing import TYPE_CHECKING, Any, Literal, NoReturn, cast
 import click
 from click.exceptions import ClickException, UsageError
 
+from . import __version__ as MEMEX_VERSION
+
 # Lazy imports to speed up CLI startup
 # The heavy imports (chromadb, sentence-transformers) only load when needed
 
@@ -585,7 +587,7 @@ def _output_status(
 
 
 @click.group(cls=JsonErrorGroup, invoke_without_command=True)
-@click.version_option(version="0.1.0", prog_name="mx")
+@click.version_option(version=MEMEX_VERSION, prog_name="mx")
 @click.option(
     "--json-errors",
     "json_errors",
@@ -3944,7 +3946,7 @@ def batch(file_path: str | None, continue_on_error: bool):
             json.dumps(
                 {
                     "error": "Batch module not available",
-                    "hint": "The batch module needs to be restored from v0.1.0",
+                    "hint": "The batch module needs to be restored from a prior release",
                 }
             ),
             err=True,
@@ -3998,7 +4000,7 @@ def summarize(dry_run: bool, limit: int | None, as_json: bool):
         from .core import generate_descriptions
     except ImportError:
         click.echo("Error: generate_descriptions function not available in core", err=True)
-        click.echo("This function needs to be restored from v0.1.0", err=True)
+        click.echo("This function needs to be restored from a prior release", err=True)
         sys.exit(1)
 
     results = run_async(generate_descriptions(dry_run=dry_run, limit=limit))
@@ -4052,7 +4054,7 @@ def _build_schema() -> dict:
     and common mistakes for agent introspection.
     """
     schema = {
-        "version": "0.1.0",
+        "version": MEMEX_VERSION,
         "description": "Token-efficient CLI for memex knowledge base",
         "commands": {
             "search": {

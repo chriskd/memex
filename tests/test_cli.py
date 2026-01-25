@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
+from memex import __version__ as MEMEX_VERSION
 from memex.cli import cli
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -103,7 +104,7 @@ def test_version_option(runner):
     """--version outputs version number."""
     result = runner.invoke(cli, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert MEMEX_VERSION in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────

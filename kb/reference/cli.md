@@ -435,7 +435,7 @@ mx schema --compact          # Minimal output (commands and options only)
 **Example output structure:**
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "commands": {
     "patch": {
       "description": "Apply surgical find-replace edits",
