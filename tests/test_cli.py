@@ -11,6 +11,7 @@ Design:
 - Targets <5 second total runtime
 """
 
+import inspect
 import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -20,6 +21,25 @@ from click.testing import CliRunner
 
 from memex import __version__ as MEMEX_VERSION
 from memex.cli import cli
+
+
+class CoroutineClosingMock(MagicMock):
+    """MagicMock that closes coroutine args to avoid un-awaited warnings."""
+
+    last_coro_locals: dict[str, object] | None = None
+
+    def __call__(self, *args, **kwargs):
+        if args and inspect.iscoroutine(args[0]):
+            frame = args[0].cr_frame
+            if frame is not None:
+                self.last_coro_locals = frame.f_locals.copy()
+            try:
+                args[0].close()
+            except RuntimeError:
+                # Closed or invalid state; keep test behavior intact.
+                pass
+        return super().__call__(*args, **kwargs)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Command Lists
@@ -118,7 +138,7 @@ class TestSearchCommand:
     """Tests for 'mx search' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_search_returns_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search returns results for valid query."""
         mock_get_kb_root.return_value = tmp_path
@@ -224,7 +244,7 @@ Content B
         assert metadata.relations == []
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_search_no_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search handles no results gracefully."""
         mock_get_kb_root.return_value = tmp_path
@@ -238,7 +258,7 @@ Content B
         assert "No results found" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_search_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search --json outputs valid JSON."""
         mock_get_kb_root.return_value = tmp_path
@@ -262,7 +282,7 @@ Content B
         assert data[0]["path"] == "test.md"
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_search_terse_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Search --terse outputs only paths."""
         mock_get_kb_root.return_value = tmp_path
@@ -301,7 +321,7 @@ Content B
             assert "No knowledge base found" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     @patch("memex.search_history.record_search")
     def test_search_records_history(
         self,
@@ -339,7 +359,7 @@ Content B
 class TestGetCommand:
     """Tests for 'mx get' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_get_by_path(self, mock_run_async, runner):
         """Get reads entry by path."""
         mock_entry = MagicMock()
@@ -360,7 +380,7 @@ class TestGetCommand:
         assert "Test Entry" in result.output
         assert "Test Content" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_get_metadata_only(self, mock_run_async, runner):
         """Get --metadata shows only metadata."""
         mock_entry = MagicMock()
@@ -381,7 +401,7 @@ class TestGetCommand:
         assert "Tags:" in result.output
         assert "tag1, tag2" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_get_json_output(self, mock_run_async, runner):
         """Get --json outputs valid JSON."""
         mock_entry = MagicMock()
@@ -397,7 +417,7 @@ class TestGetCommand:
         data = json.loads(result.output)
         assert data["metadata"]["title"] == "Test"
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_get_entry_not_found(self, mock_run_async, runner):
         """Get fails for nonexistent entry."""
         mock_run_async.side_effect = FileNotFoundError("Entry not found")
@@ -421,7 +441,7 @@ class TestGetCommand:
 class TestAddCommand:
     """Tests for 'mx add' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_content(self, mock_run_async, runner):
         """Add creates entry with inline content."""
         mock_run_async.return_value = {
@@ -446,7 +466,7 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert "Created: test/entry.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_json_output(self, mock_run_async, runner):
         """Add --json outputs valid JSON."""
         mock_run_async.return_value = {
@@ -489,7 +509,7 @@ class TestAddCommand:
         assert result.exit_code == 1
         assert "Must provide --content, --file, or --stdin" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_error_handling(self, mock_run_async, runner):
         """Add handles errors gracefully."""
         mock_run_async.side_effect = ValueError("Invalid entry")
@@ -510,7 +530,7 @@ class TestAddCommand:
         assert result.exit_code == 1
         assert "Error" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_scope_project(self, mock_run_async, runner):
         """Add with --scope=project passes scope to add_entry."""
         mock_run_async.return_value = {
@@ -537,7 +557,7 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert "Created: @project/notes/entry.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_scope_user(self, mock_run_async, runner):
         """Add with --scope=user passes scope to add_entry."""
         mock_run_async.return_value = {
@@ -564,7 +584,7 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert "Created: @user/personal/note.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_scope_json_output(self, mock_run_async, runner):
         """Add with --scope includes scope in JSON output."""
         mock_run_async.return_value = {
@@ -614,7 +634,7 @@ class TestAddCommand:
         assert result.exit_code != 0
         assert "Invalid value for '--scope'" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_scope_error_no_user_kb(self, mock_run_async, runner):
         """Add with --scope=user fails if user KB doesn't exist."""
         from memex.config import ConfigurationError
@@ -641,7 +661,7 @@ class TestAddCommand:
         assert result.exit_code == 1
         assert "No user KB found" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_decodes_escape_sequences(self, mock_run_async, runner):
         """Add decodes \\n, \\t, \\\\ escape sequences in --content."""
         mock_run_async.return_value = {
@@ -666,7 +686,7 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_keywords(self, mock_run_async, runner):
         """Add with --keywords passes keywords to add_entry."""
         mock_run_async.return_value = {
@@ -700,7 +720,7 @@ class TestAddCommand:
         # Check coroutine was created with keywords by inspecting the call
         assert coro is not None
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_without_keywords(self, mock_run_async, runner):
         """Add without --keywords passes None for keywords."""
         mock_run_async.return_value = {
@@ -725,7 +745,7 @@ class TestAddCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_semantic_links(self, mock_run_async, runner):
         """Add with --semantic-links passes parsed links to add_entry."""
         mock_run_async.return_value = {
@@ -868,7 +888,7 @@ class TestEscapeSequenceDecoding:
 class TestAppendCommand:
     """Tests for 'mx append' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_append_to_existing(self, mock_run_async, runner):
         """Append adds content to existing entry."""
         mock_run_async.return_value = {
@@ -897,7 +917,7 @@ class TestAppendCommand:
         assert result.exit_code == 1
         assert "content" in result.output.lower()
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_append_decodes_escape_sequences(self, mock_run_async, runner):
         """Append decodes \\n, \\t, \\\\ in --content."""
         mock_run_async.return_value = {
@@ -918,10 +938,8 @@ class TestAppendCommand:
 
         assert result.exit_code == 0
         # Verify the content passed to append_entry has decoded escapes
-        call_args = mock_run_async.call_args
-        coro = call_args.args[0]
-        assert coro.cr_frame is not None
-        assert coro.cr_frame.f_locals["content"] == "Line 1\nLine 2\tTabbed\\Backslash"
+        assert mock_run_async.last_coro_locals is not None
+        assert mock_run_async.last_coro_locals["content"] == "Line 1\nLine 2\tTabbed\\Backslash"
         assert mock_run_async.called
 
 
@@ -933,7 +951,7 @@ class TestAppendCommand:
 class TestReplaceCommand:
     """Tests for 'mx replace' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_tags(self, mock_run_async, runner):
         """Replace modifies entry tags."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -943,7 +961,7 @@ class TestReplaceCommand:
         assert result.exit_code == 0
         assert "Replaced" in result.output or "test.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_json_output(self, mock_run_async, runner):
         """Replace --json outputs valid JSON."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -954,7 +972,7 @@ class TestReplaceCommand:
         data = json.loads(result.output)
         assert data["path"] == "test.md"
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_not_found(self, mock_run_async, runner):
         """Replace fails for nonexistent entry."""
         mock_run_async.side_effect = FileNotFoundError("Entry not found")
@@ -964,7 +982,7 @@ class TestReplaceCommand:
         assert result.exit_code == 1
         assert "Error" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_decodes_escape_sequences(self, mock_run_async, runner):
         """Replace decodes \\n, \\t, \\\\ escape sequences in --content."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -982,7 +1000,7 @@ class TestReplaceCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_with_keywords(self, mock_run_async, runner):
         """Replace with --keywords updates entry keywords."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -1001,7 +1019,7 @@ class TestReplaceCommand:
         assert "Replaced" in result.output or "test.md" in result.output
         assert mock_run_async.called
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_update_alias_with_keywords(self, mock_run_async, runner):
         """Update alias passes keywords to replace_cmd."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -1019,7 +1037,7 @@ class TestReplaceCommand:
         assert result.exit_code == 0
         assert mock_run_async.called
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_replace_with_semantic_links(self, mock_run_async, runner):
         """Replace with --semantic-links passes parsed links to update_entry."""
         mock_run_async.return_value = {"path": "test.md", "updated": True}
@@ -1093,7 +1111,7 @@ class TestReplaceCommand:
 class TestDeleteCommand:
     """Tests for 'mx delete' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_delete_entry(self, mock_run_async, runner):
         """Delete removes entry."""
         mock_run_async.return_value = {"deleted": "test.md", "had_backlinks": []}
@@ -1103,7 +1121,7 @@ class TestDeleteCommand:
         assert result.exit_code == 0
         assert "Deleted" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_delete_with_backlinks_warning(self, mock_run_async, runner):
         """Delete shows backlink warning when forced."""
         mock_run_async.return_value = {
@@ -1116,7 +1134,7 @@ class TestDeleteCommand:
         assert result.exit_code == 0
         assert "backlink" in result.output.lower()
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_delete_json_output(self, mock_run_async, runner):
         """Delete --json outputs valid JSON."""
         mock_run_async.return_value = {"deleted": "test.md", "had_backlinks": []}
@@ -1136,7 +1154,7 @@ class TestDeleteCommand:
 class TestListCommand:
     """Tests for 'mx list' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_list_entries(self, mock_run_async, runner):
         """List shows entries."""
         mock_run_async.return_value = [
@@ -1150,7 +1168,7 @@ class TestListCommand:
         assert "a.md" in result.output
         assert "b.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_list_no_entries(self, mock_run_async, runner):
         """List handles empty results."""
         mock_run_async.return_value = []
@@ -1160,7 +1178,7 @@ class TestListCommand:
         assert result.exit_code == 0
         assert "No entries found" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_list_json_output(self, mock_run_async, runner):
         """List --json outputs valid JSON."""
         mock_run_async.return_value = [{"path": "a.md", "title": "A"}]
@@ -1180,7 +1198,7 @@ class TestListCommand:
 class TestTreeCommand:
     """Tests for 'mx tree' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_tree_shows_structure(self, mock_run_async, runner):
         """Tree displays directory structure."""
         mock_run_async.return_value = {
@@ -1200,7 +1218,7 @@ class TestTreeCommand:
         assert "tooling/" in result.output
         assert "1 directories, 1 files" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_tree_json_output(self, mock_run_async, runner):
         """Tree --json outputs valid JSON."""
         mock_run_async.return_value = {
@@ -1225,7 +1243,7 @@ class TestTagsCommand:
     """Tests for 'mx tags' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_tags_shows_tag_counts(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags lists tags with counts."""
         mock_get_kb_root.return_value = tmp_path
@@ -1241,7 +1259,7 @@ class TestTagsCommand:
         assert "10" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_tags_no_tags(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags handles empty results."""
         mock_get_kb_root.return_value = tmp_path
@@ -1253,7 +1271,7 @@ class TestTagsCommand:
         assert "No tags found" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_tags_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Tags --json outputs valid JSON."""
         mock_get_kb_root.return_value = tmp_path
@@ -1291,7 +1309,7 @@ class TestRelationsLintCommand:
     """Tests for 'mx relations-lint' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_relations_lint_reports_issues(
         self, mock_run_async, mock_get_kb_root, runner, tmp_path
     ):
@@ -1335,7 +1353,7 @@ class TestRelationsLintCommand:
         assert "use depends_on" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_relations_lint_strict_exits_nonzero(
         self, mock_run_async, mock_get_kb_root, runner, tmp_path
     ):
@@ -1367,10 +1385,8 @@ class TestRelationsLintCommand:
         assert result.exit_code == 1
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
-    def test_relations_lint_json_output(
-        self, mock_run_async, mock_get_kb_root, runner, tmp_path
-    ):
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_relations_lint_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """relations-lint --json outputs valid JSON."""
         mock_get_kb_root.return_value = tmp_path
         mock_run_async.return_value = {
@@ -1401,7 +1417,7 @@ class TestHubsCommand:
     """Tests for 'mx hubs' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_hubs_shows_hub_entries(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Hubs lists highly connected entries."""
         mock_get_kb_root.return_value = tmp_path
@@ -1415,7 +1431,7 @@ class TestHubsCommand:
         assert "hub.md" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_hubs_no_results(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Hubs handles empty results."""
         mock_get_kb_root.return_value = tmp_path
@@ -1452,7 +1468,7 @@ class TestHealthCommand:
     """Tests for 'mx health' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_health_shows_status(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health shows KB health status."""
         mock_get_kb_root.return_value = tmp_path
@@ -1471,7 +1487,7 @@ class TestHealthCommand:
         assert "Total Entries: 100" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_health_with_issues(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health reports found issues."""
         mock_get_kb_root.return_value = tmp_path
@@ -1490,7 +1506,7 @@ class TestHealthCommand:
         assert "Broken links" in result.output
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_health_json_output(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Health --json outputs valid JSON."""
         mock_get_kb_root.return_value = tmp_path
@@ -1583,7 +1599,7 @@ class TestReindexCommand:
     """Tests for 'mx reindex' command."""
 
     @patch("memex.config.get_kb_root")
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_reindex_success(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
         """Reindex reports indexed entries."""
         mock_get_kb_root.return_value = tmp_path
@@ -1685,7 +1701,7 @@ class TestInfoCommand:
 class TestWhatsNewCommand:
     """Tests for 'mx whats-new' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_whats_new_shows_recent(self, mock_run_async, runner):
         """Whats-new lists recent entries."""
         mock_run_async.return_value = [
@@ -1697,7 +1713,7 @@ class TestWhatsNewCommand:
         assert result.exit_code == 0
         assert "new.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_whats_new_no_entries(self, mock_run_async, runner):
         """Whats-new handles no recent entries."""
         mock_run_async.return_value = []
@@ -1707,7 +1723,7 @@ class TestWhatsNewCommand:
         assert result.exit_code == 0
         assert "No entries" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_whats_new_json_output(self, mock_run_async, runner):
         """Whats-new --json outputs valid JSON."""
         mock_run_async.return_value = [
@@ -1729,7 +1745,7 @@ class TestWhatsNewCommand:
 class TestSuggestLinksCommand:
     """Tests for 'mx suggest-links' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_suggest_links_shows_suggestions(self, mock_run_async, runner):
         """Suggest-links shows link suggestions."""
         mock_run_async.return_value = [
@@ -1741,7 +1757,7 @@ class TestSuggestLinksCommand:
         assert result.exit_code == 0
         assert "related.md" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_suggest_links_no_suggestions(self, mock_run_async, runner):
         """Suggest-links handles no suggestions."""
         mock_run_async.return_value = []
@@ -1751,7 +1767,7 @@ class TestSuggestLinksCommand:
         assert result.exit_code == 0
         assert "No link suggestions" in result.output
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_suggest_links_error(self, mock_run_async, runner):
         """Suggest-links handles errors gracefully."""
         mock_run_async.side_effect = FileNotFoundError("Entry not found")
@@ -1919,7 +1935,7 @@ class TestContextCommand:
 class TestPatchCommand:
     """Tests for 'mx patch' command."""
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_patch_find_replace(self, mock_run_async, runner):
         """Patch performs find/replace on entry."""
         mock_run_async.return_value = {
@@ -1973,7 +1989,7 @@ class TestExitCodes:
         result = runner.invoke(cli, ["search", "test", "--mode", "invalid"])
         assert result.exit_code != 0
 
-    @patch("memex.cli.run_async")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_error_handling_exit_code(self, mock_run_async, runner):
         """Command errors exit with 1."""
         mock_run_async.side_effect = RuntimeError("Failure")
@@ -2224,9 +2240,15 @@ class TestPublishCommand:
         assert result.exit_code == 0
         assert "Usage:" in result.output
 
-    def test_publish_no_kb_shows_options(self, runner, tmp_path):
+    def test_publish_no_kb_shows_options(self, runner, tmp_path, monkeypatch):
         """publish with no KB shows helpful error with options."""
         # Run from a directory with no KB
+        from memex.context import clear_context_cache, clear_kbconfig_cache
+
+        clear_context_cache()
+        clear_kbconfig_cache()
+        monkeypatch.chdir(tmp_path)
+
         result = runner.invoke(
             cli,
             ["publish"],

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import re
 
-
 CANONICAL_RELATION_TYPES: dict[str, str] = {
     "depends_on": "A requires B to function or make progress.",
     "implements": "A implements the spec, API, or plan described by B.",

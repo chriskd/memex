@@ -1656,8 +1656,7 @@ def relations_lint(ctx: click.Context, scope: str | None, strict: bool, as_json:
 
                     if issue_key == "inconsistent" and suggestion:
                         click.echo(
-                            f"  - {path_display} -> {target} "
-                            f"(type: {rel_type}, use {suggestion})"
+                            f"  - {path_display} -> {target} (type: {rel_type}, use {suggestion})"
                         )
                     elif issue_key == "missing":
                         click.echo(f"  - {path_display} -> {target} (type missing)")

@@ -593,8 +593,9 @@ class TestUpdateEntry:
 
     @pytest.mark.asyncio
     async def test_update_entry_relations_reindexes_scoped_paths(self, multi_kb):
-        from memex.models import RelationLink
         from conftest import create_entry
+
+        from memex.models import RelationLink
 
         project_kb = multi_kb["project_kb"]
         user_kb = multi_kb["user_kb"]
