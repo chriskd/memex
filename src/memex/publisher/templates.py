@@ -442,7 +442,7 @@ def _base_layout(
         <aside class="sidebar">
             {sidebar_html}
             <div class="sidebar-footer">
-                <a href="https://github.com/chriskd/memex"
+                <a href="https://github.com/chriskd/memex-kb"
                    target="_blank"
                    rel="noopener">Powered by memex</a>
             </div>

@@ -35,7 +35,7 @@ This includes:
 For development or customization:
 
 ```bash
-git clone https://github.com/chriskd/memex.git
+git clone https://github.com/chriskd/memex-kb.git
 cd memex
 
 # Runtime dependencies

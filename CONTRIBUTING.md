@@ -13,7 +13,7 @@ Thanks for your interest in contributing to Memex! This document provides guidel
 
 ```bash
 # Clone the repository
-git clone https://github.com/chriskd/memex.git
+git clone https://github.com/chriskd/memex-kb.git
 cd memex
 
 # Install dependencies (including dev tools)
