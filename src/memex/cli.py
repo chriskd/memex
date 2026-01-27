@@ -1137,7 +1137,7 @@ def _score_confidence_short(score: float) -> str:
 @click.option(
     "--include-neighbors",
     is_flag=True,
-    help="Include semantically linked entries and typed relations",
+    help="Include semantically linked entries, typed relations, and wikilinks",
 )
 @click.option(
     "--neighbor-depth",
@@ -1184,8 +1184,9 @@ def search(
     for unrelated queries (e.g., gibberish). Useful when you need precise matches.
 
     The --include-neighbors flag enables graph-aware search by including entries
-    that are semantically linked or connected via typed relations to the direct
-    matches. Use --neighbor-depth to control how many hops to traverse (default 1).
+    that are semantically linked, connected via typed relations, or referenced by
+    wikilinks from the direct matches. Use --neighbor-depth to control how many
+    hops to traverse (default 1).
 
     \b
     Examples:
@@ -1487,7 +1488,7 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     "--origin",
     "origins",
     multiple=True,
-    type=click.Choice(["wikilink", "relations"]),
+    type=click.Choice(["wikilink", "semantic", "relations"]),
     help="Filter by edge origin (repeatable)",
 )
 @click.option("--type", "relation_types", multiple=True, help="Filter by relation type")
@@ -1521,7 +1522,11 @@ def relations(
 
     assert path is not None  # narrowing for type checker after sys.exit
 
-    origin_set = cast(set[Literal["wikilink", "relations"]], set(origins)) if origins else None
+    origin_set = (
+        cast(set[Literal["wikilink", "relations", "semantic"]], set(origins))
+        if origins
+        else None
+    )
     type_set = set(relation_types) if relation_types else None
 
     try:

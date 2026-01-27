@@ -393,6 +393,20 @@ class SiteGenerator:
                         }
                     )
 
+            # Semantic links (auto-generated)
+            for link in entry.metadata.semantic_links:
+                target = self._normalize_relation_target(link.path)
+                if target and target in node_ids:
+                    edges.append(
+                        {
+                            "source": path,
+                            "target": target,
+                            "origin": "semantic",
+                            "type": None,
+                            "score": link.score,
+                        }
+                    )
+
             for relation in entry.metadata.relations:
                 target = self._normalize_relation_target(relation.path)
                 if target and target in node_ids:

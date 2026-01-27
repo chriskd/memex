@@ -1,4 +1,4 @@
-"""Unified relations graph built from wikilinks and frontmatter."""
+"""Unified relations graph built from wikilinks, semantic links, and frontmatter relations."""
 
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def _normalize_link_target(
 
 
 def build_relations_graph(scope: str | None = None) -> RelationsGraph:
-    """Build a relations graph from wikilinks and typed relations."""
+    """Build a relations graph from wikilinks, semantic links, and typed relations."""
     kb_roots = get_kb_roots_for_indexing(scope=scope)
     if not kb_roots:
         return RelationsGraph()
@@ -166,6 +166,26 @@ def build_relations_graph(scope: str | None = None) -> RelationsGraph:
                     )
                 )
 
+            # Semantic links (frontmatter, auto-generated)
+            for link in metadata.semantic_links:
+                target_scope, target_rel = parse_scoped_path(link.path)
+                target_scope = target_scope if target_scope is not None else scope_label
+                target_path = _scoped_path(target_scope, _ensure_md_extension(target_rel))
+                if target_path not in known_nodes:
+                    continue
+                key = (source_node, target_path, "semantic", None, None)
+                if key in edge_keys:
+                    continue
+                edge_keys.add(key)
+                edges.append(
+                    RelationEdge(
+                        source=source_node,
+                        target=target_path,
+                        origin="semantic",
+                        score=link.score,
+                    )
+                )
+
     return RelationsGraph(nodes=nodes, edges=edges)
 
 
@@ -232,7 +252,7 @@ def query_relations_graph(
     *,
     depth: int = 1,
     direction: Literal["outgoing", "incoming", "both"] = "both",
-    origin: set[Literal["wikilink", "relations"]] | None = None,
+    origin: set[Literal["wikilink", "relations", "semantic"]] | None = None,
     relation_types: set[str] | None = None,
     scope: str | None = None,
 ) -> RelationsQueryResult:

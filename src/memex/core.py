@@ -1300,10 +1300,11 @@ async def expand_search_with_neighbors(
     depth: int = 1,
     include_content: bool = False,
 ) -> list[dict]:
-    """Expand search results to include semantically linked entries (neighbors).
+    """Expand search results to include linked entries (neighbors).
 
-    For each search result, reads semantic_links and typed relations from metadata
-    and fetches those linked entries. Performs graph traversal up to the specified depth.
+    For each search result, reads semantic_links, typed relations, and wikilinks
+    from metadata/content and fetches those linked entries. Performs graph traversal
+    up to the specified depth.
 
     Args:
         results: Initial search results to expand.
@@ -1317,7 +1318,10 @@ async def expand_search_with_neighbors(
         Direct matches have is_neighbor=False, neighbors have is_neighbor=True
         and linked_from set to the path that linked to them.
     """
-    from .config import resolve_scoped_path
+    from .config import get_kb_roots_for_indexing, resolve_scoped_path
+    from .parser import extract_links
+    from .parser.links import resolve_wikilink_target
+    from .parser.title_index import build_title_index
 
     def _normalize_neighbor_path(raw_path: str, default_scope: str | None) -> str | None:
         """Normalize neighbor path to include scope and .md when needed."""
@@ -1337,6 +1341,12 @@ async def expand_search_with_neighbors(
         if default_scope is not None:
             return f"@{default_scope}/{relative}"
         return relative
+
+    # Build title indexes per scope for wikilink resolution
+    scope_indices = {}
+    for scope_label, kb_root in get_kb_roots_for_indexing():
+        if kb_root.exists():
+            scope_indices[scope_label] = build_title_index(kb_root, include_filename_index=True)
 
     # Build output list - start with direct matches
     output: list[dict] = []
@@ -1376,7 +1386,7 @@ async def expand_search_with_neighbors(
 
         # Read the entry to get its semantic_links and relations
         try:
-            current_scope, _ = parse_scoped_path(current_path)
+            current_scope, current_rel = parse_scoped_path(current_path)
             file_path = resolve_scoped_path(current_path)
             if not file_path.exists():
                 continue
@@ -1384,6 +1394,7 @@ async def expand_search_with_neighbors(
             metadata, content, _ = parse_entry(file_path)
             semantic_links = metadata.semantic_links
             relation_links = metadata.relations
+            wikilinks = extract_links(content)
 
             neighbor_links: list[tuple[str, float]] = []
             for link in semantic_links:
@@ -1392,6 +1403,19 @@ async def expand_search_with_neighbors(
                     neighbor_links.append((normalized, link.score))
             for relation in relation_links:
                 normalized = _normalize_neighbor_path(relation.path, current_scope)
+                if normalized:
+                    neighbor_links.append((normalized, parent_score))
+            # Wikilinks from content
+            source_rel = current_rel[:-3] if current_rel.endswith(".md") else current_rel
+            title_index = scope_indices.get(current_scope)
+            for target in wikilinks:
+                normalized = None
+                if target.startswith("@"):
+                    normalized = _normalize_neighbor_path(target, current_scope)
+                elif title_index:
+                    resolved = resolve_wikilink_target(source_rel, target, title_index)
+                    if resolved:
+                        normalized = _normalize_neighbor_path(resolved, current_scope)
                 if normalized:
                     neighbor_links.append((normalized, parent_score))
 

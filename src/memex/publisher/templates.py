@@ -809,6 +809,10 @@ def render_graph_page(
                 <span>Wikilinks</span>
             </label>
             <label class="graph-control-item">
+                <input type="checkbox" data-origin="semantic" checked>
+                <span>Semantic</span>
+            </label>
+            <label class="graph-control-item">
                 <input type="checkbox" data-origin="relations" checked>
                 <span>Typed</span>
             </label>
@@ -856,6 +860,7 @@ def render_graph_page(
 
             const edgeColors = {
                 'wikilink': '#262b3a',
+                'semantic': '#8fbcbb',
                 'relations': '#5e81ac'
             };
 
@@ -884,7 +889,11 @@ def render_graph_page(
                 .attr('stroke', d => edgeColors[d.origin] || '#262b3a')
                 .attr('stroke-opacity', 0.5)
                 .attr('stroke-width', d => d.score ? 1 + (d.score * 2) : 1)
-                .attr('stroke-dasharray', d => d.origin === 'wikilink' ? '2,2' : null)
+                .attr('stroke-dasharray', d => {
+                    if (d.origin === 'wikilink') return '2,2';
+                    if (d.origin === 'semantic') return '1,4';
+                    return null;
+                })
                 .attr('marker-end', d => d.origin === 'relations' ? 'url(#arrow-relations)' : null)
                 .attr('data-origin', d => d.origin)
                 .attr('data-type', d => d.type || '');
@@ -955,6 +964,7 @@ def render_graph_page(
             const activeTypes = new Set(relationTypes);
             const originEnabled = {
                 wikilink: true,
+                semantic: true,
                 relations: true,
             };
 
@@ -1057,7 +1067,9 @@ def render_graph_page(
 
             link.on('mouseover', (event, d) => {
                     tooltip.style.display = 'block';
-                    const label = d.origin === 'relations' ? (d.type || 'relation') : 'wikilink';
+                    const label = d.origin === 'relations'
+                        ? (d.type || 'relation')
+                        : (d.origin === 'semantic' ? 'semantic' : 'wikilink');
                     const sourceLabel = d.source.title || d.source.id;
                     const targetLabel = d.target.title || d.target.id;
                     const score = d.score ? ' (' + d.score.toFixed(2) + ')' : '';

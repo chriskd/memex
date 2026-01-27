@@ -7,6 +7,7 @@ Tests cover:
 4. Deduplication of results
 5. Edge cases (no neighbors, circular links, depth limiting)
 6. Typed relations included as neighbors
+7. Wikilinks included as neighbors
 """
 
 from pathlib import Path
@@ -223,6 +224,41 @@ class TestExpandSearchWithNeighbors:
             "Content about entry A",
             ["test"],
             relations=[{"path": "b.md", "type": "depends_on"}],
+        )
+        # Create entry B
+        create_entry_with_links(tmp_kb, "b.md", "Entry B", "Content about entry B", ["test"])
+
+        results = [
+            SearchResult(
+                path="a.md",
+                title="Entry A",
+                snippet="Content about entry A",
+                score=0.9,
+                tags=["test"],
+            )
+        ]
+
+        expanded = await expand_search_with_neighbors(results, depth=1)
+
+        assert len(expanded) == 2
+        assert expanded[0]["path"] == "a.md"
+        assert expanded[0]["is_neighbor"] is False
+        assert expanded[1]["path"] == "b.md"
+        assert expanded[1]["is_neighbor"] is True
+        assert expanded[1]["linked_from"] == "a.md"
+
+    @pytest.mark.asyncio
+    async def test_expands_direct_results_with_wikilinks(self, tmp_kb: Path):
+        """Wikilinks in content are included as neighbors."""
+        from memex.core import expand_search_with_neighbors
+
+        # Create entry A with wikilink to B (title-based)
+        create_entry_with_links(
+            tmp_kb,
+            "a.md",
+            "Entry A",
+            "See [[Entry B]] for more.",
+            ["test"],
         )
         # Create entry B
         create_entry_with_links(tmp_kb, "b.md", "Entry B", "Content about entry B", ["test"])

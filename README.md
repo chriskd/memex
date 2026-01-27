@@ -11,7 +11,7 @@ Designed for humans and AI coding agents across project and user knowledge bases
   merged with Reciprocal Rank Fusion and relevance boosts.
 - **Typed relations**: Canonical relation types in frontmatter, CLI add/remove helpers,
   and linting (`mx relations-lint`) for consistency.
-- **Relations graph**: Unified graph of wikilinks + typed relations, queryable via `mx relations`,
+- **Relations graph**: Unified graph of wikilinks, typed relations, and semantic links, queryable via `mx relations`,
   and surfaced in published sites.
 - **Bidirectional links**: Obsidian-style `[[links]]`, backlinks, and semantic links for discovery.
 - **Project + user scopes**: Separate KBs with `@project/` and `@user/` paths, shared search,

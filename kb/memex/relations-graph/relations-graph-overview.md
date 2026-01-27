@@ -21,7 +21,7 @@ relations:
 
 # Relations Graph Overview
 
-This page connects wikilinks and typed relations into a single graph.
+This page connects wikilinks, typed relations, and semantic links into a single graph.
 
 See [[memex/relations-graph/wikilink-edge-behavior]] and [[memex/relations-graph/frontmatter-edge-types]] for details.
 
@@ -30,17 +30,17 @@ See [[memex/relations-graph/wikilink-edge-behavior]] and [[memex/relations-graph
 Published KB pages surface typed relations in two places:
 
 - **Entry panel**: "Typed Relations" shows outgoing vs incoming edges with direction arrows and type labels.
-- **Graph view**: Typed relations render as solid edges with arrowheads, and the controls let you filter by origin and relation type.
+- **Graph view**: Typed relations render as solid edges with arrowheads; semantic links and wikilinks appear with distinct styles, and the controls let you filter by origin and relation type.
 
 ## Search neighbors
 
-`mx search --include-neighbors` expands results using both semantic links and typed relations.
+`mx search --include-neighbors` expands results using semantic links, typed relations, and wikilinks.
 Use `--neighbor-depth` to control hop count (default 1).
 
 ## Query the relations graph
 
 There isn't a dedicated CLI command yet. For now:
-- Use `mx search --include-neighbors` to expand results through semantic links + typed relations
+- Use `mx search --include-neighbors` to expand results through semantic links + typed relations + wikilinks
 - Inspect `relations` in entry frontmatter (open the file or use `mx get path/to/entry.md --json`)
 
 ## Editing typed relations

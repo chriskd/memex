@@ -58,7 +58,7 @@ mx search "query" --json             # JSON output
 - `--terse`: Output paths only
 - `--full-titles`: Show full titles without truncation
 - `--scope`: Limit to KB scope (project or user)
-- `--include-neighbors`: Include semantic links + typed relations
+- `--include-neighbors`: Include semantic links + typed relations + wikilinks
 - `--neighbor-depth`: Neighbor traversal depth (default: 1)
 - `--json`: JSON output
 

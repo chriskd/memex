@@ -142,7 +142,7 @@ class RelationEdge(BaseModel):
 
     source: str
     target: str
-    origin: Literal["wikilink", "relations"]
+    origin: Literal["wikilink", "relations", "semantic"]
     relation_type: str | None = None
     score: float | None = None
 

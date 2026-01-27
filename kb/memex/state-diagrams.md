@@ -122,15 +122,17 @@ stateDiagram-v2
     ApplyMinScore --> FormatOutput: no neighbors
     IncludeNeighbors --> ExpandFromSemanticLinks
     IncludeNeighbors --> ExpandFromTypedRelations
+    IncludeNeighbors --> ExpandFromWikilinks
     ExpandFromSemanticLinks --> MergeResults
     ExpandFromTypedRelations --> MergeResults
+    ExpandFromWikilinks --> MergeResults
     MergeResults --> FormatOutput
     FormatOutput --> [*]
 ```
 
 Notes:
 - `--scope` limits the KB roots used for indexing and search; single-KB mode returns unscoped paths.
-- Neighbor expansion uses semantic links plus typed relations from the relations graph cache.
+- Neighbor expansion uses semantic links, typed relations, and wikilinks.
 
 ## Typed Relations + Publish Rendering
 
