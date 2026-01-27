@@ -1,5 +1,5 @@
 ---
-name: kb-quality
+name: memex-kb-quality
 description: Audit KB health and find problems
 allowed-tools:
   - Bash

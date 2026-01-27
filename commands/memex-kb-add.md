@@ -1,5 +1,5 @@
 ---
-name: kb-add
+name: memex-kb-add
 description: Add a new entry to the knowledge base
 allowed-tools:
   - Bash

@@ -1,5 +1,5 @@
 ---
-name: kb-usage
+name: memex-kb-usage
 description: This skill should be used when the user asks to "search the KB", "find documentation", "add to knowledge base", "document this pattern", "check organizational docs", or when an agent discovers reusable knowledge worth preserving.
 ---
 

@@ -1,5 +1,5 @@
 ---
-name: kb-search
+name: memex-kb-search
 description: Search the knowledge base
 allowed-tools:
   - Bash
