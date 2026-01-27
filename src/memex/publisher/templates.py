@@ -64,8 +64,17 @@ def _safe(html: str) -> str:
 
 
 def _recent_sort_key(entry: EntryData):
-    """Sort by most recent activity, preferring updated over created."""
-    return entry.metadata.updated or entry.metadata.created
+    """Sort by most recent activity, preferring updated over created.
+
+    Normalizes datetimes to handle mixed timezone-aware and timezone-naive
+    values (comparing them would raise TypeError). Strips timezone info
+    to get a consistent naive datetime for comparison.
+    """
+    dt = entry.metadata.updated or entry.metadata.created
+    if dt is None:
+        return None
+    # Strip timezone info to allow comparison between aware and naive datetimes
+    return dt.replace(tzinfo=None) if dt.tzinfo else dt
 
 
 def _build_file_tree(entries: list[EntryData], current_path: str = "", base_url: str = "") -> str:
