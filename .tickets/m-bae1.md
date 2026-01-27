@@ -14,7 +14,7 @@ Readiness review m-71f4 requires state diagrams for all major flows (init, add/u
 
 ## Acceptance Criteria
 
-- [x] State diagram for init + KB discovery (.kbconfig/.kbcontext)\n- [x] State diagram for add/update/patch flows (including category/primary rules)\n- [x] State diagram for search + neighbors/relations graph\n- [x] State diagram for typed relations add/remove + publish rendering\n- [x] Diagrams stored in KB or docs location and referenced from README/KB
+- [x] State diagram for init + KB discovery (.kbconfig/.kbconfig)\n- [x] State diagram for add/update/patch flows (including category/primary rules)\n- [x] State diagram for search + neighbors/relations graph\n- [x] State diagram for typed relations add/remove + publish rendering\n- [x] Diagrams stored in KB or docs location and referenced from README/KB
 
 ## Notes
 

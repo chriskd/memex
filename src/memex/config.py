@@ -325,7 +325,7 @@ DEFAULT_SEARCH_LIMIT = 10
 # Maximum number of results allowed (prevents expensive queries)
 MAX_SEARCH_LIMIT = 50
 
-# Maximum directory traversal depth when searching for .kbcontext files
+# Maximum directory traversal depth when searching for .kbconfig files
 # Prevents infinite loops on circular symlinks or unusual filesystems.
 # 50 levels is far beyond typical project depths (5-10 levels).
 MAX_CONTEXT_SEARCH_DEPTH = 50
@@ -375,7 +375,7 @@ TAG_MATCH_BOOST = 0.05
 # Helps surface project-specific documentation when working within that project
 PROJECT_CONTEXT_BOOST = 0.15
 
-# Boost for entries matching .kbcontext path patterns
+# Boost for entries matching .kbconfig path patterns
 # Slightly lower than project boost to prioritize exact project matches
 KB_PATH_CONTEXT_BOOST = 0.12
 

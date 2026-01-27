@@ -1,9 +1,9 @@
 """Project context discovery and loading for memex.
 
 This module provides context-aware behavior when working within a project directory.
-A .kbcontext file tells the KB which paths are most relevant for that project.
+A .kbconfig file tells the KB which paths are most relevant for that project.
 
-Example .kbcontext file:
+Example .kbconfig file:
     primary: projects/memex    # Default write directory
     paths:                           # Boost these in search (supports globs)
       - projects/memex
@@ -121,7 +121,7 @@ def clear_kbconfig_cache() -> None:
 
 @dataclass
 class KBContext:
-    """Project context configuration from .kbcontext file."""
+    """Project context configuration from .kbconfig file."""
 
     primary: str | None = None
     """Default directory for new entries (e.g., 'projects/memex')."""
@@ -142,7 +142,7 @@ class KBContext:
     """Base URL for published site (e.g., '/repo-name' for GitHub Pages subdirectory)."""
 
     source_file: Path | None = None
-    """Path to the .kbcontext file that was loaded."""
+    """Path to the .kbconfig file that was loaded."""
 
     @classmethod
     def from_dict(cls, data: dict[str, Any], source_file: Path | None = None) -> "KBContext":
@@ -187,7 +187,7 @@ def matches_glob(path: str, pattern: str) -> bool:
 
     Args:
         path: KB entry path (e.g., 'projects/memex/docs.md')
-        pattern: Glob pattern from .kbcontext
+        pattern: Glob pattern from .kbconfig
 
     Returns:
         True if path matches the pattern.
@@ -230,9 +230,9 @@ def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
     """Walk up from start_dir to find and parse .kbconfig file.
 
     Discovery order:
-    1. Check VL_KB_CONTEXT environment variable for explicit path
-    2. Walk up from start_dir (or cwd) looking for .kbconfig
-    3. Stop at first config file found
+    1. Walk up from start_dir (or cwd) looking for .kbconfig
+    2. Stop at first config file found
+    Skips discovery entirely when MEMEX_SKIP_PROJECT_KB=1.
 
     Args:
         start_dir: Directory to start searching from. Defaults to cwd.
@@ -240,13 +240,7 @@ def discover_kb_context(start_dir: Path | None = None) -> KBContext | None:
     Returns:
         KBContext if found and valid, None otherwise.
     """
-    # Check environment variable first (explicit override)
-    env_context = os.environ.get("VL_KB_CONTEXT")
-    if env_context:
-        context_path = Path(env_context)
-        if context_path.exists():
-            return _load_kbconfig_as_context(context_path)
-        # Env var set but file doesn't exist - treat as no context
+    if os.environ.get("MEMEX_SKIP_PROJECT_KB"):
         return None
 
     # Walk up from start_dir looking for .kbconfig
@@ -331,7 +325,7 @@ def get_kb_context(start_dir: Path | None = None) -> KBContext | None:
 
 
 def clear_context_cache() -> None:
-    """Clear the context cache. Useful for testing or after .kbcontext changes."""
+    """Clear the context cache. Useful for testing or after .kbconfig changes."""
     _context_cache.clear()
 
 

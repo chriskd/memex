@@ -1904,7 +1904,7 @@ class TestContextCommand:
     def test_context_show_found(self, mock_get_context, runner):
         """Context show displays context when found."""
         mock_ctx = MagicMock()
-        mock_ctx.source_file = Path("/project/.kbcontext")
+        mock_ctx.source_file = Path("/project/.kbconfig")
         mock_ctx.primary = "projects/myapp"
         mock_ctx.paths = ["projects/myapp"]
         mock_ctx.default_tags = ["myapp"]
@@ -1924,7 +1924,7 @@ class TestContextCommand:
         result = runner.invoke(cli, ["context", "show"])
 
         assert result.exit_code == 0
-        assert "No .kbcontext" in result.output
+        assert "No .kbconfig" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2176,7 +2176,7 @@ class TestInputValidation:
 class TestKBContext:
     """Tests for KBContext dataclass and loading."""
 
-    def test_kbcontext_has_project_kb_attribute(self):
+    def test_kbconfig_has_project_kb_attribute(self):
         """KBContext has project_kb attribute."""
         from memex.context import KBContext
 
@@ -2184,7 +2184,7 @@ class TestKBContext:
         assert hasattr(ctx, "project_kb")
         assert ctx.project_kb is None
 
-    def test_kbcontext_has_publish_base_url_attribute(self):
+    def test_kbconfig_has_publish_base_url_attribute(self):
         """KBContext has publish_base_url attribute."""
         from memex.context import KBContext
 
@@ -2192,7 +2192,7 @@ class TestKBContext:
         assert hasattr(ctx, "publish_base_url")
         assert ctx.publish_base_url is None
 
-    def test_kbcontext_from_dict_loads_project_kb(self):
+    def test_kbconfig_from_dict_loads_project_kb(self):
         """KBContext.from_dict loads project_kb field."""
         from memex.context import KBContext
 
@@ -2200,7 +2200,7 @@ class TestKBContext:
         ctx = KBContext.from_dict(data)
         assert ctx.project_kb == "./kb"
 
-    def test_kbcontext_from_dict_loads_publish_base_url(self):
+    def test_kbconfig_from_dict_loads_publish_base_url(self):
         """KBContext.from_dict loads publish_base_url field."""
         from memex.context import KBContext
 
@@ -2281,7 +2281,6 @@ class TestPublishCommand:
         (tmp_path / ".kbconfig").write_text("kb_path: ./kb\n")
 
         monkeypatch.chdir(tmp_path)
-        monkeypatch.delenv("VL_KB_CONTEXT", raising=False)
 
         with tempfile.TemporaryDirectory() as output_dir:
             result = runner.invoke(

@@ -4,7 +4,7 @@ Templates provide scaffolding for common entry types, helping agents and users
 create well-structured documentation with consistent sections.
 
 Template sources (in priority order):
-1. Project-specific templates from .kbcontext
+1. Project-specific templates from .kbconfig
 2. User-defined templates from ~/.config/memex/templates/
 3. Built-in defaults
 
@@ -361,9 +361,9 @@ def _load_user_templates() -> dict[str, Template]:
 
 
 def _load_project_templates() -> dict[str, Template]:
-    """Load project-specific templates from .kbcontext.
+    """Load project-specific templates from .kbconfig.
 
-    .kbcontext format:
+    .kbconfig format:
         templates:
           quick-fix:
             description: Quick bug fix

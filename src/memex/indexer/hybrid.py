@@ -256,7 +256,7 @@ class HybridSearcher:
         1. Tag boost: TAG_MATCH_BOOST per matching tag in query (always stacks)
         2. Context boost: MAX of PROJECT_CONTEXT_BOOST or KB_PATH_CONTEXT_BOOST
            - Project boost: entry was created from current project
-           - Path boost: entry matches .kbcontext paths
+           - Path boost: entry matches .kbconfig paths
            These don't stack to avoid overboosting correlated signals.
         """
         if not results:

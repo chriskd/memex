@@ -14,5 +14,5 @@ kb/guides/mcp-setup.md lists tools/commands that don’t exist, and kb/guides/ai
 
 ## Acceptance Criteria
 
-- [ ] MCP tool list reflects actual server/tooling (or removes unsupported tools)\n- [ ] AI integration guide removes mx context init; documents manual .kbcontext creation or actual command\n- [ ] Examples validated against current CLI
+- [ ] MCP tool list reflects actual server/tooling (or removes unsupported tools)\n- [ ] AI integration guide removes mx context init; documents manual .kbconfig creation or actual command\n- [ ] Examples validated against current CLI
 

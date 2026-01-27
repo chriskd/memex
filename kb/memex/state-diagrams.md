@@ -51,10 +51,7 @@ stateDiagram-v2
 
 ```mermaid
 stateDiagram-v2
-    [*] --> CheckEnv
-    CheckEnv --> EnvContext: VL_KB_CONTEXT set (legacy .kbcontext)
-    CheckEnv --> WalkUp: else search up for .kbconfig
-    EnvContext --> LoadContext
+    [*] --> WalkUp
     WalkUp --> LoadContext: .kbconfig found
     WalkUp --> NoContext: none
     LoadContext --> [*]
@@ -63,7 +60,6 @@ stateDiagram-v2
 
 Notes:
 - Context overlays supply `primary`, `boost_paths`, `default_tags`, and `publish_base_url`.
-- Legacy `.kbcontext` is still supported via `VL_KB_CONTEXT` for compatibility.
 
 ## Add, Update, Patch
 
@@ -95,7 +91,7 @@ stateDiagram-v2
 ```
 
 Notes:
-- `--category` (or `--directory`) is required unless `primary` is set in `.kbconfig` or legacy `.kbcontext`.
+- `--category` (or `--directory`) is required unless `primary` is set in `.kbconfig`.
 - Writes rebuild backlinks and reindex the new entry.
 
 ### mx replace / patch / append (update entry)
@@ -158,7 +154,7 @@ stateDiagram-v2
     [*] --> ResolveKBSource
     ResolveKBSource --> UseKbRoot: --kb-root
     ResolveKBSource --> UseScope: --scope
-    ResolveKBSource --> UseContext: .kbconfig/.kbcontext project_kb or kb_path
+    ResolveKBSource --> UseContext: .kbconfig/.kbconfig project_kb or kb_path
     ResolveKBSource --> ErrorNoKB: none
     UseKbRoot --> LoadEntries
     UseScope --> LoadEntries

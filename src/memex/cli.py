@@ -261,8 +261,8 @@ def _format_missing_category_error(tags: list[str], message: str) -> str:
     suggestion = matches[0] if len(matches) == 1 else None
 
     lines = ["Error: --category required."]
-    if "no .kbcontext file found" in message.lower():
-        lines.append("No .kbcontext primary found. Run 'mx context init' or pass --category.")
+    if ".kbconfig" in message.lower():
+        lines.append("No .kbconfig primary set. Update .kbconfig or pass --category.")
     if tags:
         lines.append(f"Your tags: {', '.join(tags)}")
     if suggestion:
@@ -299,7 +299,7 @@ def _handle_add_error(ctx: click.Context, error: Exception, tags: list[str]) -> 
                 ErrorCode.INVALID_CATEGORY,
                 "--category is required",
                 {
-                    "suggestion": "Provide --category or run 'mx context init'",
+                    "suggestion": "Provide --category or set primary in .kbconfig",
                     "available_categories": valid_categories,
                     "matching_tags": matches if matches else None,
                     "your_tags": tags,
@@ -496,7 +496,7 @@ def _output_status(
 
     Args:
         kb_root: KB root path (None if not configured).
-        context: Loaded KBContext (None if no .kbcontext).
+        context: Loaded KBContext (None if no .kbconfig).
         entries: Recent entries to display.
         project_name: Current project name.
     """
@@ -573,7 +573,7 @@ def _output_status(
             lines.append("  mx tree             Browse structure")
 
         if not context:
-            lines.append("  mx context init     Set up project context")
+            lines.append("  mx context show     Inspect project .kbconfig")
 
         lines.append("  mx --help           Show all commands")
 
@@ -2838,9 +2838,9 @@ def reindex(ctx: click.Context, scope: str | None, as_json: bool):
 @cli.group(invoke_without_command=True)
 @click.pass_context
 def context(ctx):
-    """Show or validate project KB context (.kbcontext file).
+    """Show or validate project KB context (.kbconfig file).
 
-    The .kbcontext file configures KB behavior for a project:
+    The .kbconfig file configures KB behavior for a project:
     - primary: Default directory for new entries
     - paths: Boost these paths in search results
     - default_tags: Suggested tags for new entries
@@ -2860,7 +2860,7 @@ def context(ctx):
 def context_show(as_json: bool):
     """Show the current project context.
 
-    Searches for .kbcontext file starting from current directory.
+    Searches for .kbconfig file starting from current directory.
 
     \b
     Examples:
@@ -2873,9 +2873,9 @@ def context_show(as_json: bool):
 
     if ctx is None:
         if as_json:
-            output({"found": False, "message": "No .kbcontext file found"}, as_json=True)
+            output({"found": False, "message": "No .kbconfig file found"}, as_json=True)
         else:
-            click.echo("No .kbcontext file found.")
+            click.echo("No .kbconfig file found.")
             click.echo("Run 'mx init' to create a project KB.")
         return
 
@@ -2911,7 +2911,7 @@ def context_status(ctx):
 @context.command("validate")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 def context_validate(as_json: bool):
-    """Validate the current .kbcontext file against the knowledge base.
+    """Validate the current .kbconfig file against the knowledge base.
 
     Checks that:
     - primary directory exists (or can be created)
@@ -2929,9 +2929,9 @@ def context_validate(as_json: bool):
 
     if ctx is None:
         if as_json:
-            output({"valid": False, "error": "No .kbcontext file found"}, as_json=True)
+            output({"valid": False, "error": "No .kbconfig file found"}, as_json=True)
         else:
-            click.echo("Error: No .kbcontext file found.", err=True)
+            click.echo("Error: No .kbconfig file found.", err=True)
         sys.exit(1)
 
     # ctx is guaranteed non-None after the check above
@@ -3388,7 +3388,7 @@ def templates(action: str, name: str | None, as_json: bool):
 
     \b
     Template sources (in priority order):
-      1. Project: .kbcontext templates: section
+      1. Project: .kbconfig templates: section
       2. User: ~/.config/memex/templates/*.yaml
       3. Built-in: troubleshooting, project, pattern, decision, runbook, api, meeting
     """
@@ -4887,7 +4887,7 @@ def _build_schema() -> dict:
                 ],
             },
             "context": {
-                "description": "Show or validate project KB context (.kbcontext file)",
+                "description": "Show or validate project KB context (.kbconfig file)",
                 "aliases": [],
                 "arguments": [],
                 "subcommands": ["show", "validate"],
@@ -5150,7 +5150,7 @@ jobs:
     "--scope",
     "-s",
     type=click.Choice(["project", "user"]),
-    help="KB scope: project (from .kbcontext) or user (~/.memex/kb/)",
+    help="KB scope: project (from .kbconfig) or user (~/.memex/kb/)",
 )
 @click.option(
     "--yes",
@@ -5239,24 +5239,24 @@ def publish(
     KB source resolution (in order):
       1. --kb-root flag (explicit path)
       2. --scope flag (project or user)
-      3. project_kb in .kbcontext (relative to context file)
+      3. project_kb in .kbconfig (relative to context file)
 
     \b
     Base URL resolution:
       1. --base-url flag (explicit)
-      2. publish_base_url in .kbcontext (auto-applied)
+      2. publish_base_url in .kbconfig (auto-applied)
 
     Use --base-url when hosting at a subdirectory (e.g., user.github.io/repo).
-    Without it, links will 404. Configure in .kbcontext to avoid repeating:
+    Without it, links will 404. Configure in .kbconfig to avoid repeating:
 
     \b
-      # .kbcontext
+      # .kbconfig
       project_kb: ./kb
       publish_base_url: /repo-name
 
     \b
     Examples:
-      mx publish -o docs                   # Uses .kbcontext settings
+      mx publish -o docs                   # Uses .kbconfig settings
       mx publish --kb-root ./kb -o docs    # Explicit KB source
       mx publish --scope=user -o docs      # Publish user KB
       mx publish --base-url /my-kb         # Subdirectory hosting
@@ -5305,18 +5305,18 @@ def publish(
                 click.echo("Aborted.", err=True)
                 sys.exit(0)
     elif context and context.project_kb and context.source_file:
-        # Try .kbcontext project_kb
+        # Try .kbconfig project_kb
         project_kb_path = (context.source_file.parent / context.project_kb).resolve()
         if project_kb_path.exists():
             resolved_kb = project_kb_path
-            source_description = ".kbcontext project_kb"
+            source_description = ".kbconfig project_kb"
 
     # No KB found - show options
     if not resolved_kb:
         click.echo("Error: No KB found to publish", err=True)
         click.echo("", err=True)
         click.echo("Options:", err=True)
-        click.echo("  - Use --scope=project (requires project_kb in .kbcontext)", err=True)
+        click.echo("  - Use --scope=project (requires project_kb in .kbconfig)", err=True)
         click.echo("  - Use --scope=user for your personal KB", err=True)
         click.echo("  - Use --kb-root ./path/to/kb for an arbitrary directory", err=True)
         sys.exit(1)

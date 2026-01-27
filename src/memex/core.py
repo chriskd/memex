@@ -1522,9 +1522,7 @@ async def add_entry(
         rel_dir = normalized_dir
     else:
         valid_categories = get_valid_categories()
-        context_hint = (
-            " (no .kbcontext file found with 'primary' field)" if kb_context is None else ""
-        )
+        context_hint = " (no .kbconfig with 'primary' set)" if kb_context is None else ""
         raise ValueError(
             f"Either 'category' or 'directory' must be provided{context_hint}. "
             f"Existing categories: {', '.join(valid_categories)}"
@@ -1713,7 +1711,7 @@ async def add_entry(
         min_score=0.3,
     )
 
-    # Collect default_tags from .kbconfig (KB-level) and .kbcontext (project-level)
+    # Collect default_tags from KB .kbconfig and project .kbconfig (context)
     existing_tag_set = set(tags)
     suggested_tag_set = {s["tag"] for s in suggested_tags}
     config_suggestions = []
@@ -1732,7 +1730,7 @@ async def add_entry(
                 )
                 suggested_tag_set.add(tag)
 
-    # Also check .kbcontext default_tags (project-level, for backwards compatibility)
+    # Also check project context default_tags
     if kb_context and kb_context.default_tags:
         for tag in kb_context.default_tags:
             if tag not in existing_tag_set and tag not in suggested_tag_set:
@@ -1740,7 +1738,7 @@ async def add_entry(
                     {
                         "tag": tag,
                         "score": 1.0,  # High priority for context tags
-                        "reason": "From project .kbcontext",
+                        "reason": "From project .kbconfig",
                     }
                 )
                 suggested_tag_set.add(tag)

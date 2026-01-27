@@ -1,7 +1,7 @@
 """Session context persistence for memex.
 
 Provides global, explicit-lifetime session state for filtering and boosting
-KB searches. Unlike `.kbcontext` (per-directory, static), session context is
+KB searches. Unlike `.kbconfig` (per-directory, static), session context is
 global, dynamic, and persists until explicitly cleared.
 
 Session context supports:

@@ -657,7 +657,6 @@ class TestEdgeCases:
 
     def test_add_without_category_fails(self, tmp_kb, monkeypatch):
         """add_entry without category or directory fails."""
-        monkeypatch.setenv("VL_KB_CONTEXT", "/nonexistent")
         with pytest.raises(ValueError, match="category.*directory"):
             run_async(
                 core.add_entry(
