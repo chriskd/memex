@@ -1,6 +1,6 @@
 ---
 id: m-2ce2
-status: in_progress
+status: closed
 deps: []
 links: []
 created: 2026-01-27T01:08:29Z
