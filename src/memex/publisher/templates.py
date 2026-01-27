@@ -63,6 +63,11 @@ def _safe(html: str) -> str:
     return Markup(html)
 
 
+def _recent_sort_key(entry: EntryData):
+    """Sort by most recent activity, preferring updated over created."""
+    return entry.metadata.updated or entry.metadata.created
+
+
 def _build_file_tree(entries: list[EntryData], current_path: str = "", base_url: str = "") -> str:
     """Build HTML for the sidebar file tree navigation.
 
@@ -142,10 +147,8 @@ def _build_recent_list(
     Returns:
         HTML string for the recent entries list
     """
-    # Sort by created date, newest first
-    sorted_entries = sorted(
-        entries, key=lambda e: str(e.metadata.created) if e.metadata.created else "", reverse=True
-    )[:limit]
+    # Sort by most recent update (fall back to created)
+    sorted_entries = sorted(entries, key=_recent_sort_key, reverse=True)[:limit]
 
     html_parts = ['<div class="tree" id="recent-list">']
 
@@ -675,10 +678,8 @@ def render_index_page(
     # Build tabbed sidebar
     sidebar_html = _build_tabbed_sidebar(entries, base_url=base_url)
 
-    # Sort entries by created date (newest first)
-    recent_entries = sorted(
-        entries, key=lambda e: str(e.metadata.created) if e.metadata.created else "", reverse=True
-    )[:20]
+    # Sort entries by most recent update (fall back to created)
+    recent_entries = sorted(entries, key=_recent_sort_key, reverse=True)[:20]
 
     # Build tags with counts
     tags_with_counts = sorted(
