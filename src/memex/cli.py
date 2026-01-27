@@ -760,9 +760,23 @@ def prime(full: bool, mcp: bool, as_json: bool):
         use_full = not _detect_mcp_mode()
 
     content = PRIME_OUTPUT if use_full else PRIME_MCP_OUTPUT
+    session_result = None
+
+    if use_full:
+        from .session_context import build_session_context
+
+        session_result = build_session_context()
+        if session_result:
+            content = session_result.content
 
     if as_json:
-        output({"mode": "full" if use_full else "mcp", "content": content}, as_json=True)
+        payload: dict[str, Any] = {"mode": "full" if use_full else "mcp", "content": content}
+        if session_result:
+            payload["project"] = session_result.project
+            payload["entries"] = session_result.entries
+            payload["recent_entries"] = session_result.recent_entries
+            payload["cached"] = session_result.cached
+        output(payload, as_json=True)
     else:
         click.echo(content)
 

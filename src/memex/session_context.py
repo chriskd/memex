@@ -20,20 +20,21 @@ from .parser import ParseError, parse_entry
 CACHE_DIR = Path("/tmp")
 CACHE_TTL_SECONDS = 3600  # 1 hour
 DEFAULT_MAX_ENTRIES = 4
+CACHE_VERSION = 2
 
 
 @dataclass
 class SessionContextResult:
     project: str
     entries: list[dict]
-    recent_entries: list[dict] = field(default_factory=list)
     content: str
+    recent_entries: list[dict] = field(default_factory=list)
     cached: bool = False
 
 
 def _get_cache_path(project_name: str, max_entries: int) -> Path:
     safe_name = re.sub(r"[^\w\-]", "_", project_name)
-    return CACHE_DIR / f"memex-context-{safe_name}-{max_entries}.json"
+    return CACHE_DIR / f"memex-context-{safe_name}-{max_entries}-v{CACHE_VERSION}.json"
 
 
 def _load_cached_context(project_name: str, max_entries: int) -> SessionContextResult | None:

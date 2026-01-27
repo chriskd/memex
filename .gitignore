@@ -26,6 +26,7 @@ Thumbs.db
 
 # Plugin local settings
 .claude/*.local.md
+agents.md
 
 # Local project hooks/config
 hooks/
