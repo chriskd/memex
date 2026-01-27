@@ -891,7 +891,7 @@ wheels = [
 ]
 
 [[package]]
-name = "memex"
+name = "memex-kb"
 version = "0.2.0"
 source = { editable = "." }
 dependencies = [
