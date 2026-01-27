@@ -4240,6 +4240,116 @@ def summarize(dry_run: bool, limit: int | None, as_json: bool):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Eval Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command()
+@click.option(
+    "--dataset",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=Path("eval/queries.json"),
+    show_default=True,
+    help="Path to JSON dataset of queries and expected paths",
+)
+@click.option("--limit", "-k", default=5, type=click.IntRange(min=1), help="Top-k cutoff")
+@click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--strict", is_flag=True, help="Use strict semantic threshold")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def eval(
+    ctx: click.Context,
+    dataset: Path,
+    limit: int,
+    mode: str,
+    scope: str | None,
+    strict: bool,
+    as_json: bool,
+):
+    """Evaluate search accuracy against a query dataset."""
+    from .core import search as core_search
+    from .evaluation import aggregate_metrics, compute_metrics, load_eval_cases
+
+    if not dataset.exists():
+        raise UsageError(f"Dataset not found: {dataset}")
+
+    try:
+        cases = load_eval_cases(dataset)
+    except ValueError as exc:
+        raise UsageError(str(exc)) from exc
+
+    results: list[dict] = []
+    for case in cases:
+        case_mode = case.mode or mode
+        case_scope = case.scope or scope
+        case_strict = case.strict if case.strict is not None else strict
+        case_tags = case.tags
+
+        result = run_async(
+            core_search(
+                query=case.query,
+                limit=limit,
+                mode=cast(Literal["hybrid", "keyword", "semantic"], case_mode),
+                tags=case_tags,
+                include_content=False,
+                strict=case_strict,
+                scope=case_scope,
+            )
+        )
+
+        result_paths = [item.path for item in result.results]
+        metrics = compute_metrics(result_paths, case.expected, limit)
+        results.append(
+            {
+                "query": case.query,
+                "expected": case.expected,
+                "best_rank": metrics["best_rank"],
+                "recall": metrics["recall"],
+                "mrr": metrics["mrr"],
+                "ndcg": metrics["ndcg"],
+                "hit": metrics["hit"],
+                "hits": metrics["hits"],
+            }
+        )
+
+    summary = aggregate_metrics(results, limit)
+    summary.update({"mode": mode, "scope": scope, "dataset": str(dataset)})
+
+    if as_json:
+        output({"summary": summary, "results": results}, as_json=True)
+        return
+
+    click.echo(
+        f"Evaluation (k={limit}, mode={mode}, scope={scope or 'all'}) - {dataset}"
+    )
+    click.echo(
+        f"Recall@{limit}: {summary['recall@k']:.2f}  "
+        f"MRR: {summary['mrr']:.2f}  "
+        f"nDCG@{limit}: {summary['ndcg@k']:.2f}  "
+        f"Hit@{limit}: {summary['hit_rate@k']:.2f}  "
+        f"Queries: {summary['queries']}"
+    )
+
+    rows = []
+    for item in results:
+        rows.append(
+            {
+                "query": item["query"],
+                "best": item["best_rank"] or "-",
+                "hit": "yes" if item["hit"] else "no",
+            }
+        )
+    click.echo(format_table(rows, ["query", "best", "hit"], {"query": 50}))
+
+    misses = [item for item in results if not item["hit"]]
+    if misses:
+        click.echo("\nMisses:")
+        for item in misses:
+            click.echo(f"- {item['query']} (expected: {', '.join(item['expected'])})")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Schema Command (Agent Introspection)
 # ─────────────────────────────────────────────────────────────────────────────
 
