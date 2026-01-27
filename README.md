@@ -19,8 +19,8 @@ Designed for humans and AI coding agents across project and user knowledge bases
 - **Entry tooling**: Quick-add, ingest, templates, and surgical edits (append/patch/replace).
 - **Publishing**: Static HTML site with search index, tag pages, and graph data; optional
   GitHub Pages workflow generation.
-- **Agent workflows**: `mx session-context`, `mx prime`, `mx schema`, `mx batch`, and
-  optional memory/evolution tooling for AI assistants.
+- **Agent workflows**: `mx session-context`, `mx prime`, `mx schema`, and `mx batch`
+  for AI assistants.
 - **Quality tooling**: `mx health`, `mx suggest-links`, `mx hubs`, `mx summarize`, and
   `mx reindex` for maintenance.
 
@@ -211,23 +211,15 @@ Restart Claude Code after installing or updating the plugin.
 ### Codex Skills
 
 This repo includes a Memex skill at `skills/kb-usage/`.
-Codex CLI discovers skills from well-known directories (for example
-`.codex/skills` in the repo or `~/.codex/skills` for user-level installs).
-Team Config can also load skills from `/etc/codex/skills` when centrally managed.
-To install this repo's Memex skill, copy or symlink `skills/kb-usage/` into a
-Codex skills directory, then restart Codex.
+Codex loads skills from `$CODEX_HOME/skills` (defaults to `~/.codex/skills`).
+To install this repo's Memex skill, copy or symlink `skills/kb-usage/` into that
+directory, then restart Codex.
 
 Examples:
 
 ```bash
-mkdir -p .codex/skills
-cp -r skills/kb-usage .codex/skills/
-
 mkdir -p ~/.codex/skills
 cp -r skills/kb-usage ~/.codex/skills/
-
-sudo mkdir -p /etc/codex/skills
-sudo cp -r skills/kb-usage /etc/codex/skills/
 ```
 
 ### Agent-Friendly Commands
@@ -241,15 +233,6 @@ mx batch << 'EOF'
 search "deployment"
 get guides/installation.md
 EOF
-```
-
-Agent memory tools:
-
-```bash
-mx memory init
-mx memory add "Decision: use Redis for caching"
-mx a-mem-init --scope=project
-mx evolve --status
 ```
 
 ## Configuration

@@ -92,23 +92,15 @@ Search organizational knowledge before implementing:
 
 ### Codex Skills (Optional)
 
-This repo includes a Memex skill at `skills/kb-usage/`. Codex CLI discovers skills
-from well-known directories (for example `.codex/skills` in the repo or
-`~/.codex/skills` for user installs). Team Config can also load skills from
-`/etc/codex/skills` when centrally managed. Copy or symlink the skill into a
-Codex skills directory and restart Codex.
+This repo includes a Memex skill at `skills/kb-usage/`. Codex loads skills from
+`$CODEX_HOME/skills` (defaults to `~/.codex/skills`). Copy or symlink the skill
+into that directory and restart Codex.
 
-Examples:
+Example:
 
 ```bash
-mkdir -p .codex/skills
-cp -r skills/kb-usage .codex/skills/
-
 mkdir -p ~/.codex/skills
 cp -r skills/kb-usage ~/.codex/skills/
-
-sudo mkdir -p /etc/codex/skills
-sudo cp -r skills/kb-usage /etc/codex/skills/
 ```
 
 ## Other AI Agents
