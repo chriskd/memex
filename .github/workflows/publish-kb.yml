@@ -32,7 +32,8 @@ jobs:
 
       - name: Generate static site
         run: |
-          mx publish --kb-root ./kb -o _site --base-url /memex --title "Memex KB"
+          mx publish --kb-root ./kb -o _site --base-url / --title "Memex KB"
+          echo "docs.memex-kb.sh" > _site/CNAME
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
