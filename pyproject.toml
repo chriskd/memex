@@ -4,18 +4,28 @@ version = "0.2.1"
 description = "Personal knowledge base with semantic search"
 requires-python = ">=3.11"
 dependencies = [
+    # Core dependencies (required for all functionality)
     "pydantic>=2.12.0",
+    "python-frontmatter>=1.1.0",
+    "click>=8.1.0",
+    "pyyaml>=6.0.0",  # For .kbconfig parsing
+    "tiktoken>=0.5.0",  # For token counting
+    "markdown-it-py>=3.0.0",  # For markdown rendering
+    "jinja2>=3.1.0",  # For publisher templates
+]
+
+[project.optional-dependencies]
+# Full installation with semantic search (includes ~2GB of CUDA/torch deps)
+search = [
     "whoosh-reloaded>=2.7.4",
     "chromadb>=0.5.0,<1.0.0",  # Cap for arm64 onnxruntime compatibility
     "sentence-transformers>=3.0.0",
-    "python-frontmatter>=1.1.0",
     "watchdog>=4.0.0",
-    "tiktoken>=0.5.0",
-    "click>=8.1.0",
     "anthropic>=0.40.0",  # For memory capture LLM calls
-    "pyyaml>=6.0.0",  # For .kbconfig parsing
     "openai>=1.0.0",  # For memory evolution via OpenRouter
 ]
+# Convenience alias for full installation
+all = ["memex-kb[search]"]
 
 [project.scripts]
 mx = "memex.cli:main"

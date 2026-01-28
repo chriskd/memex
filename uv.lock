@@ -892,18 +892,32 @@ wheels = [
 
 [[package]]
 name = "memex-kb"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
-    { name = "anthropic" },
-    { name = "chromadb" },
     { name = "click" },
-    { name = "openai" },
+    { name = "jinja2" },
+    { name = "markdown-it-py" },
     { name = "pydantic" },
     { name = "python-frontmatter" },
     { name = "pyyaml" },
-    { name = "sentence-transformers" },
     { name = "tiktoken" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "anthropic" },
+    { name = "chromadb" },
+    { name = "openai" },
+    { name = "sentence-transformers" },
+    { name = "watchdog" },
+    { name = "whoosh-reloaded" },
+]
+search = [
+    { name = "anthropic" },
+    { name = "chromadb" },
+    { name = "openai" },
+    { name = "sentence-transformers" },
     { name = "watchdog" },
     { name = "whoosh-reloaded" },
 ]
@@ -918,18 +932,22 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "anthropic", specifier = ">=0.40.0" },
-    { name = "chromadb", specifier = ">=0.5.0,<1.0.0" },
+    { name = "anthropic", marker = "extra == 'search'", specifier = ">=0.40.0" },
+    { name = "chromadb", marker = "extra == 'search'", specifier = ">=0.5.0,<1.0.0" },
     { name = "click", specifier = ">=8.1.0" },
-    { name = "openai", specifier = ">=1.0.0" },
+    { name = "jinja2", specifier = ">=3.1.0" },
+    { name = "markdown-it-py", specifier = ">=3.0.0" },
+    { name = "memex-kb", extras = ["search"], marker = "extra == 'all'" },
+    { name = "openai", marker = "extra == 'search'", specifier = ">=1.0.0" },
     { name = "pydantic", specifier = ">=2.12.0" },
     { name = "python-frontmatter", specifier = ">=1.1.0" },
     { name = "pyyaml", specifier = ">=6.0.0" },
-    { name = "sentence-transformers", specifier = ">=3.0.0" },
+    { name = "sentence-transformers", marker = "extra == 'search'", specifier = ">=3.0.0" },
     { name = "tiktoken", specifier = ">=0.5.0" },
-    { name = "watchdog", specifier = ">=4.0.0" },
-    { name = "whoosh-reloaded", specifier = ">=2.7.4" },
+    { name = "watchdog", marker = "extra == 'search'", specifier = ">=4.0.0" },
+    { name = "whoosh-reloaded", marker = "extra == 'search'", specifier = ">=2.7.4" },
 ]
+provides-extras = ["search", "all"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -17,7 +17,10 @@ import subprocess
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
+
+if TYPE_CHECKING:
+    from .indexer import HybridSearcher
 
 from .backlinks_cache import ensure_backlink_cache, rebuild_backlink_cache
 from .config import (
@@ -38,9 +41,7 @@ from .config import (
     parse_scoped_path,
 )
 from .context import KBContext, get_kb_context, get_kbconfig
-from .evaluation import run_quality_checks
 from .frontmatter import build_frontmatter, create_new_metadata, update_metadata_for_edit
-from .indexer import HybridSearcher
 from .models import (
     AddEntryPreview,
     DocumentChunk,
@@ -93,7 +94,7 @@ class DuplicateSearcher(Protocol):
 # Module-level state (lazy initialization)
 # ─────────────────────────────────────────────────────────────────────────────
 
-_searcher: HybridSearcher | None = None
+_searcher: "HybridSearcher | None" = None
 _searcher_ready = False
 
 
@@ -235,7 +236,7 @@ def get_actor_identity() -> str | None:
     return None
 
 
-def _maybe_initialize_searcher(searcher: HybridSearcher) -> None:
+def _maybe_initialize_searcher(searcher: "HybridSearcher") -> None:
     """Ensure search indices are populated before first query."""
     global _searcher_ready
     if _searcher_ready:
@@ -250,10 +251,16 @@ def _maybe_initialize_searcher(searcher: HybridSearcher) -> None:
     _searcher_ready = True
 
 
-def get_searcher() -> HybridSearcher:
-    """Get the HybridSearcher, initializing lazily."""
+def get_searcher() -> "HybridSearcher":
+    """Get the HybridSearcher, initializing lazily.
+
+    Raises:
+        ImportError: If search dependencies (chromadb, sentence-transformers) not installed.
+    """
     global _searcher
     if _searcher is None:
+        from .indexer import HybridSearcher
+
         _searcher = HybridSearcher()
     _maybe_initialize_searcher(_searcher)
     return _searcher
@@ -606,7 +613,7 @@ def _add_backlink_to_neighbor(
     neighbor_path: str,
     new_entry_path: str,
     score: float,
-    searcher: HybridSearcher,
+    searcher: "HybridSearcher",
 ) -> None:
     """Add a semantic backlink to a neighbor entry.
 
@@ -1174,6 +1181,8 @@ async def expand_search_with_neighbors(
 
 async def quality(limit: int = 5, cutoff: int = 3) -> QualityReport:
     """Evaluate MCP search accuracy."""
+    from .evaluation import run_quality_checks
+
     searcher = get_searcher()
     return run_quality_checks(searcher, limit=limit, cutoff=cutoff)
 

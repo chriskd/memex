@@ -1,11 +1,18 @@
-"""Search indexing with hybrid Whoosh + Chroma."""
+"""Search indexing with hybrid Whoosh + Chroma.
+
+Note: Heavy dependencies (chromadb, sentence-transformers, torch) are lazily loaded.
+Import HybridSearcher, ChromaIndex, etc. only when actually needed for search.
+"""
 
 import re
+from typing import TYPE_CHECKING
 
-from .chroma_index import ChromaIndex
-from .hybrid import HybridSearcher
-from .watcher import FileWatcher
-from .whoosh_index import WhooshIndex
+# Type hints only - no runtime import of heavy deps
+if TYPE_CHECKING:
+    from .chroma_index import ChromaIndex
+    from .hybrid import HybridSearcher
+    from .watcher import FileWatcher
+    from .whoosh_index import WhooshIndex
 
 __all__ = [
     "HybridSearcher",
@@ -13,7 +20,37 @@ __all__ = [
     "ChromaIndex",
     "FileWatcher",
     "strip_markdown_for_snippet",
+    "get_searcher",
 ]
+
+
+def __getattr__(name: str):
+    """Lazy import for heavy search dependencies."""
+    if name == "HybridSearcher":
+        from .hybrid import HybridSearcher
+        return HybridSearcher
+    if name == "WhooshIndex":
+        from .whoosh_index import WhooshIndex
+        return WhooshIndex
+    if name == "ChromaIndex":
+        from .chroma_index import ChromaIndex
+        return ChromaIndex
+    if name == "FileWatcher":
+        from .watcher import FileWatcher
+        return FileWatcher
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def get_searcher():
+    """Get HybridSearcher instance, raising helpful error if deps missing."""
+    try:
+        from .hybrid import HybridSearcher
+        return HybridSearcher
+    except ImportError as e:
+        raise ImportError(
+            "Search functionality requires additional dependencies. "
+            "Install with: pip install 'memex-kb[search]'"
+        ) from e
 
 
 def strip_markdown_for_snippet(text: str, max_length: int = 200) -> str:

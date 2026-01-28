@@ -27,8 +27,8 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install memex from repo
-        run: uv pip install --system -e .
+      - name: Install memex (minimal, no search deps)
+        run: uv pip install --system -e . --no-deps && uv pip install --system pydantic python-frontmatter click pyyaml tiktoken markdown-it-py jinja2
 
       - name: Generate static site
         run: |
