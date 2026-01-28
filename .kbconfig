@@ -19,3 +19,6 @@ kb_path: kb
 # Optional: exclude patterns from indexing (glob)
 # exclude:
 #   - "*.draft.md"
+
+# Landing page for published site
+publish_index_entry: guides/quick-start
