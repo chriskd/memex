@@ -1322,68 +1322,103 @@ async def add_entry(
     )
     frontmatter = build_frontmatter(metadata)
 
-    # Write the file
+    # Write the file. After this point, we should avoid failing the whole command
+    # for best-effort post-processing (indexing, suggestions, caches), because agents
+    # may retry and create duplicates if the exit code is non-zero.
     file_path.write_text(frontmatter + final_content, encoding="utf-8")
-    rebuild_backlink_cache(kb_root)
 
-    # Reindex the new file
+    warnings: list[str] = []
+
+    # Rebuild backlink cache (best-effort; file is already created)
+    try:
+        rebuild_backlink_cache(kb_root)
+    except Exception as e:
+        msg = f"Created entry but failed to rebuild backlink cache: {e}"
+        log.warning("%s (%s)", msg, rel_path)
+        warnings.append(msg)
+
+    # Reindex the new file (best-effort; search deps are optional)
     try:
         _, _, chunks = parse_entry(file_path)
-        searcher = get_searcher()
         if chunks:
             relative_path = relative_kb_path(kb_root, file_path)
             normalized_chunks = normalize_chunks(chunks, relative_path)
+            searcher = get_searcher()
             searcher.index_chunks(normalized_chunks)
-    except ParseError as e:
-        log.warning("Created entry but failed to index %s: %s", rel_path, e)
+    except Exception as e:
+        # Includes ParseError and optional dependency failures (MemexError).
+        msg = f"Created entry but failed to index it (search may be unavailable): {e}"
+        log.warning("%s (%s)", msg, rel_path)
+        warnings.append(msg)
 
     # Auto-create bidirectional semantic links if enabled and no manual links provided
     if semantic_links is None and SEMANTIC_LINK_ENABLED:
-        linking_result = create_bidirectional_semantic_links(
-            entry_path=rel_path,
-            title=title,
-            content=final_content,
-            tags=tags,
-        )
-        if linking_result.forward_links:
-            # Re-save entry with auto-generated semantic links
-            try:
-                updated_metadata = metadata.model_copy(
-                    update={"semantic_links": linking_result.forward_links}
-                )
-                updated_frontmatter = build_frontmatter(updated_metadata)
-                file_path.write_text(updated_frontmatter + final_content, encoding="utf-8")
+        try:
+            linking_result = create_bidirectional_semantic_links(
+                entry_path=rel_path,
+                title=title,
+                content=final_content,
+                tags=tags,
+            )
+        except Exception as e:
+            msg = f"Created entry but failed to generate semantic links: {e}"
+            log.warning("%s (%s)", msg, rel_path)
+            warnings.append(msg)
+        else:
+            if linking_result.forward_links:
+                # Re-save entry with auto-generated semantic links
+                try:
+                    updated_metadata = metadata.model_copy(
+                        update={"semantic_links": linking_result.forward_links}
+                    )
+                    updated_frontmatter = build_frontmatter(updated_metadata)
+                    file_path.write_text(updated_frontmatter + final_content, encoding="utf-8")
 
-                # Re-index with updated metadata
-                _, _, updated_chunks = parse_entry(file_path)
-                if updated_chunks:
-                    searcher = get_searcher()
-                    searcher.delete_document(rel_path)
-                    normalized_chunks = normalize_chunks(updated_chunks, rel_path)
-                    searcher.index_chunks(normalized_chunks)
-            except (ParseError, OSError) as e:
-                log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
+                    # Re-index with updated metadata (best-effort)
+                    try:
+                        _, _, updated_chunks = parse_entry(file_path)
+                        if updated_chunks:
+                            searcher = get_searcher()
+                            searcher.delete_document(rel_path)
+                            normalized_chunks = normalize_chunks(updated_chunks, rel_path)
+                            searcher.index_chunks(normalized_chunks)
+                    except Exception as e:
+                        msg = f"Updated entry with semantic links but failed to re-index: {e}"
+                        log.warning("%s (%s)", msg, rel_path)
+                        warnings.append(msg)
+                except (ParseError, OSError) as e:
+                    log.warning("Failed to update entry with auto semantic links %s: %s", rel_path, e)
 
     # Compute link suggestions for the new entry
     existing_links = set(links) if links else set()
-    suggested_links = compute_link_suggestions(
-        title=title,
-        content=final_content,
-        tags=tags,
-        self_path=rel_path,
-        existing_links=existing_links,
-        limit=3,  # Suggest up to 3 high-confidence links
-        min_score=0.5,
-    )
+    try:
+        suggested_links = compute_link_suggestions(
+            title=title,
+            content=final_content,
+            tags=tags,
+            self_path=rel_path,
+            existing_links=existing_links,
+            limit=3,  # Suggest up to 3 high-confidence links
+            min_score=0.5,
+        )
+    except Exception as e:
+        log.debug("Failed to compute link suggestions for %s: %s", rel_path, e)
+        warnings.append(f"Created entry but failed to compute link suggestions: {e}")
+        suggested_links = []
 
     # Compute tag suggestions for additional tags to consider
-    suggested_tags = compute_tag_suggestions(
-        title=title,
-        content=final_content,
-        existing_tags=tags,
-        limit=5,
-        min_score=0.3,
-    )
+    try:
+        suggested_tags = compute_tag_suggestions(
+            title=title,
+            content=final_content,
+            existing_tags=tags,
+            limit=5,
+            min_score=0.3,
+        )
+    except Exception as e:
+        log.debug("Failed to compute tag suggestions for %s: %s", rel_path, e)
+        warnings.append(f"Created entry but failed to compute tag suggestions: {e}")
+        suggested_tags = []
 
     # Collect default_tags from KB .kbconfig and project .kbconfig (context)
     existing_tag_set = set(tags)
@@ -1420,7 +1455,15 @@ async def add_entry(
     # Prepend config suggestions to semantic suggestions
     suggested_tags = config_suggestions + suggested_tags
 
-    return {"path": rel_path, "suggested_links": suggested_links, "suggested_tags": suggested_tags}
+    result: dict[str, object] = {
+        "path": rel_path,
+        "suggested_links": suggested_links,
+        "suggested_tags": suggested_tags,
+    }
+    if warnings:
+        # Only include if there is something actionable to report.
+        result["warnings"] = warnings
+    return result
 
 
 async def preview_add_entry(
@@ -2941,9 +2984,16 @@ async def delete_entry(path: str, force: bool = False) -> dict:
             "Use force=True to delete anyway, or update linking entries first."
         )
 
-    # Remove from search index
-    searcher = get_searcher()
-    searcher.delete_document(normalized)
+    warnings: list[str] = []
+
+    # Remove from search index (best-effort; file deletion must not be blocked)
+    try:
+        searcher = get_searcher()
+        searcher.delete_document(normalized)
+    except Exception as e:
+        msg = f"Deleted entry but failed to de-index it (search may be unavailable): {e}"
+        log.warning("%s (%s)", msg, normalized)
+        warnings.append(msg)
 
     # Remove from view tracking
     try:
@@ -2953,16 +3003,21 @@ async def delete_entry(path: str, force: bool = False) -> dict:
     except Exception as e:
         log.debug("Failed to delete view tracking for %s: %s", normalized, e)
 
-    # Delete the file
+    # Delete the file (the primary operation)
     abs_path.unlink()
 
-    # Rebuild backlink cache
-    rebuild_backlink_cache(kb_root)
+    # Rebuild backlink cache (best-effort; file is already gone)
+    try:
+        rebuild_backlink_cache(kb_root)
+    except Exception as e:
+        msg = f"Deleted entry but failed to rebuild backlink cache: {e}"
+        log.warning("%s (%s)", msg, normalized)
+        warnings.append(msg)
 
-    return {
-        "deleted": normalized,
-        "had_backlinks": entry_backlinks,
-    }
+    result: dict[str, object] = {"deleted": normalized, "had_backlinks": entry_backlinks}
+    if warnings:
+        result["warnings"] = warnings
+    return result
 
 
 async def tags(

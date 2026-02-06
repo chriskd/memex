@@ -755,6 +755,72 @@ class TestAddCommand:
         assert result.exit_code != 0
         assert "Invalid value for '--scope'" in result.output
 
+    def test_add_exit_code_zero_when_indexing_fails(self, runner, tmp_kb, monkeypatch):
+        """If indexing fails after file creation, mx add should still exit 0 (with a warning)."""
+        from memex import core
+        from memex.errors import MemexError
+
+        def broken_searcher():
+            raise MemexError.dependency_missing(
+                feature="search",
+                missing="chromadb",
+                suggestion="Install: uv tool install 'memex-kb[search]'",
+            )
+
+        monkeypatch.setattr(core, "get_searcher", broken_searcher)
+
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Index Failure OK",
+                "--tags",
+                "test",
+                "--category",
+                "general",
+                "--content",
+                "content",
+            ],
+        )
+
+        assert result.exit_code == 0
+        assert "Created:" in result.output
+        created = [line for line in result.output.splitlines() if line.startswith("Created:")]
+        assert created
+        rel_path = created[0].split("Created:", 1)[1].strip()
+        if rel_path.startswith("@"):
+            rel_path = rel_path.split("/", 1)[1]
+        assert (tmp_kb / rel_path).exists()
+
+    def test_delete_still_deletes_when_deindexing_fails(self, runner, tmp_kb, monkeypatch):
+        """mx delete should delete the file even if de-indexing fails (deps missing/broken)."""
+        from memex import core
+        from memex.errors import MemexError
+        from memex.frontmatter import build_frontmatter, create_new_metadata
+        from memex.parser import parse_entry
+
+        # Create a file directly so delete has something to remove.
+        (tmp_kb / "general").mkdir(exist_ok=True)
+        p = tmp_kb / "general" / "delete-me.md"
+        md = create_new_metadata(title="Delete Me", tags=["test"])
+        p.write_text(build_frontmatter(md) + "# Delete Me\n\ncontent", encoding="utf-8")
+        # Ensure it parses (sanity)
+        parse_entry(p)
+
+        def broken_searcher():
+            raise MemexError.dependency_missing(
+                feature="search",
+                missing="chromadb",
+                suggestion="Install: uv tool install 'memex-kb[search]'",
+            )
+
+        monkeypatch.setattr(core, "get_searcher", broken_searcher)
+
+        result = runner.invoke(cli, ["delete", "general/delete-me.md", "--force"])
+        assert result.exit_code == 0
+        assert not p.exists()
+
     @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_scope_error_no_user_kb(self, mock_run_async, runner):
         """Add with --scope=user fails if user KB doesn't exist."""
@@ -1655,6 +1721,22 @@ class TestReindexCommand:
             assert result.exit_code == 1
             assert "No knowledge base found" in result.output
 
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_reindex_dependency_missing_no_traceback(self, mock_run_async, runner, tmp_kb):
+        """Reindex should not print a Python traceback when optional deps are missing/broken."""
+        from memex.errors import MemexError
+
+        mock_run_async.side_effect = MemexError.dependency_missing(
+            feature="search",
+            missing="whoosh",
+            suggestion="uv tool install 'memex-kb[search]'",
+        )
+
+        result = runner.invoke(cli, ["reindex"])
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        assert "Optional dependency missing" in result.output or "dependency" in result.output.lower()
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Info Command Tests
@@ -2107,6 +2189,17 @@ class TestJsonErrorMode:
                 pytest.fail("Output should not be valid JSON without --json-errors")
             except json.JSONDecodeError:
                 pass  # Expected - plain text is not JSON
+
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_json_errors_get_not_found_outputs_json(self, mock_run_async, runner):
+        """--json-errors should also apply to runtime errors from subcommands (e.g., get not found)."""
+        mock_run_async.side_effect = FileNotFoundError("Entry not found: nonexistent.md")
+
+        result = runner.invoke(cli, ["--json-errors", "get", "nonexistent.md"])
+        assert result.exit_code != 0
+        assert result.stderr_bytes, "Expected JSON error on stderr"
+        data = json.loads(result.stderr_bytes.decode())
+        assert "error" in data
 
 
 # ─────────────────────────────────────────────────────────────────────────────

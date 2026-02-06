@@ -435,6 +435,73 @@ class JsonErrorGroup(click.Group):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Path Suggestions (Get UX)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _suggest_similar_paths(path: str, limit: int = 5) -> list[str]:
+    """Suggest similar KB paths when a path-based lookup fails.
+
+    Best-effort: if KB isn't configured (or scope KB not found), returns [].
+    """
+    from .config import (
+        ConfigurationError,
+        get_kb_root,
+        get_project_kb_root,
+        get_user_kb_root,
+        parse_scoped_path,
+    )
+
+    scope, relative = parse_scoped_path(path)
+    try:
+        if scope == "project":
+            kb_root = get_project_kb_root()
+            if not kb_root:
+                return []
+        elif scope == "user":
+            kb_root = get_user_kb_root()
+            if not kb_root:
+                return []
+        else:
+            kb_root = get_kb_root()
+    except ConfigurationError:
+        return []
+
+    if not kb_root.exists():
+        return []
+
+    candidates: list[str] = []
+    try:
+        for p in kb_root.rglob("*.md"):
+            try:
+                rel = str(p.relative_to(kb_root))
+            except Exception:
+                continue
+            if rel.startswith(".kb-indices/") or "/.kb-indices/" in rel:
+                continue
+            if rel.startswith(".") or "/." in rel:
+                continue
+            if rel.startswith("_") or "/_" in rel:
+                continue
+            candidates.append(rel)
+    except Exception:
+        return []
+
+    target = relative
+    target_alt = target[:-3] if target.endswith(".md") else f"{target}.md"
+
+    matches = difflib.get_close_matches(target, candidates, n=limit, cutoff=0.6)
+    if len(matches) < limit:
+        more = difflib.get_close_matches(target_alt, candidates, n=limit, cutoff=0.6)
+        for m in more:
+            if m not in matches:
+                matches.append(m)
+                if len(matches) >= limit:
+                    break
+    return matches[:limit]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Status Output (default when no subcommand)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -910,6 +977,24 @@ def prime(as_json: bool):
     if session_result:
         content = session_result.content
 
+    # Help agents understand limitations when optional search deps aren't installed.
+    import importlib.util
+
+    deps = {
+        "whoosh": importlib.util.find_spec("whoosh") is not None,
+        "chromadb": importlib.util.find_spec("chromadb") is not None,
+        "sentence_transformers": importlib.util.find_spec("sentence_transformers") is not None,
+    }
+    missing = [k for k, ok in deps.items() if not ok]
+    if missing:
+        content = (
+            content
+            + "\n\n## Search Dependencies\n\n"
+            + f"Search deps are missing ({', '.join(missing)}).\n"
+            + "Fallback: use `mx list --tags=<tag>` and `mx tree`.\n"
+            + "Install: uv tool install 'memex-kb[search]' (recommended) or pip install 'memex-kb[search]'\n"
+        )
+
     if as_json:
         payload: dict[str, Any] = {"content": content}
         if session_result:
@@ -1377,6 +1462,18 @@ def search(
         )
     except Exception as exc:
         # Most common case for first-time users: optional search deps not installed.
+        try:
+            from .errors import ErrorCode, MemexError
+
+            if isinstance(exc, MemexError) and exc.code == ErrorCode.DEPENDENCY_MISSING:
+                if exc.details.get("feature") == "search":
+                    details = dict(exc.details or {})
+                    suggestion = str(details.get("suggestion") or "").strip()
+                    fallback = "Tip: Use 'mx list --tags=<tag>' as a fallback when search deps are unavailable."
+                    details["suggestion"] = f"{suggestion}\n{fallback}" if suggestion else fallback
+                    exc = MemexError(exc.code, exc.message, details)
+        except Exception:
+            pass
         _handle_error(ctx, exc, fallback_message="Search failed.")
 
     # Record search in history
@@ -1533,7 +1630,8 @@ def search(
 @click.option("--title", "by_title", help="Get entry by title instead of path")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON with metadata")
 @click.option("--metadata", "-m", is_flag=True, help="Show only metadata")
-def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
+@click.pass_context
+def get(ctx: click.Context, path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     """Read a knowledge base entry.
 
     \b
@@ -1549,15 +1647,14 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
       mx search - Search entries by query
       mx list   - List entries with optional filters
     """
+    from .errors import MemexError
     from .core import find_entries_by_title, get_entry, get_similar_titles
 
     # Validate that exactly one of path or --title is provided
     if path and by_title:
-        click.echo("Error: Cannot specify both PATH and --title", err=True)
-        sys.exit(1)
+        raise UsageError("Cannot specify both PATH and --title")
     if not path and not by_title:
-        click.echo("Error: Must specify either PATH or --title", err=True)
-        sys.exit(1)
+        raise UsageError("Must specify either PATH or --title")
 
     # If --title is used, find the entry by title
     if by_title:
@@ -1566,20 +1663,34 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
         if len(matches) == 0:
             # No exact match - show suggestions
             suggestions = run_async(get_similar_titles(by_title))
-            click.echo(f"Error: No entry found with title '{by_title}'", err=True)
-            if suggestions:
-                click.echo("\nDid you mean:", err=True)
-                for suggestion in suggestions:
-                    click.echo(f"  - {suggestion}", err=True)
-            sys.exit(1)
+            if ctx.obj and ctx.obj.get("json_errors"):
+                err = MemexError.entry_not_found(
+                    by_title,
+                    suggestion="Use mx list or mx get <path> for an exact path.",
+                )
+                if suggestions:
+                    err.details["suggestions"] = suggestions
+                _handle_error(ctx, err)
+            else:
+                click.echo(f"Error: No entry found with title '{by_title}'", err=True)
+                if suggestions:
+                    click.echo("\nDid you mean:", err=True)
+                    for suggestion in suggestions:
+                        click.echo(f"  - {suggestion}", err=True)
+                sys.exit(1)
 
         if len(matches) > 1:
             # Multiple matches - show candidates
-            click.echo(f"Error: Multiple entries found with title '{by_title}':", err=True)
-            for match in matches:
-                click.echo(f"  - {match['path']}", err=True)
-            click.echo("\nUse the full path to specify which entry.", err=True)
-            sys.exit(1)
+            candidate_paths = [m.get("path") for m in matches if m.get("path")]
+            if ctx.obj and ctx.obj.get("json_errors"):
+                err = MemexError.ambiguous_match(by_title, candidate_paths)
+                _handle_error(ctx, err)
+            else:
+                click.echo(f"Error: Multiple entries found with title '{by_title}':", err=True)
+                for match in matches:
+                    click.echo(f"  - {match['path']}", err=True)
+                click.echo("\nUse the full path to specify which entry.", err=True)
+                sys.exit(1)
 
         # Single match - use its path
         path = matches[0]["path"]
@@ -1590,8 +1701,26 @@ def get(path: str | None, by_title: str | None, as_json: bool, metadata: bool):
     try:
         entry = run_async(get_entry(path=path))
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+        message = str(e)
+        if "not found" in message.lower():
+            suggestions = _suggest_similar_paths(path)
+            if ctx.obj and ctx.obj.get("json_errors"):
+                err = MemexError.entry_not_found(
+                    path,
+                    suggestion="Use mx list to browse entries, or run mx tree to explore structure.",
+                )
+                if suggestions:
+                    err.details["suggestions"] = suggestions
+                _handle_error(ctx, err)
+            else:
+                click.echo(f"Error: {e}", err=True)
+                if suggestions:
+                    click.echo("\nDid you mean:", err=True)
+                    for s in suggestions:
+                        click.echo(f"  - {s}", err=True)
+                    click.echo("\nTip: mx list --full-titles may help identify the right entry.", err=True)
+                sys.exit(1)
+        _handle_error(ctx, e, fallback_message="Get failed.")
 
     if as_json:
         output(entry.model_dump(), as_json=True)
@@ -1953,7 +2082,9 @@ def relations_lint(ctx: click.Context, scope: str | None, strict: bool, as_json:
     ),
 )
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
 def add(
+    ctx: click.Context,
     title: str,
     tags: str,
     category: str,
@@ -2007,18 +2138,20 @@ def add(
     """
     from .context import get_kb_context
     from .core import add_entry
+    from .errors import MemexError
     from .models import SemanticLink
 
-    warnings: list[str] = []
+    local_warnings: list[str] = []
 
     # Validate mutual exclusivity of content sources
     sources = sum([bool(content), bool(file_path), stdin])
     if sources > 1:
-        click.echo("Error: Only one of --content, --file, or --stdin can be used", err=True)
-        sys.exit(1)
+        _handle_error(
+            ctx,
+            MemexError.validation_error("Only one of --content, --file, or --stdin can be used"),
+        )
     if sources == 0:
-        click.echo("Error: Must provide --content, --file, or --stdin", err=True)
-        sys.exit(1)
+        _handle_error(ctx, MemexError.validation_error("Must provide --content, --file, or --stdin"))
 
     # Resolve content source
     if stdin:
@@ -2049,7 +2182,7 @@ def add(
             "and run 'mx reindex'."
         )
         if as_json:
-            warnings.append(warning)
+            local_warnings.append(warning)
         else:
             click.echo(f"Warning: {warning}", err=True)
 
@@ -2059,21 +2192,23 @@ def add(
         try:
             links_data = json.loads(semantic_links_json)
             if not isinstance(links_data, list):
-                click.echo("Error: --semantic-links must be a JSON array", err=True)
-                sys.exit(1)
+                _handle_error(ctx, MemexError.validation_error("--semantic-links must be a JSON array"))
             semantic_links = []
             for i, link_data in enumerate(links_data):
                 if not isinstance(link_data, dict):
-                    click.echo(f"Error: --semantic-links[{i}] must be a JSON object", err=True)
-                    sys.exit(1)
+                    _handle_error(
+                        ctx,
+                        MemexError.validation_error(f"--semantic-links[{i}] must be a JSON object"),
+                    )
                 missing = [f for f in ("path", "score", "reason") if f not in link_data]
                 if missing:
-                    click.echo(
-                        f"Error: --semantic-links[{i}] missing required fields: "
-                        f"{', '.join(missing)}",
-                        err=True,
+                    _handle_error(
+                        ctx,
+                        MemexError.validation_error(
+                            f"--semantic-links[{i}] missing required fields: {', '.join(missing)}",
+                            details={"missing_fields": missing},
+                        ),
                     )
-                    sys.exit(1)
                 try:
                     semantic_links.append(
                         SemanticLink(
@@ -2083,11 +2218,12 @@ def add(
                         )
                     )
                 except (ValueError, TypeError) as e:
-                    click.echo(f"Error: --semantic-links[{i}] invalid: {e}", err=True)
-                    sys.exit(1)
+                    _handle_error(
+                        ctx,
+                        MemexError.validation_error(f"--semantic-links[{i}] invalid: {e}"),
+                    )
         except json.JSONDecodeError as e:
-            click.echo(f"Error: --semantic-links is not valid JSON: {e}", err=True)
-            sys.exit(1)
+            _handle_error(ctx, MemexError.validation_error(f"--semantic-links is not valid JSON: {e}"))
 
     relations = _parse_relations_inputs(relation_items, relations_json)
 
@@ -2104,17 +2240,27 @@ def add(
             )
         )
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+        _handle_add_error(ctx, e, tag_list)
+
+    core_warnings: list[str] = []
+    if isinstance(result, dict) and isinstance(result.get("warnings"), list):
+        core_warnings = [str(w) for w in (result.get("warnings") or [])]
+
+    combined_warnings = local_warnings + core_warnings
+    if combined_warnings:
+        result["warnings"] = combined_warnings
 
     if as_json:
         # Include scope in JSON output if explicitly set
         if scope:
             result["scope"] = scope
-        if warnings:
-            result["warnings"] = warnings
         output(result, as_json=True)
     else:
+        quiet = ctx.obj.get("quiet", False) if ctx.obj else False
+        if combined_warnings and not quiet:
+            for w in combined_warnings:
+                click.echo(f"Warning: {w}", err=True)
+
         # Show path with scope prefix if explicitly set
         path_display = f"@{scope}/{result['path']}" if scope else result["path"]
         click.echo(f"Created: {path_display}")
@@ -2634,6 +2780,12 @@ def list_entries(
         rows = [{"path": e["path"], "title": e["title"]} for e in result]
         title_width = 10000 if full_titles else 40
         click.echo(format_table(rows, ["path", "title"], {"path": 45, "title": title_width}))
+        if not full_titles:
+            try:
+                if any(len(str(e.get("title", ""))) > 40 for e in result):
+                    click.echo("\nTip: Use --full-titles to see full values")
+            except Exception:
+                pass
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2906,7 +3058,11 @@ def reindex(ctx: click.Context, scope: str | None, as_json: bool):
         scope_msg = f"{scope} KB" if scope else "all KBs"
         click.echo(f"Reindexing {scope_msg}...")
 
-    result = run_async(core_reindex(scope=scope))
+    try:
+        result = run_async(core_reindex(scope=scope))
+    except Exception as exc:
+        # Match mx search behavior: no traceback, but preserve the underlying message.
+        _handle_error(ctx, exc)
 
     if as_json:
         output(
@@ -3063,7 +3219,8 @@ def context_validate(as_json: bool):
 @click.argument("path")
 @click.option("--force", "-f", is_flag=True, help="Delete even if has backlinks")
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def delete(path: str, force: bool, as_json: bool):
+@click.pass_context
+def delete(ctx: click.Context, path: str, force: bool, as_json: bool):
     """Delete a knowledge base entry.
 
     \b
@@ -3076,12 +3233,15 @@ def delete(path: str, force: bool, as_json: bool):
     try:
         result = run_async(delete_entry(path=path, force=force))
     except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
+        _handle_error(ctx, e, fallback_message="Delete failed.")
 
     if as_json:
         output(result, as_json=True)
     else:
+        quiet = ctx.obj.get("quiet", False) if ctx.obj else False
+        if not quiet and isinstance(result, dict) and result.get("warnings"):
+            for w in result.get("warnings") or []:
+                click.echo(f"Warning: {w}", err=True)
         if result.get("had_backlinks"):
             click.echo(f"Warning: Entry had {len(result['had_backlinks'])} backlinks", err=True)
         click.echo(f"Deleted: {result['deleted']}")
