@@ -15,12 +15,6 @@ edit_sources:
   - memex
 git_branch: main
 last_edited_by: chris
-keywords:
-  - model context protocol (mcp)
-  - memex knowledge base
-  - semantic search
-  - deprecated mcp server
-  - knowledge management tools
 ---
 
 # MCP Server Setup (Deprecated)

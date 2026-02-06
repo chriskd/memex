@@ -11,12 +11,6 @@ contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
 semantic_links:
-  - path: a-mem-parity/semantic-linking.md
-    score: 0.62
-    reason: bidirectional
-  - path: a-mem-parity/a-mem-parity-analysis.md
-    score: 0.768
-    reason: bidirectional
 ---
 
 # Dense Memory Signals Research
@@ -31,7 +25,6 @@ Research into what contextual signals can be captured and injected to help agent
 | **basic-memory** | Structured notes, relations, knowledge graph links | Medium |
 | **Mem0** | Facts extracted from conversations (not transcripts) | ~90% reduction vs full context |
 | **Letta/MemGPT** | Message buffer, core memory blocks, recall history, archival knowledge | Variable |
-| **A-Mem** (NeurIPS 2025) | Atomic notes with keywords, tags, context, embeddings, links | 1,200-2,500 tokens vs 16,900 baseline |
 
 ## Signal Tiers
 
@@ -71,11 +64,9 @@ Research into what contextual signals can be captured and injected to help agent
 
 ## Key Research Insights
 
-1. **Atomic > Monolithic**: A-Mem treats memories as single, self-contained units with rich metadata. This enables 85% token reduction.
+1. **Causality matters**: claude-mem's innovation is that every observation includes what came before and after. The LLM sees causality, not snapshots.
 
-2. **Causality matters**: claude-mem's innovation is that every observation includes what came before and after. The LLM sees causality, not snapshots.
-
-3. **Facts > Transcripts**: Mem0 extracts relevant facts, not full transcripts—reducing tokens ~90%.
+2. **Facts > Transcripts**: Mem0 extracts relevant facts, not full transcripts—reducing tokens ~90%.
 
 ## Scaling Strategies
 
@@ -134,5 +125,4 @@ Estimated: ~120 tokens with very high information density.
 - [[https://docs.basicmemory.com/|basic-memory Docs]]
 - [[https://github.com/mem0ai/mem0|Mem0 GitHub]]
 - [[https://www.letta.com/blog/agent-memory|Letta Agent Memory]]
-- [[https://arxiv.org/abs/2502.12110|A-Mem Paper (NeurIPS 2025)]]
 - [[https://alok-mishra.com/2026/01/07/a-2026-memory-stack-for-enterprise-agents/|2026 Enterprise Memory Stack]]

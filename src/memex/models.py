@@ -6,51 +6,6 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-class EvolutionRecord(BaseModel):
-    """A record of how an entry was evolved based on a related entry."""
-
-    timestamp: datetime  # When evolution occurred
-    trigger_entry: str  # Path of entry that triggered evolution
-    previous_keywords: list[str] = Field(default_factory=list)  # Keywords before evolution
-    new_keywords: list[str] = Field(default_factory=list)  # Keywords after evolution
-    previous_description: str | None = None  # Description before (if changed)
-    new_description: str | None = None  # Description after (if changed)
-
-
-class NeighborUpdate(BaseModel):
-    """Update suggestion for a single neighbor entry during evolution.
-
-    Represents the LLM's suggested changes for one neighbor entry.
-    Part of the EvolutionDecision response structure (A-Mem parity).
-    """
-
-    path: str  # Path to the neighbor entry
-    # Updated keyword list (replaces existing)
-    new_keywords: list[str] = Field(default_factory=list)
-    new_context: str = ""  # Updated context/description (one sentence)
-    relationship: str = ""  # One-sentence description of relationship to new entry
-
-
-class EvolutionDecision(BaseModel):
-    """LLM decision about whether and how to evolve neighbors.
-
-    Mirrors A-Mem's evolution response structure where the LLM explicitly
-    decides whether evolution should happen, not just the score threshold.
-
-    Fields:
-        should_evolve: LLM's explicit decision (not just score threshold)
-        actions: What to do - 'update_keywords', 'update_context', 'add_links'
-        neighbor_updates: Per-neighbor update suggestions
-        suggested_connections: New link paths to add (for 'add_links' action)
-    """
-
-    should_evolve: bool  # LLM decision: should this entry trigger evolution?
-    # Actions: update_keywords, update_context, add_links
-    actions: list[str] = Field(default_factory=list)
-    neighbor_updates: list[NeighborUpdate] = Field(default_factory=list)  # Per-neighbor updates
-    suggested_connections: list[str] = Field(default_factory=list)  # New links to add
-
-
 class SemanticLink(BaseModel):
     """A computed semantic relationship to another entry."""
 
@@ -60,7 +15,7 @@ class SemanticLink(BaseModel):
 
 
 class RelationLink(BaseModel):
-    """A typed relation to another entry (manual, not A-Mem)."""
+    """A typed relation to another entry (manual)."""
 
     path: str  # Target entry path
     type: str  # Relation type (e.g., "implements", "depends_on")
@@ -83,12 +38,9 @@ class EntryMetadata(BaseModel):
     model: str | None = None  # LLM model that created/last updated the entry
     git_branch: str | None = None  # Git branch during creation
     last_edited_by: str | None = None  # Last contributor identity (agent or human)
-    # A-Mem semantic linking
-    keywords: list[str] = Field(default_factory=list)  # LLM-extracted key concepts
     semantic_links: list[SemanticLink] = Field(default_factory=list)  # Computed relationships
-    # Typed relations (manual, non-A-Mem)
+    # Typed relations (manual)
     relations: list[RelationLink] = Field(default_factory=list)
-    evolution_history: list[EvolutionRecord] = Field(default_factory=list)  # How entry evolved
 
 
 class DocumentChunk(BaseModel):
@@ -293,70 +245,3 @@ class IngestResult(BaseModel):
     title: str  # Entry title (extracted or provided)
     tags: list[str]  # Tags applied
     suggested_tags: list[dict] = Field(default_factory=list)  # Tag suggestions
-
-
-class InitInventoryEntry(BaseModel):
-    """An entry in the a-mem-init inventory."""
-
-    path: str  # Relative path to entry (with @scope/ prefix in multi-KB mode)
-    title: str  # Entry title
-    created: datetime  # Creation timestamp (for chronological ordering)
-    has_keywords: bool  # Whether entry has keywords
-    keyword_status: Literal["ready", "skipped", "needs_llm"]  # Processing status
-    keywords: list[str] = Field(default_factory=list)  # Existing keywords if any
-    absolute_path: str | None = None  # Absolute path for file operations
-
-
-class InitInventoryResult(BaseModel):
-    """Result of a-mem-init inventory phase."""
-
-    entries: list[InitInventoryEntry]  # Entries sorted by created (oldest first)
-    total_count: int  # Total entries found
-    with_keywords: int  # Entries with keywords
-    missing_keywords: int  # Entries without keywords
-    skipped_count: int  # Entries skipped (missing keywords in skip mode)
-    needs_llm_count: int  # Entries queued for LLM keyword extraction
-    missing_keyword_mode: Literal["error", "skip", "llm"]  # Mode used
-    errors: list[str] = Field(default_factory=list)  # Entries that caused errors
-
-
-class KeywordExtractionEntry(BaseModel):
-    """Result of keyword extraction for a single entry."""
-
-    path: str  # Entry path
-    title: str  # Entry title
-    keywords: list[str]  # Extracted keywords
-    success: bool  # Whether extraction succeeded
-    error: str | None = None  # Error message if failed
-
-
-class KeywordExtractionPhaseResult(BaseModel):
-    """Result of Phase 2: LLM keyword extraction."""
-
-    entries_processed: int  # Total entries processed
-    entries_updated: int  # Entries successfully updated with keywords
-    entries_failed: int  # Entries that failed extraction
-    results: list[KeywordExtractionEntry] = Field(default_factory=list)  # Per-entry results
-    errors: list[str] = Field(default_factory=list)  # General errors
-
-
-class LinkingPhaseEntry(BaseModel):
-    """Result of linking for a single entry."""
-
-    path: str  # Entry path
-    title: str  # Entry title
-    links_created: int  # Number of forward links created
-    evolution_items_queued: int  # Number of evolution queue items
-    neighbors: list[str] = Field(default_factory=list)  # Paths of linked neighbors
-
-
-class LinkingPhaseResult(BaseModel):
-    """Result of Phase 3: Semantic Linking."""
-
-    entries_processed: int  # Total entries processed
-    entries_linked: int  # Entries that got at least one link
-    entries_skipped: int  # Entries skipped (missing keywords, etc.)
-    total_links_created: int  # Total bidirectional link pairs created
-    total_evolution_items: int  # Total items queued for evolution
-    results: list[LinkingPhaseEntry] = Field(default_factory=list)  # Per-entry results
-    errors: list[str] = Field(default_factory=list)  # General errors

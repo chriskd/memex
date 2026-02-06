@@ -14,12 +14,6 @@ edit_sources:
   - memex
 git_branch: main
 last_edited_by: chris
-keywords:
-  - memex
-  - markdown
-  - yaml frontmatter
-  - bidirectional links
-  - knowledge management
 ---
 
 # Entry Format Reference

@@ -12,10 +12,6 @@ updated: 2026-01-15T03:22:55.904510+00:00
 contributors:
   - chriskd <2326567+chriskd@users.noreply.github.com>
 source_project: memex
-semantic_links:
-  - path: a-mem-parity/a-mem-test-cases-for-agent-evaluation.md
-    score: 0.609
-    reason: bidirectional
 ---
 
 # Focusgroup Evaluation: mx CLI Discoverability

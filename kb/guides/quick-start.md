@@ -9,6 +9,20 @@ description: Get productive with memex in 5 minutes
 
 Get productive with memex in 5 minutes.
 
+## 5-minute flow (agents)
+
+Run these in order; each step confirms the previous one worked.
+
+```bash
+mx init                                 # Creates KB + .kbconfig
+mx add --title="First Entry" --tags=docs --category=guides --content="Hello KB"
+mx list --limit=5                       # Confirms entry path
+mx get guides/first-entry.md            # Confirms read path
+mx health                               # Confirms basic KB health
+```
+
+Optional check: `mx search "Hello KB"` to verify indexing.
+
 ## 1. Set Up Your Knowledge Base
 
 Choose a KB scope:
@@ -52,7 +66,7 @@ Use \`git stash apply\` to keep the stash after applying."
 
 This creates `tooling/git-stash-workflow.md` in your KB.
 
-**Note:** `mx add` requires `--category` unless you set `primary` in `.kbconfig` (project) or your user KB `.kbconfig`.
+**Note:** If `--category` is omitted and no `.kbconfig` `primary` exists, `mx add` defaults to the KB root (`.`) and prints a warning.
 
 ## 3. Search for It
 
@@ -94,6 +108,8 @@ Audits your KB for:
 - Broken links
 - Orphaned entries
 - Index sync issues
+
+Orphans are entries with no incoming links yet. This is normal for new KBs; add links or use `mx suggest-links` when you have more entries.
 
 ## Essential Commands
 

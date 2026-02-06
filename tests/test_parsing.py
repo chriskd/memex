@@ -161,34 +161,6 @@ class TestBuildFrontmatter:
         assert parsed["contributors"] == original.contributors
         assert parsed["aliases"] == original.aliases
 
-    def test_keywords_serialized_when_present(self):
-        """Keywords field is serialized as YAML list."""
-        metadata = EntryMetadata(
-            title="Entry with Keywords",
-            tags=["test"],
-            created=datetime(2024, 1, 1, 0, 0, 0),
-            keywords=["python", "testing", "cli"],
-        )
-
-        result = build_frontmatter(metadata)
-
-        assert "keywords:" in result
-        assert "- python" in result
-        assert "- testing" in result
-        assert "- cli" in result
-
-    def test_keywords_omitted_when_empty(self):
-        """Keywords field is not included when empty."""
-        metadata = EntryMetadata(
-            title="No Keywords",
-            tags=["test"],
-            created=datetime(2024, 1, 1, 0, 0, 0),
-        )
-
-        result = build_frontmatter(metadata)
-
-        assert "keywords:" not in result
-
     def test_semantic_links_serialized_when_present(self):
         """Semantic links are serialized as structured YAML."""
         metadata = EntryMetadata(
@@ -255,13 +227,12 @@ class TestBuildFrontmatter:
 
         assert "relations:" not in result
 
-    def test_keywords_and_semantic_links_roundtrip(self):
-        """Keywords and semantic links can be parsed back."""
+    def test_semantic_links_roundtrip(self):
+        """Semantic links can be parsed back."""
         original = EntryMetadata(
-            title="Full A-Mem Entry",
+            title="Full Semantic Entry",
             tags=["test"],
             created=datetime(2024, 1, 15, 10, 30, 0),
-            keywords=["memory", "semantic"],
             semantic_links=[
                 SemanticLink(path="other.md", score=0.9, reason="bidirectional"),
             ],
@@ -271,7 +242,6 @@ class TestBuildFrontmatter:
         yaml_content = fm.split("---")[1]
         parsed = yaml.safe_load(yaml_content)
 
-        assert parsed["keywords"] == ["memory", "semantic"]
         assert len(parsed["semantic_links"]) == 1
         assert parsed["semantic_links"][0]["path"] == "other.md"
         assert parsed["semantic_links"][0]["score"] == 0.9
@@ -336,17 +306,7 @@ class TestSemanticLink:
 
 
 class TestEntryMetadataSemanticFields:
-    """Tests for keywords and semantic_links fields on EntryMetadata."""
-
-    def test_default_empty_keywords(self):
-        """Keywords default to empty list."""
-        metadata = EntryMetadata(
-            title="Test",
-            tags=["test"],
-            created=datetime(2024, 1, 1, 0, 0, 0),
-        )
-
-        assert metadata.keywords == []
+    """Tests for semantic_links field on EntryMetadata."""
 
     def test_default_empty_semantic_links(self):
         """Semantic links default to empty list."""
@@ -370,7 +330,6 @@ class TestEntryMetadataSemanticFields:
         metadata = EntryMetadata.model_validate(yaml_data)
 
         assert metadata.title == "Old Entry"
-        assert metadata.keywords == []
         assert metadata.semantic_links == []
 
 
@@ -404,22 +363,6 @@ class TestCreateNewMetadata:
         assert metadata.model == "claude-opus-4"
         assert metadata.git_branch == "feature/new"
         assert metadata.last_edited_by == "ci-agent"
-
-    def test_populates_keywords_when_provided(self):
-        """Keywords field is populated when provided."""
-        metadata = create_new_metadata(
-            title="Entry",
-            tags=["test"],
-            keywords=["semantic", "memory", "graph"],
-        )
-
-        assert metadata.keywords == ["semantic", "memory", "graph"]
-
-    def test_keywords_default_to_empty(self):
-        """Keywords default to empty list when not provided."""
-        metadata = create_new_metadata(title="Entry", tags=["test"])
-
-        assert metadata.keywords == []
 
 
 class TestUpdateMetadataForEdit:
@@ -471,22 +414,6 @@ class TestUpdateMetadataForEdit:
         # Same as source_project should not be added
         updated2 = update_metadata_for_edit(base_metadata, edit_source="original-project")
         assert "original-project" not in updated2.edit_sources
-
-    def test_preserves_keywords_when_not_specified(self, base_metadata: EntryMetadata):
-        """Keywords are preserved when not explicitly updated."""
-        base_metadata.keywords = ["existing", "keywords"]
-
-        updated = update_metadata_for_edit(base_metadata)
-
-        assert updated.keywords == ["existing", "keywords"]
-
-    def test_updates_keywords_when_specified(self, base_metadata: EntryMetadata):
-        """Keywords are replaced when explicitly provided."""
-        base_metadata.keywords = ["old"]
-
-        updated = update_metadata_for_edit(base_metadata, keywords=["new", "keywords"])
-
-        assert updated.keywords == ["new", "keywords"]
 
     def test_preserves_semantic_links_when_not_specified(self, base_metadata: EntryMetadata):
         """Semantic links are preserved when not explicitly updated."""

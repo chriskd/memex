@@ -20,12 +20,6 @@ semantic_links:
   - path: guides/quick-start.md
     score: 0.769
     reason: embedding_similarity
-  - path: a-mem-parity/a-mem-init-command-specification.md
-    score: 0.731
-    reason: embedding_similarity
-  - path: a-mem-parity/keywords-and-embeddings.md
-    score: 0.696
-    reason: embedding_similarity
 ---
 
 # Plan: LLM Query Processing for KB Entries
@@ -77,7 +71,7 @@ class LLMQueryConfig:
     cache_enabled: bool = True
 ```
 
-Add `get_llm_query_config()` (follow `get_memory_evolution_config()` pattern)
+Add `get_llm_query_config()` (follow existing config loader patterns)
 
 ### `src/memex/models.py`
 Add:

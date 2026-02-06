@@ -5,7 +5,6 @@ Magic numbers are documented here rather than scattered throughout the codebase.
 """
 
 import os
-from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -453,88 +452,5 @@ SEMANTIC_LINK_MIN_SCORE = 0.6
 # Maximum number of semantic links to create per entry.
 # Higher values create denser link graphs but may add noise.
 SEMANTIC_LINK_K = 5
-
-# Minimum similarity score for triggering memory evolution on neighbors.
-# Higher than SEMANTIC_LINK_MIN_SCORE to focus evolution on strong connections.
-MEMORY_EVOLUTION_MIN_SCORE = 0.7
-
-
-# =============================================================================
-# LLM Provider Configuration
-# =============================================================================
-
-
-@dataclass
-class LLMConfig:
-    """Configuration for LLM provider and models.
-
-    Applies to all LLM-powered features (evolution, etc.).
-    Provider is auto-detected from available API keys unless explicitly set.
-
-    Example .kbconfig:
-        llm:
-          provider: anthropic  # or "openrouter"
-          model: claude-3.5-haiku
-    """
-
-    provider: str | None = None
-    """LLM provider: 'anthropic' or 'openrouter'. Auto-detected if None."""
-
-    model: str = "claude-3.5-haiku"
-    """Default model for all LLM features."""
-
-    models: dict[str, str] | None = None
-    """Per-feature model overrides."""
-
-    def get_model(self, feature: str) -> str:
-        """Get the model for a specific feature.
-
-        Args:
-            feature: Feature name.
-
-        Returns:
-            Model name, using feature-specific override if set.
-        """
-        if self.models and feature in self.models:
-            return self.models[feature]
-        return self.model
-
-
-def get_llm_config() -> LLMConfig:
-    """Load LLM config from .kbconfig.
-
-    Config is loaded from the project .kbconfig file's llm section.
-    Returns default config if not configured or KB not found.
-
-    Example .kbconfig:
-        llm:
-          provider: anthropic
-          model: claude-3.5-haiku
-
-    Returns:
-        LLMConfig with loaded or default values.
-    """
-    import yaml
-
-    try:
-        project_config = _discover_project_config()
-        if not project_config:
-            return LLMConfig()
-
-        config_path, _ = project_config
-        content = config_path.read_text(encoding="utf-8")
-        data = yaml.safe_load(content) or {}
-
-        llm_data = data.get("llm", {})
-        if not llm_data:
-            return LLMConfig()
-
-        return LLMConfig(
-            provider=llm_data.get("provider"),
-            model=llm_data.get("model", "claude-3.5-haiku"),
-            models=llm_data.get("models"),
-        )
-    except (OSError, yaml.YAMLError):
-        return LLMConfig()
 
 

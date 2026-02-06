@@ -170,14 +170,16 @@ class TestAddEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_add_entry_requires_category_or_directory(self, tmp_kb, monkeypatch):
-        """Missing both category and directory raises ValueError."""
-        with pytest.raises(ValueError, match="category.*directory"):
-            await core.add_entry(
-                title="Test Entry",
-                content="Content",
-                tags=["test"],
-            )
+    async def test_add_entry_defaults_to_root(self, tmp_kb):
+        """Missing category defaults to KB root."""
+        result = await core.add_entry(
+            title="Root Entry",
+            content="Content",
+            tags=["test"],
+        )
+
+        assert result["path"] == "root-entry.md"
+        assert (tmp_kb / "root-entry.md").exists()
 
     @pytest.mark.asyncio
     async def test_add_entry_auto_creates_directory(self, tmp_kb):
@@ -515,12 +517,8 @@ class TestUpdateEntry:
             )
 
     @pytest.mark.asyncio
-    async def test_update_entry_requires_content_sections_tags_keywords_or_semantic_links(
-        self, tmp_kb
-    ):
-        """update_entry requires either content, section_updates, tags, keywords,
-        or semantic_links.
-        """
+    async def test_update_entry_requires_content_sections_tags_or_semantic_links(self, tmp_kb):
+        """update_entry requires either content, section_updates, tags, semantic_links, or relations."""
         _create_entry(
             tmp_kb / "general" / "test.md",
             "Test",
@@ -529,7 +527,7 @@ class TestUpdateEntry:
 
         with pytest.raises(
             ValueError,
-            match="content, section_updates, tags, keywords, semantic_links, or relations",
+            match="content, section_updates, tags, semantic_links, or relations",
         ):
             await core.update_entry(path="general/test.md")
 
@@ -1988,7 +1986,6 @@ class TestCreateBidirectionalSemanticLinks:
         )
 
         assert result.forward_links == []
-        assert result.neighbors_for_evolution == []
 
     def test_skips_results_below_threshold(self, tmp_kb, monkeypatch):
         """Results below min_score threshold are not linked."""
@@ -2015,7 +2012,6 @@ class TestCreateBidirectionalSemanticLinks:
         )
 
         assert result.forward_links == []
-        assert result.neighbors_for_evolution == []
 
     def test_limits_to_k_results(self, tmp_kb, monkeypatch):
         """Only returns up to k semantic links."""
@@ -2059,8 +2055,3 @@ class TestCreateBidirectionalSemanticLinks:
         assert result.forward_links[0].path == "entries/entry0.md"
         assert result.forward_links[1].path == "entries/entry1.md"
         assert result.forward_links[2].path == "entries/entry2.md"
-        # Also verify neighbors_for_evolution
-        assert len(result.neighbors_for_evolution) == 3
-        assert result.neighbors_for_evolution[0] == ("entries/entry0.md", 0.9)
-        assert result.neighbors_for_evolution[1] == ("entries/entry1.md", 0.89)
-        assert result.neighbors_for_evolution[2] == ("entries/entry2.md", 0.88)

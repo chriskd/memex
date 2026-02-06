@@ -20,7 +20,7 @@ from .parser import ParseError, parse_entry
 CACHE_DIR = Path("/tmp")
 CACHE_TTL_SECONDS = 3600  # 1 hour
 DEFAULT_MAX_ENTRIES = 4
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 
 
 @dataclass
@@ -262,35 +262,65 @@ def _format_output(
     context: KBContext | None,
     recent_entries: list[dict],
 ) -> str:
+    import importlib.util
+
+    project_kb = get_project_kb_root()
+    user_kb = get_user_kb_root()
+
     lines = [
         "## Memex Knowledge Base",
         "",
-        "You have access to a knowledge base with documentation, patterns,",
-        "and operational guides. **Search before creating** to avoid duplicates.",
+        "Search before creating new content. Add discoveries for future agents.",
         "",
-        "**Project Context:**",
+        "**Context snapshot:**",
     ]
-    context_parts = []
+    context_parts = [f"write_kb={kb_root}"]
     if scope:
         context_parts.append(f"scope={scope}")
-    context_parts.append(f"kb_path={kb_root}")
+    if project_kb and project_kb != kb_root:
+        context_parts.append(f"project_kb={project_kb}")
+    if user_kb and user_kb != kb_root:
+        context_parts.append(f"user_kb={user_kb}")
+    if context and context.source_file:
+        context_parts.append(f"context={context.source_file}")
     if context and context.primary:
         context_parts.append(f"primary={context.primary}")
     if context and context.default_tags:
         context_parts.append(f"default_tags={','.join(context.default_tags)}")
-    if context and context.paths:
-        context_parts.append(f"boost_paths={','.join(context.paths)}")
     lines.append(" | ".join(context_parts))
     lines.append("")
+
+    if importlib.util.find_spec("whoosh") is None:
+        lines.append(
+            "Note: `mx search` requires optional dependencies. Run `mx doctor` for install hints."
+        )
+        lines.append("")
+
     lines.extend(
         [
-            "**Quick Reference:**",
+            "**5-minute flow:**",
+            "1) `mx info` - active KB paths + categories",
+            "2) `mx context show` - .kbconfig (primary category + default tags)",
+            "3) `mx add --title=\"...\" --tags=\"...\" --category=... --content=\"...\"` - create entry",
+            "   (omit --category if `.kbconfig` sets `primary`; otherwise defaults to KB root (.) with a warning)",
+            "4) `mx list --limit=5` - confirm entry path",
+            "   Optional: `mx search \"query\"` - verify indexing",
+            "5) `mx get path/to/entry.md` - read entry",
+            "6) `mx health` - audit (orphans = entries with no incoming links)",
+            "",
+            "**Required frontmatter:**",
+            "- `title`",
+            "- `tags`",
+            "README.md inside the KB should include frontmatter or be excluded (prefix \"_\" or move it).",
+            "Quick fix: add frontmatter or rename it to _README.md.",
+            "",
+            "**Quick reference:**",
             "| Action | Command |",
             "|--------|---------|",
             "| Search | `mx search <query>` |",
             "| Browse | `mx list` or `mx tree` |",
             "| Read entry | `mx get <path>` |",
-            "| Add new | `mx add --title=... --tags=... --content=...` |",
+            "| Add new | `mx add --title=... --tags=... --category=... --content=...` |",
             "",
         ]
     )

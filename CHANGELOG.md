@@ -15,10 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Token-based chunking**: Smarter document splitting using tiktoken for better semantic search quality
 - **Evaluation harness**: `mx eval` command with precision/recall/MRR metrics for search quality testing
 
-### Removed
-
-- **A-Mem features**: Removed `evolve`, `a-mem-init`, and evolution queue (experimental, unused)
-
 ## [0.2.0] - 2026-01-27
 
 ### Added

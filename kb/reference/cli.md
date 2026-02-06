@@ -13,12 +13,6 @@ edit_sources:
   - memex
 git_branch: main
 last_edited_by: chris
-keywords:
-  - hybrid search
-  - semantic search
-  - cli knowledge base
-  - search scoring
-  - query filtering
 ---
 
 # CLI Reference
@@ -185,11 +179,10 @@ cat content.md | mx add --title="..." --tags="..." --category=... --stdin
 **Required:**
 - `--title`: Entry title
 - `--tag, --tags`: Tags (comma-separated)
-- `--category`: Target directory (required unless `primary` is set in `.kbconfig`)
+- `--category`: Target directory. If omitted and no `.kbconfig` `primary` exists, defaults to KB root (`.`) with a warning.
 
 **Common options:**
 - `--scope`: Target KB scope (project or user)
-- `--keywords`: Key concepts for semantic linking (comma-separated)
 - `--semantic-links`: Set semantic links as JSON array
 
 ### mx replace
@@ -286,6 +279,8 @@ Checks for:
 - Broken links
 - Stale content (>90 days)
 - Missing frontmatter
+
+Note: Orphans are normal in new KBs. Add links from other entries or use `mx suggest-links` to connect them.
 
 ### mx relations-lint
 
@@ -407,32 +402,6 @@ EOF
 
 Reads commands from stdin (or `--file`) and returns JSON results.
 
-## Agent Memory Commands
-
-### mx memory
-
-Agent memory for AI coding assistants.
-
-```bash
-mx memory              # Show memory status
-mx memory init         # Enable memory for this project
-mx memory add "note"   # Add a manual memory note
-mx memory inject       # Preview injected context
-mx memory capture      # Manually trigger capture
-```
-
-### mx evolve
-
-Process queued memory evolution.
-
-```bash
-mx evolve              # Process all queued items
-mx evolve --status     # Show queue statistics
-mx evolve --dry-run    # Preview what would be evolved
-mx evolve --limit 10   # Process up to 10 items
-mx evolve --clear      # Clear all queued items
-```
-
 ## Templates
 
 List or show available entry templates.
@@ -478,46 +447,12 @@ mx reindex
 mx reindex --json
 ```
 
-### mx a-mem-init
-
-Initialize A-Mem structures (semantic links + evolution queue) for existing KB entries.
-
-```bash
-mx a-mem-init                        # Run all phases
-mx a-mem-init --dry-run              # Preview without executing
-mx a-mem-init --missing-keywords=llm # Use LLM to extract missing keywords
-mx a-mem-init --missing-keywords=skip # Skip entries without keywords
-mx a-mem-init --scope=project        # Only process project KB
-mx a-mem-init --limit=10             # Process first 10 entries only
-mx a-mem-init --json                 # JSON output
-```
-
-**Phases:**
-1. **Inventory & Validation** - Lists entries, validates keywords
-2. **Keyword Extraction** - Uses LLM to extract keywords (when mode=llm)
-3. **Semantic Linking** - Creates bidirectional links chronologically
-4. **Evolution Queue** - Queues items for `mx evolve`
-
-**Missing Keywords Modes:**
-- `error` - Stop and list missing keywords (default if `amem_strict: true`)
-- `skip` - Skip entries without keywords (default otherwise)
-- `llm` - Extract keywords using LLM (requires `OPENROUTER_API_KEY`)
-
-**Notes:**
-- Processes entries chronologically (oldest first) to simulate incremental A-Mem
-- Only links to entries created BEFORE the current entry
-- Idempotent: safe to re-run without creating duplicates
-
-See [[a-mem-parity/a-mem-init-command-specification.md]] for full specification.
-
 ### mx prime
 
 Output agent workflow context (for hooks).
 
 ```bash
-mx prime                    # Auto-detect mode
-mx prime --full             # Force full output
-mx prime --mcp              # Force minimal output
+mx prime                    # Output onboarding + quick reference
 mx prime --json             # JSON output
 ```
 

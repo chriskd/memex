@@ -354,32 +354,17 @@ class TestSemanticSearch:
         results = chroma_index.search("Python programming", limit=5)
         assert len(results) == 5
 
-    def test_build_embedding_text_includes_keywords_and_tags(self, chroma_index):
-        """Embedding text builder includes content, keywords, and tags."""
+    def test_build_embedding_text_includes_tags(self, chroma_index):
+        """Embedding text builder includes content and tags."""
         # Test the internal _build_embedding_text method
         result = chroma_index._build_embedding_text(
             content="Main document content",
             title="Test Title",
             section=None,
-            keywords=["concept1", "concept2"],
             tags=["tag1", "tag2"],
         )
         assert "Main document content" in result
-        assert "Keywords: concept1, concept2" in result
         assert "Tags: tag1, tag2" in result
-
-    def test_build_embedding_text_empty_keywords(self, chroma_index):
-        """Embedding text handles empty keywords gracefully."""
-        result = chroma_index._build_embedding_text(
-            content="Content only",
-            title="Test Title",
-            section=None,
-            keywords=[],
-            tags=["tag1"],
-        )
-        assert "Content only" in result
-        assert "Keywords:" not in result
-        assert "Tags: tag1" in result
 
     def test_build_embedding_text_empty_tags(self, chroma_index):
         """Embedding text handles empty tags gracefully."""
@@ -387,30 +372,10 @@ class TestSemanticSearch:
             content="Content only",
             title="Test Title",
             section=None,
-            keywords=["keyword1"],
             tags=[],
         )
         assert "Content only" in result
-        assert "Keywords: keyword1" in result
         assert "Tags:" not in result
-
-    def test_semantic_finds_by_keywords(self, chroma_index):
-        """Semantic search finds content via keywords in metadata."""
-        # Document content doesn't mention "neural networks" but keywords do
-        chunk = _make_chunk(
-            "ml/classifier.md",
-            "A system for categorizing images into predefined classes.",
-            "Image Classifier",
-            tags=["ml"],
-        )
-        # Add keywords to metadata
-        chunk.metadata.keywords = ["neural networks", "deep learning", "CNN"]
-        chroma_index.index_document(chunk)
-
-        # Query using keyword concept (neural networks)
-        results = chroma_index.search("neural networks", limit=5)
-        assert len(results) >= 1
-        assert results[0].path == "ml/classifier.md"
 
     def test_semantic_finds_by_tags(self, chroma_index):
         """Semantic search finds content via tags included in embedding."""
@@ -426,37 +391,6 @@ class TestSemanticSearch:
         results = chroma_index.search("continuous integration", limit=5)
         assert len(results) >= 1
         assert results[0].path == "devops/ci.md"
-
-    def test_keywords_improve_search_quality(self, chroma_index):
-        """Keywords improve semantic search by adding semantic context."""
-        # Two documents about similar topics
-        chunk_with_keywords = _make_chunk(
-            "concepts/attention.md",
-            "A mechanism for weighting different parts of input data.",
-            "Attention Mechanisms",
-            tags=["ml"],
-        )
-        chunk_with_keywords.metadata.keywords = [
-            "transformer",
-            "self-attention",
-            "NLP",
-        ]
-
-        chunk_without_keywords = _make_chunk(
-            "concepts/weighting.md",
-            "A mechanism for weighting different parts of input data.",
-            "Weighting Scheme",
-            tags=["ml"],
-        )
-        # No keywords
-
-        chroma_index.index_documents([chunk_with_keywords, chunk_without_keywords])
-
-        # Search for transformer-related concept
-        results = chroma_index.search("transformer attention models", limit=5)
-        assert len(results) >= 1
-        # Document with relevant keywords should rank higher
-        assert results[0].path == "concepts/attention.md"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

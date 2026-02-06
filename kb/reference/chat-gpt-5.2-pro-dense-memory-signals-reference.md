@@ -46,7 +46,6 @@ My prompt:
   Existing tools' approaches:
   - claude-mem: Causal observations (what led to what)
   - Mem0: Extract facts, not transcripts (~90% token reduction)
-  - A-Mem (NeurIPS 2025): Atomic notes with metadata, embeddings, links (85% reduction)
   - Letta/MemGPT: Message buffer + core memory blocks + archival
 
   What I Need Help With
@@ -494,7 +493,7 @@ MemoryBank explicitly explores time-based updating inspired by forgetting curves
 
 ### D. Cluster semantically + store “gist episodes”
 
-Store per-session “gist” plus structured atomic notes. A-Mem is a concrete example of structuring notes with attributes/tags/keywords and then linking them into a network that can evolve as new memories arrive. ([arXiv][6])
+Store per-session “gist” plus structured atomic notes, then link them into a network you keep updated as new memories arrive.
 
 Practical implementation for your case:
 
@@ -579,7 +578,6 @@ Your analog checklist items:
 
 * **MemGPT** (hierarchical memory / paging-inspired) and the associated Letta architecture docs (core vs archival, etc.). ([arXiv][12])
 * **Mem0 (2025)**: focuses on extracting + consolidating salient memory (and a graph variant), reporting big token savings and latency reductions. ([arXiv][13])
-* **A-Mem (NeurIPS 2025)**: Zettelkasten-inspired structured notes + dynamic linking + memory evolution as new notes arrive. ([arXiv][6])
 * **MemoryBank (AAAI)**: long-term memory mechanism + time-based updating inspired by forgetting curves. ([arXiv][5])
 * **ReadAgent (2024)**: “gist memory” episodes + the ability to look up details in the original text. ([arXiv][3])
 * **LoCoMo benchmark** for evaluating very long-term conversational memory across sessions. ([ACL Anthology][14])
@@ -619,7 +617,6 @@ If you want one very targeted follow-up direction (without adding user effort): 
 [3]: https://arxiv.org/abs/2402.09727?utm_source=chatgpt.com "A Human-Inspired Reading Agent with Gist Memory of Very Long Contexts"
 [4]: https://github.com/thedotmack/claude-mem "GitHub - thedotmack/claude-mem: A Claude Code plugin that automatically captures everything Claude does during your coding sessions, compresses it with AI (using Claude's agent-sdk), and injects relevant context back into future sessions."
 [5]: https://arxiv.org/abs/2305.10250?utm_source=chatgpt.com "MemoryBank: Enhancing Large Language Models with Long-Term Memory"
-[6]: https://arxiv.org/abs/2502.12110?utm_source=chatgpt.com "A-MEM: Agentic Memory for LLM Agents"
 [7]: https://link.springer.com/content/pdf/10.1186/s40886-018-0073-1.pdf?utm_source=chatgpt.com "Situation, Background, Assessment, Recommendation (SBAR) Communication ..."
 [8]: https://link.springer.com/article/10.1186/s12909-024-05880-7?utm_source=chatgpt.com "Secondary analysis of hand-offs in internal medicine using the I-PASS ..."
 [9]: https://process.honeywell.com/content/dam/process/en/documents/document-lists/doc_asm-consortium/white-papers/July%2031%202011%20-%20Effective%20Shift%20Handover.pdf?utm_source=chatgpt.com "Microsoft Word - Effective Shift HAndover_HCI2011 ... - Honeywell"

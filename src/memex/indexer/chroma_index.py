@@ -113,17 +113,12 @@ class ChromaIndex:
         content: str,
         title: str,
         section: str | None,
-        keywords: list[str],
         tags: list[str],
     ) -> str:
-        """Build text for embedding by concatenating title, section, content, keywords, and tags.
-
-        This follows A-Mem's approach of enriching embeddings with semantic context
-        to improve search quality for keyword-rich entries.
+        """Build text for embedding by concatenating title, section, content, and tags.
 
         Args:
             content: The document content.
-            keywords: LLM-extracted key concepts from metadata.
             tags: Document tags from metadata.
 
         Returns:
@@ -135,8 +130,6 @@ class ChromaIndex:
         if section:
             parts.append(f"Section: {section}")
         parts.append(content)
-        if keywords:
-            parts.append(f"\n\nKeywords: {', '.join(keywords)}")
         if tags:
             parts.append(f"\nTags: {', '.join(tags)}")
         return "\n\n".join(parts).strip()
@@ -152,12 +145,11 @@ class ChromaIndex:
         # Create unique chunk ID
         chunk_id = self._chunk_id(chunk)
 
-        # Build text for embedding with keywords and tags
+        # Build text for embedding with tags
         embedding_text = self._build_embedding_text(
             chunk.content,
             chunk.metadata.title,
             chunk.section,
-            chunk.metadata.keywords,
             chunk.metadata.tags,
         )
         embedding_hash = hash_embedding_text(embedding_text)
@@ -217,12 +209,11 @@ class ChromaIndex:
             chunk = chunks[idx]
             ids.append(chunk_id)
             documents.append(chunk.content)
-            # Build enriched text for embedding (content + keywords + tags)
+            # Build enriched text for embedding (content + tags)
             embedding_text = self._build_embedding_text(
                 chunk.content,
                 chunk.metadata.title,
                 chunk.section,
-                chunk.metadata.keywords,
                 chunk.metadata.tags,
             )
             embedding_texts.append(embedding_text)
