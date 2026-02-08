@@ -89,6 +89,7 @@ mx search "query"                          # Hybrid search (default)
 mx search "query" --mode=semantic          # Semantic only
 mx search "query" --include-neighbors      # Include linked entries
 mx get path/entry.md                       # Read entry
+mx categories                              # List categories
 mx list --tags=docs                        # List by tag
 mx tree                                    # Directory structure
 mx whats-new --days=7                      # Recent changes
@@ -110,6 +111,7 @@ mx hubs                                    # Find high-connectivity entries
 mx suggest-links path.md                   # Semantic link suggestions
 mx reindex                                 # Rebuild indices
 mx eval                                    # Search quality metrics
+mx eval --json --save                      # Save self-describing eval artifact
 
 # Agent tools
 mx prime                                   # Session context for agents

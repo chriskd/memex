@@ -153,6 +153,16 @@ mx list --full-titles          # Show untruncated titles
 mx list --scope=project        # Project KB only
 ```
 
+### mx categories
+
+List available top-level categories (directories) in the KB.
+
+```bash
+mx categories
+mx categories --scope=project
+mx categories --json
+```
+
 ### mx tree
 
 Display directory structure.
@@ -180,6 +190,7 @@ cat content.md | mx add --title="..." --tags="..." --category=... --stdin
 - `--title`: Entry title
 - `--tag, --tags`: Tags (comma-separated)
 - `--category`: Target directory. If omitted and no `.kbconfig` `primary` exists, defaults to KB root (`.`) with a warning.
+  Tip: Use `mx categories` to discover available categories.
 
 **Common options:**
 - `--scope`: Target KB scope (project or user)
@@ -458,6 +469,19 @@ Rebuild search indices.
 ```bash
 mx reindex
 mx reindex --json
+```
+
+### mx eval
+
+Evaluate search accuracy against a query dataset.
+
+```bash
+mx eval                              # Run eval/queries.json against current KB
+mx eval --mode=keyword               # Keyword-only evaluation
+mx eval --scope=project              # Project KB only
+mx eval --json                       # JSON to stdout (includes meta)
+mx eval --save                       # Also write eval/results/<timestamp>.json
+mx eval --out /tmp/mx-eval.json      # Also write JSON artifact to a specific file
 ```
 
 ### mx prime

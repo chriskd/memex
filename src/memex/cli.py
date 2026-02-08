@@ -257,7 +257,12 @@ def format_table(rows: list[dict], columns: list[str], max_widths: dict | None =
     for row in rows:
         for col in columns:
             val = str(row.get(col, ""))
-            limit = max_widths.get(col, 50)
+            # Paths are the machine-readable identifiers for mx get/delete/etc.
+            # Truncating them forces extra round-trips (e.g., --json/--terse).
+            if col in max_widths:
+                limit = max_widths[col]
+            else:
+                limit = 10000 if col == "path" else 50
             if len(val) > limit:
                 val = val[: limit - 3] + "..."
             widths[col] = max(widths[col], len(val))
@@ -272,7 +277,10 @@ def format_table(rows: list[dict], columns: list[str], max_widths: dict | None =
         vals = []
         for col in columns:
             val = str(row.get(col, ""))
-            limit = max_widths.get(col, 50)
+            if col in max_widths:
+                limit = max_widths[col]
+            else:
+                limit = 10000 if col == "path" else 50
             if len(val) > limit:
                 val = val[: limit - 3] + "..."
             vals.append(val.ljust(widths[col]))
@@ -1124,6 +1132,7 @@ mx get path/to/entry.md --metadata  # Just metadata
 
 # Browse
 mx tree                             # Directory structure
+mx categories                        # List categories (directories)
 mx list --tags=infrastructure       # Filter by tag
 mx tags                             # List all tags with counts
 mx whats-new --days=7               # Recent changes
@@ -1273,7 +1282,7 @@ def prime(as_json: bool, compact: bool, max_entries: int, max_recent: int, max_b
             content
             + "\n\n## Search Dependencies\n\n"
             + f"Search deps are missing ({', '.join(missing)}).\n"
-            + "Fallback: use `mx list --tags=<tag>` and `mx tree`.\n"
+            + "Fallback: use `mx list --tags=<tag>`, `mx categories`, and `mx tree`.\n"
             + "Install: uv tool install 'memex-kb[search]' (recommended) or pip install 'memex-kb[search]'\n"
         )
 
@@ -1896,7 +1905,7 @@ def search(
                 )
             title_width = 10000 if full_titles else 30
             columns = ["path", "title", "score", "conf", "nbr"]
-            widths = {"path": 40, "title": title_width}
+            widths = {"title": title_width}
             click.echo(format_table(rows, columns, widths))
 
             # Show full content below table when --content flag is used
@@ -1956,7 +1965,7 @@ def search(
                 format_table(
                     rows,
                     ["path", "title", "score", "conf"],
-                    {"path": 40, "title": title_width},
+                    {"title": title_width},
                 )
             )
 
@@ -2509,6 +2518,7 @@ def add(
       mx append - Append content to existing entry (or create new)
     """
     from .context import get_kb_context
+    from .config import get_kb_root, get_kb_root_by_scope
     from .core import add_entry
     from .errors import MemexError
     from .models import SemanticLink
@@ -2555,12 +2565,50 @@ def add(
 
     tag_list = [t.strip() for t in tags.split(",")]
     context = get_kb_context()
+
+    kb_root: Path | None = None
+    try:
+        kb_root = get_kb_root_by_scope(scope) if scope else get_kb_root()
+    except Exception:
+        # Best-effort only: add_entry will emit the canonical error guidance.
+        kb_root = None
+
+    # Warn if we're about to auto-create a brand new directory due to a category typo.
+    if category and category not in (".", "./") and kb_root is not None:
+        target_dir = kb_root / category
+        if not target_dir.exists():
+            warning = (
+                f"Category directory does not exist and will be created: {category!r}. "
+                "Tip: run 'mx categories' to see existing categories."
+            )
+            if as_json:
+                local_warnings.append(warning)
+            else:
+                click.echo(f"Warning: {warning}", err=True)
+
     if not category and not (context and context.primary):
+        categories_hint = ""
+        if kb_root is not None:
+            try:
+                categories = sorted(
+                    d.name
+                    for d in kb_root.iterdir()
+                    if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".")
+                )
+                if categories:
+                    # Keep warnings compact but actionable.
+                    shown = ", ".join(categories[:8])
+                    extra = f" (+{len(categories) - 8} more)" if len(categories) > 8 else ""
+                    categories_hint = f" Available categories: {shown}{extra}."
+            except Exception:
+                categories_hint = ""
+
         warning = (
             "No --category provided; defaulting to KB root (.). "
             "Use --category=. to be explicit. "
-            "Set a default in .kbconfig (see 'mx context show') or move the file later "
-            "and run 'mx reindex'."
+            "Set a default in .kbconfig (see 'mx context show') or choose a category "
+            "(see 'mx categories')."
+            + categories_hint
         )
         if as_json:
             local_warnings.append(warning)
@@ -3166,13 +3214,72 @@ def list_entries(
 
         rows = [{"path": e["path"], "title": e["title"]} for e in result]
         title_width = 10000 if full_titles else 40
-        click.echo(format_table(rows, ["path", "title"], {"path": 45, "title": title_width}))
+        click.echo(format_table(rows, ["path", "title"], {"title": title_width}))
         if not full_titles:
             try:
                 if any(len(str(e.get("title", ""))) > 40 for e in result):
-                    click.echo("\nTip: Use --full-titles to see full values")
+                    click.echo("\nTip: Use --full-titles to see full titles")
             except Exception:
                 pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Categories Command
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+@cli.command("categories")
+@click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def categories(ctx: click.Context, scope: str | None, as_json: bool):
+    """List available top-level categories (directories) in the KB.
+
+    Categories are directories directly under the KB root (excluding hidden/_ prefixed).
+
+    \b
+    Examples:
+      mx categories
+      mx categories --scope=project
+      mx categories --json
+    """
+    from .config import get_kb_root, get_kb_root_by_scope
+    from .context import get_kb_context
+
+    _require_kb_configured(ctx, scope=scope)
+    kb_root = get_kb_root_by_scope(scope) if scope else get_kb_root()
+    ctx_cfg = get_kb_context()
+
+    cats = sorted(
+        d.name
+        for d in kb_root.iterdir()
+        if d.is_dir() and not d.name.startswith("_") and not d.name.startswith(".")
+    )
+    primary = ctx_cfg.primary if ctx_cfg else None
+
+    if as_json:
+        output(
+            {
+                "scope": scope or "auto",
+                "kb_root": str(kb_root),
+                "primary": primary,
+                "categories": cats,
+            },
+            as_json=True,
+        )
+        return
+
+    click.echo("Categories")
+    click.echo("=" * 40)
+    click.echo(f"KB Root: {kb_root}")
+    click.echo(f"Primary: {primary or '(not set)'}")
+    if not cats:
+        click.echo("\n(no categories yet)")
+    else:
+        for c in cats:
+            marker = "*" if primary and c == primary else " "
+            click.echo(f"{marker} {c}")
+    click.echo("\nTip: Set `primary` in .kbconfig to omit --category for `mx add`.")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3211,7 +3318,7 @@ def whats_new(ctx: click.Context, days: int, limit: int, scope: str | None, as_j
             {"path": e["path"], "title": e["title"], "date": str(e["activity_date"])}
             for e in result
         ]
-        click.echo(format_table(rows, ["path", "title", "date"], {"path": 40, "title": 30}))
+        click.echo(format_table(rows, ["path", "title", "date"], {"title": 30}))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -3378,7 +3485,7 @@ def hubs(ctx: click.Context, limit: int, as_json: bool):
             }
             for h in result
         ]
-        click.echo(format_table(rows, ["path", "incoming", "outgoing", "total"], {"path": 50}))
+        click.echo(format_table(rows, ["path", "incoming", "outgoing", "total"]))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -4341,7 +4448,7 @@ def history(limit: int, rerun: int | None, clear: bool, as_json: bool):
                 {"path": r.path, "title": r.title, "score": f"{r.score:.2f}"}
                 for r in result.results
             ]
-            click.echo(format_table(rows, ["path", "title", "score"], {"path": 40, "title": 35}))
+            click.echo(format_table(rows, ["path", "title", "score"], {"title": 35}))
         return
 
     # Show history
@@ -4552,6 +4659,17 @@ def summarize(dry_run: bool, limit: int | None, as_json: bool):
 @click.option("--mode", type=click.Choice(["hybrid", "keyword", "semantic"]), default="hybrid")
 @click.option("--scope", type=click.Choice(["project", "user"]), help="Limit to specific KB scope")
 @click.option("--strict", is_flag=True, help="Use strict semantic threshold")
+@click.option(
+    "--save",
+    is_flag=True,
+    help="Write JSON results to eval/results/<timestamp>.json (in addition to stdout)",
+)
+@click.option(
+    "--out",
+    type=click.Path(dir_okay=False, path_type=Path),
+    default=None,
+    help="Write JSON results to a specific file (in addition to stdout)",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
 def eval(
@@ -4561,6 +4679,8 @@ def eval(
     mode: str,
     scope: str | None,
     strict: bool,
+    save: bool,
+    out: Path | None,
     as_json: bool,
 ):
     """Evaluate search accuracy against a query dataset."""
@@ -4618,8 +4738,46 @@ def eval(
     summary = aggregate_metrics(results, limit)
     summary.update({"mode": mode, "scope": scope, "dataset": str(dataset)})
 
+    # Self-describing metadata for reproducibility.
+    import hashlib
+    from datetime import datetime, timezone
+
+    meta: dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "argv": list(sys.argv),
+        "dataset": str(dataset),
+        "dataset_sha256": hashlib.sha256(dataset.read_bytes()).hexdigest(),
+        "k": limit,
+        "mode": mode,
+        "scope": scope,
+        "strict": strict,
+    }
+    try:
+        from .config import get_kb_root, get_kb_root_by_scope
+
+        kb_root = get_kb_root_by_scope(scope) if scope else get_kb_root()
+        meta["kb_root"] = str(kb_root)
+    except Exception:
+        pass
+
+    payload = {"meta": meta, "summary": summary, "results": results}
+
+    out_path: Path | None = None
+    if out is not None:
+        out_path = out
+    elif save:
+        out_dir = Path("eval/results")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = meta["timestamp"].replace(":", "").replace("+", "").replace("-", "")
+        out_path = out_dir / f"mx-eval-{stamp}.json"
+
+    if out_path is not None:
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        meta["artifact_path"] = str(out_path)
+        out_path.write_text(json.dumps(payload, indent=2, default=str) + "\n", encoding="utf-8")
+
     if as_json:
-        output({"summary": summary, "results": results}, as_json=True)
+        output(payload, as_json=True)
         return
 
     click.echo(
@@ -4649,6 +4807,9 @@ def eval(
         click.echo("\nMisses:")
         for item in misses:
             click.echo(f"- {item['query']} (expected: {', '.join(item['expected'])})")
+
+    if out_path is not None:
+        click.echo(f"\nWrote eval artifact: {out_path}")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -5054,16 +5215,36 @@ def _build_schema() -> dict:
                     },
                     {"name": "--json", "type": "flag", "description": "Output as JSON"},
                 ],
-                "related": ["search", "tree", "tags"],
+                "related": ["search", "tree", "tags", "categories"],
                 "common_mistakes": {
                     "invalid category": (
-                        "Category must exist in KB. Use 'mx tree' to see valid categories."
+                        "Use 'mx categories' or 'mx tree' to discover categories."
                     ),
                 },
                 "examples": [
                     "mx list",
                     "mx list --tags=infrastructure",
                     "mx list --scope=project",
+                ],
+            },
+            "categories": {
+                "description": "List available top-level categories (directories) in the KB",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["list", "tree", "context", "info", "add"],
+                "common_mistakes": {},
+                "examples": [
+                    "mx categories",
+                    "mx categories --scope=project",
                 ],
             },
             "tree": {
@@ -5290,6 +5471,66 @@ def _build_schema() -> dict:
                 "examples": [
                     "mx reindex",
                     "mx reindex --scope=project",
+                ],
+            },
+            "eval": {
+                "description": "Evaluate search accuracy against a query dataset",
+                "aliases": [],
+                "arguments": [],
+                "options": [
+                    {
+                        "name": "--dataset",
+                        "type": "path",
+                        "default": "eval/queries.json",
+                        "description": "Path to JSON dataset of queries and expected paths",
+                    },
+                    {
+                        "name": "--limit",
+                        "short": "-k",
+                        "type": "integer",
+                        "default": 5,
+                        "description": "Top-k cutoff",
+                    },
+                    {
+                        "name": "--mode",
+                        "type": "choice",
+                        "choices": ["hybrid", "keyword", "semantic"],
+                        "default": "hybrid",
+                        "description": "Search mode for evaluation",
+                    },
+                    {
+                        "name": "--scope",
+                        "type": "choice",
+                        "choices": ["project", "user"],
+                        "description": "Limit to specific KB scope",
+                    },
+                    {
+                        "name": "--strict",
+                        "type": "flag",
+                        "description": "Use strict semantic threshold",
+                    },
+                    {
+                        "name": "--save",
+                        "type": "flag",
+                        "description": "Write JSON results to eval/results/<timestamp>.json",
+                    },
+                    {
+                        "name": "--out",
+                        "type": "path",
+                        "description": "Write JSON results to a specific file",
+                    },
+                    {"name": "--json", "type": "flag", "description": "Output as JSON"},
+                ],
+                "related": ["search", "reindex"],
+                "common_mistakes": {
+                    "missing deps": "If search deps are missing, run 'mx doctor' and install extras.",
+                },
+                "examples": [
+                    "mx eval",
+                    "mx eval --mode=keyword",
+                    "mx eval --scope=project",
+                    "mx eval --json --save",
+                    "mx eval --out /tmp/mx-eval.json",
                 ],
             },
             "context": {

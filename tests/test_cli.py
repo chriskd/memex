@@ -56,12 +56,14 @@ ALL_COMMANDS = [
     "replace",
     "delete",
     "list",
+    "categories",
     "tree",
     "tags",
     "hubs",
     "health",
     "init",
     "reindex",
+    "eval",
     "info",
     "whats-new",
     "suggest-links",
@@ -85,10 +87,12 @@ JSON_COMMANDS = [
     "replace",
     "delete",
     "list",
+    "categories",
     "tree",
     "tags",
     "hubs",
     "health",
+    "eval",
     "info",
     "whats-new",
     "suggest-links",
@@ -175,6 +179,29 @@ class TestSearchCommand:
 
         assert result.exit_code == 0
         assert "tooling/test.md" in result.output
+
+    @patch("memex.config.get_kb_root")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_search_table_shows_full_paths(self, mock_run_async, mock_get_kb_root, runner, tmp_path):
+        """Table output should not truncate PATH values (agents need exact mx get paths)."""
+        mock_get_kb_root.return_value = tmp_path
+        long_path = "reference/" + ("x" * 120) + ".md"
+        mock_result = MagicMock()
+        mock_result.results = [
+            MagicMock(
+                path=long_path,
+                title="Entry",
+                score=0.9,
+                snippet="...",
+                content=None,
+            )
+        ]
+        mock_run_async.return_value = mock_result
+
+        result = runner.invoke(cli, ["search", "test"])
+
+        assert result.exit_code == 0
+        assert long_path in result.output
 
     def test_search_missing_dependency_is_friendly(self, runner, tmp_kb):
         """Missing optional deps should not print a traceback; it should give an install hint."""
@@ -1339,6 +1366,87 @@ class TestListCommand:
             assert result.exit_code == 1
             assert "No knowledge base found" in result.output
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Categories Command Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestCategoriesCommand:
+    """Tests for 'mx categories' command."""
+
+    @patch("memex.config.get_kb_root")
+    @patch("memex.context.get_kb_context")
+    def test_categories_lists_directories(self, mock_get_kb_context, mock_get_kb_root, runner, tmp_path):
+        mock_get_kb_root.return_value = tmp_path
+        mock_get_kb_context.return_value = MagicMock(primary="guides")
+
+        (tmp_path / "guides").mkdir()
+        (tmp_path / "reference").mkdir()
+        (tmp_path / "design").mkdir()
+        (tmp_path / "_ignored").mkdir()
+        (tmp_path / ".hidden").mkdir()
+
+        result = runner.invoke(cli, ["categories"])
+
+        assert result.exit_code == 0
+        assert "* guides" in result.output
+        assert "reference" in result.output
+        assert "design" in result.output
+        assert "_ignored" not in result.output
+        assert ".hidden" not in result.output
+
+    @patch("memex.config.get_kb_root")
+    @patch("memex.context.get_kb_context")
+    def test_categories_json_output(self, mock_get_kb_context, mock_get_kb_root, runner, tmp_path):
+        mock_get_kb_root.return_value = tmp_path
+        mock_get_kb_context.return_value = MagicMock(primary=None)
+        (tmp_path / "guides").mkdir()
+
+        result = runner.invoke(cli, ["categories", "--json"])
+
+        assert result.exit_code == 0
+        data = json.loads(result.output)
+        assert "categories" in data
+        assert data["categories"] == ["guides"]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Eval Command Tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+class TestEvalCommand:
+    """Tests for 'mx eval' command."""
+
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_eval_out_writes_artifact_and_keeps_stdout_json(self, mock_run_async, runner, tmp_path):
+        dataset = tmp_path / "queries.json"
+        dataset.write_text(
+            json.dumps([{"query": "q", "expected": ["guides/ai-integration.md"]}]), encoding="utf-8"
+        )
+        out = tmp_path / "eval.json"
+
+        mock_result = MagicMock()
+        mock_result.results = [MagicMock(path="guides/ai-integration.md")]
+        mock_run_async.return_value = mock_result
+
+        result = runner.invoke(cli, ["eval", "--dataset", str(dataset), "--out", str(out), "--json"])
+
+        assert result.exit_code == 0
+        # stdout is valid JSON payload
+        payload = json.loads(result.output)
+        assert "meta" in payload
+        assert payload["meta"]["dataset"] == str(dataset)
+        assert "dataset_sha256" in payload["meta"]
+        assert payload["meta"]["artifact_path"] == str(out)
+        assert "summary" in payload
+        assert "results" in payload
+
+        assert out.exists()
+        saved = json.loads(out.read_text(encoding="utf-8"))
+        assert saved["meta"]["dataset"] == str(dataset)
+        assert saved["meta"]["artifact_path"] == str(out)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Tree Command Tests
