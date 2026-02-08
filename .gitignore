@@ -15,6 +15,11 @@ build/
 # Search indices (rebuilt locally)
 .indices/
 
+# Generated publish output / demos (rebuilt locally)
+_site/
+_site_repo/
+_first_run/
+
 # IDE
 .idea/
 .vscode/
