@@ -17,6 +17,7 @@ import difflib
 import json
 import logging
 import os
+import shlex
 import sys
 from datetime import datetime
 from collections.abc import Sequence
@@ -370,9 +371,48 @@ def _handle_error(
         fallback_message: Optional message to use for non-MemexError exceptions.
         exit_code: Exit code to use (default 1). Some commands use specific codes.
     """
-    from .errors import MemexError, format_error_json
+    from .errors import ErrorCode, MemexError, format_error_json
 
     json_errors = ctx.obj.get("json_errors", False) if ctx.obj else False
+
+    # Standardize missing-config UX across commands (and in --json-errors mode).
+    try:
+        from .config import ConfigurationError
+    except Exception:  # pragma: no cover - defensive
+        ConfigurationError = None  # type: ignore[assignment]
+
+    if ConfigurationError is not None and isinstance(error, ConfigurationError):
+        user_kb = str(Path.home() / ".memex" / "kb")
+        suggestion_lines = [
+            "First run:",
+            "  mx onboard --init --yes",
+            "  mx init --sample",
+            "  mx init --user --sample",
+            "  mx doctor",
+            "",
+            "Config locations:",
+            "  project: ./.kbconfig + ./kb/",
+            f"  user:    {user_kb}/.kbconfig",
+            "  env:     MEMEX_USER_KB_ROOT=/path/to/kb",
+        ]
+        error = MemexError(
+            ErrorCode.KB_NOT_CONFIGURED,
+            str(error),
+            details={
+                "suggestion": "\n".join(suggestion_lines),
+                "suggested_commands": [
+                    "mx onboard --init --yes",
+                    "mx init --sample",
+                    "mx init --user --sample",
+                    "mx doctor",
+                ],
+                "config_locations": {
+                    "project": {"kb": "./kb", "config": "./.kbconfig"},
+                    "user": {"kb": user_kb, "config": f"{user_kb}/.kbconfig"},
+                    "env": {"MEMEX_USER_KB_ROOT": "/path/to/kb"},
+                },
+            },
+        )
 
     if isinstance(error, MemexError):
         if json_errors:
@@ -561,10 +601,20 @@ class JsonErrorGroup(click.Group):
             cmd_name = args[0] if args else ""
             if cmd_name and "No such command" in str(e):
                 matches = difflib.get_close_matches(
-                    cmd_name, self.list_commands(ctx), n=1, cutoff=0.6
+                    cmd_name, self.list_commands(ctx), n=3, cutoff=0.6
                 )
+                lines = [f"No such command '{cmd_name}'."]
                 if matches:
-                    raise UsageError(f"No such command '{cmd_name}'. Did you mean '{matches[0]}'?")
+                    lines.append("")
+                    lines.append("Did you mean:")
+                    for m in matches:
+                        lines.append(f"  {m}")
+                lines.append("")
+                lines.append("Try:")
+                lines.append("  mx --help")
+                lines.append("  mx help <command>")
+                lines.append("  mx onboard")
+                raise UsageError("\n".join(lines))
             raise
 
     def invoke(self, ctx):
@@ -830,24 +880,32 @@ def _output_status(
     else:
         lines.append("KB Root: NOT CONFIGURED")
         lines.append("")
-        lines.append("Set MEMEX_USER_KB_ROOT environment variable or run 'mx init'")
-        lines.append("to point to your knowledge base directory.")
+        lines.append("First run:")
+        lines.append("  mx onboard --init --yes")
+        lines.append("  mx init --sample        # project: ./kb + ./.kbconfig")
+        lines.append("  mx init --user --sample # user: ~/.memex/kb")
+        lines.append("  mx doctor               # deps + install hints")
+        lines.append("")
+        lines.append("Config locations:")
+        lines.append("  project: ./.kbconfig + ./kb/")
+        lines.append(f"  user:    {Path.home()}/.memex/kb/.kbconfig")
+        lines.append("  env:     MEMEX_USER_KB_ROOT=/path/to/kb")
 
     # Start here section
     lines.append("")
     lines.append("Start here")
     lines.append("-" * 40)
+    lines.append("  mx onboard           Guided setup check (and optional init)")
     lines.append("  mx prime            Quick agent walkthrough")
     if not kb_root:
-        lines.append("  mx init             Create project KB in ./kb")
-        lines.append("  mx init --user      Create personal KB in ~/.memex/kb")
+        lines.append("  mx init --sample        Create project KB in ./kb (with sample entry)")
+        lines.append("  mx init --user --sample Create personal KB in ~/.memex/kb (with sample entry)")
     lines.append("  mx info             KB paths + categories")
     lines.append("  mx context show     .kbconfig (primary + default tags)")
     lines.append('  mx add --title="..." --tags="..." --category=... --content="..."')
     if has_keyword_search:
         lines.append('  mx search "query"   Search entries')
-    else:
-        lines.append("  mx doctor           Check search deps + install hint")
+    lines.append("  mx doctor           Check deps + install hints")
     lines.append("  mx get path/to/entry.md")
 
     # Recent entries section
@@ -883,8 +941,10 @@ def _output_status(
     lines.append("-" * 40)
 
     if not kb_root:
-        lines.append("  mx prime           Quick agent onboarding")
-        lines.append("  mx init            Create project KB in ./kb")
+        lines.append("  mx onboard --init --yes   Guided setup + init (recommended)")
+        lines.append("  mx init --sample          Create project KB in ./kb (with sample entry)")
+        lines.append("  mx init --user --sample   Create personal KB in ~/.memex/kb (with sample entry)")
+        lines.append("  mx doctor                 Check deps + install hints")
         lines.append("  mx --help           Show all commands")
     else:
         lines.append("  mx prime            Quick agent onboarding")
@@ -960,6 +1020,8 @@ def cli(ctx: click.Context, json_errors: bool, quiet: bool):
 
     \b
     New to mx:
+      mx onboard                            # Guided setup check
+      mx onboard --init --yes               # ...and create a KB if missing (non-interactive)
       mx prime                              # Agent onboarding + required frontmatter
       mx info                               # KB paths + categories
       mx context show                       # .kbconfig (primary + default tags)
@@ -1065,6 +1127,12 @@ def doctor(ctx: click.Context, as_json: bool):
     click.echo(f"version: {MEMEX_VERSION}")
     click.echo(f"python:  {sys.executable}")
     click.echo(f"kb:      {kb_root if kb_configured else '(not configured)'}")
+    if not kb_configured:
+        click.echo("")
+        click.echo("First run:")
+        click.echo("  mx onboard --init --yes")
+        click.echo("  mx init --sample")
+        click.echo("  mx init --user --sample")
     click.echo("")
     click.echo("deps")
     click.echo("-" * 40)
@@ -1074,6 +1142,189 @@ def doctor(ctx: click.Context, as_json: bool):
     if data["suggestion"]:
         click.echo("")
         click.echo(f"Next step: {data['suggestion']}")
+
+
+@cli.command()
+@click.option(
+    "--init",
+    "do_init",
+    is_flag=True,
+    help="If no KB is configured, initialize one (project by default; includes a sample entry).",
+)
+@click.option("--user", is_flag=True, help="When initializing, create a user KB at ~/.memex/kb/")
+@click.option(
+    "--yes",
+    "-y",
+    is_flag=True,
+    help="Assume yes for initialization prompts (required for non-interactive init).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON")
+@click.pass_context
+def onboard(ctx: click.Context, do_init: bool, user: bool, yes: bool, as_json: bool):
+    """Guided setup check for first-time mx users/agents.
+
+    This command does not integrate with any external apps (e.g. tickets). It only inspects
+    the configured KB(s) and optional dependency availability, and can optionally run `mx init`
+    logic if no KB is configured.
+    """
+    import importlib.util
+
+    from .config import ConfigurationError, get_kb_root
+    from .context import clear_context_cache, clear_kbconfig_cache, get_kb_context
+    from .core import get_valid_categories
+    from .initializer import initialize_kb
+
+    deps = {
+        "whoosh": importlib.util.find_spec("whoosh") is not None,
+        "chromadb": importlib.util.find_spec("chromadb") is not None,
+        "sentence_transformers": importlib.util.find_spec("sentence_transformers") is not None,
+    }
+
+    kb_root: Path | None = None
+    init_result: dict[str, Any] | None = None
+    kb_error: Exception | None = None
+
+    try:
+        kb_root = get_kb_root()
+    except ConfigurationError as exc:
+        kb_error = exc
+
+    if kb_root is None and do_init:
+        # For non-interactive invocations (common for agents), require explicit confirmation.
+        if not yes and not sys.stdin.isatty():
+            if as_json:
+                output(
+                    {
+                        "kb_configured": False,
+                        "error": "No KB configured. Re-run with: mx onboard --init --yes",
+                    },
+                    as_json=True,
+                )
+            else:
+                click.echo("No KB configured.", err=True)
+                click.echo("Re-run with: mx onboard --init --yes", err=True)
+            sys.exit(2)
+
+        if sys.stdin.isatty() and not yes:
+            if not click.confirm("No KB found. Initialize one now?", default=True):
+                sys.exit(2)
+
+        try:
+            res = initialize_kb(cwd=Path.cwd(), path=None, user=user, force=False, sample=True)
+            init_result = {
+                "created": str(res.kb_path),
+                "config": str(res.config_path),
+                "scope": res.scope,
+                "files": res.files,
+            }
+            # Refresh caches so newly created configs are visible in the same process.
+            clear_context_cache()
+            clear_kbconfig_cache()
+            kb_root = get_kb_root()
+            kb_error = None
+        except Exception as exc:
+            _handle_error(ctx, exc, fallback_message=str(exc), exit_code=1)
+
+    if kb_root is None:
+        suggested = [
+            "mx onboard --init --yes",
+            "mx init --sample",
+            "mx init --user --sample",
+            "mx doctor",
+            "mx prime",
+        ]
+        if as_json:
+            output(
+                {
+                    "kb_configured": False,
+                    "deps": deps,
+                    "suggested_commands": suggested,
+                    "error": str(kb_error) if kb_error else "No KB configured",
+                },
+                as_json=True,
+            )
+        else:
+            click.echo("mx onboard")
+            click.echo("=" * 40)
+            click.echo("KB: (not configured)")
+            if kb_error:
+                click.echo(f"Reason: {kb_error}")
+            click.echo("")
+            click.echo("Next:")
+            for cmd in suggested:
+                click.echo(f"  {cmd}")
+        sys.exit(2)
+
+    kb_ctx = get_kb_context()
+    categories = get_valid_categories()
+
+    # Read smoke test: list one entry then read it back.
+    sample_entry: dict[str, Any] | None = None
+    read_ok = False
+    read_error: str | None = None
+    try:
+        from .core import get_entry, list_entries
+
+        entries = run_async(list_entries(limit=1))
+        if entries:
+            sample_entry = entries[0]
+            _ = run_async(get_entry(sample_entry["path"]))
+            read_ok = True
+    except Exception as exc:
+        read_error = str(exc)
+
+    payload: dict[str, Any] = {
+        "kb_configured": True,
+        "kb_root": str(kb_root),
+        "context_file": str(kb_ctx.source_file) if kb_ctx and kb_ctx.source_file else None,
+        "primary": kb_ctx.primary if kb_ctx else None,
+        "default_tags": kb_ctx.default_tags if kb_ctx else [],
+        "categories": categories,
+        "deps": deps,
+        "read_smoke_ok": read_ok,
+        "read_smoke_error": read_error,
+        "sample_entry": sample_entry,
+    }
+    if init_result:
+        payload["init"] = init_result
+
+    if as_json:
+        output(payload, as_json=True)
+        return
+
+    click.echo("mx onboard")
+    click.echo("=" * 40)
+    click.echo(f"KB Root: {kb_root}")
+    if kb_ctx and kb_ctx.source_file:
+        click.echo(f"Context: {kb_ctx.source_file}")
+    if kb_ctx and kb_ctx.primary:
+        click.echo(f"Primary: {kb_ctx.primary}")
+    click.echo("")
+    click.echo("Deps")
+    click.echo("-" * 40)
+    click.echo(f"whoosh:               {'OK' if deps['whoosh'] else 'MISSING'}")
+    click.echo(f"chromadb:             {'OK' if deps['chromadb'] else 'MISSING'}")
+    click.echo(f"sentence-transformers: {'OK' if deps['sentence_transformers'] else 'MISSING'}")
+    click.echo("")
+    click.echo("Read Smoke Test")
+    click.echo("-" * 40)
+    if read_ok:
+        click.echo("OK")
+        if sample_entry and sample_entry.get("path"):
+            click.echo(f"Sample: {sample_entry['path']}")
+    else:
+        click.echo("FAILED")
+        if read_error:
+            click.echo(f"Error: {read_error}")
+    click.echo("")
+    click.echo("Next")
+    click.echo("-" * 40)
+    click.echo("  mx prime")
+    click.echo("  mx tree")
+    if deps["whoosh"]:
+        click.echo('  mx search \"query\"')
+    else:
+        click.echo("  mx doctor")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1086,8 +1337,8 @@ Search org knowledge before reinventing. Add discoveries for future agents.
 
 ## 5-minute onboarding (new KB)
 
-1) `mx init` - create project KB in ./kb + .kbconfig
-   (or `mx init --user` for personal KB in ~/.memex/kb)
+1) `mx onboard --init --yes` - guided setup + init if missing (recommended for agents)
+   (or `mx init --sample` / `mx init --user --sample`)
 2) `mx add --title="First Entry" --tags="docs" --category=guides --content="Hello KB"` - create entry
    Tip: set `.kbconfig` `primary: guides` to make `--category` optional.
 3) `mx list --limit=5` - confirm entry path
@@ -1448,8 +1699,13 @@ LOCAL_KB_DIR = "kb"
 @click.option("--path", "-p", type=click.Path(), help="Custom location for KB (default: kb/)")
 @click.option("--user", "-u", is_flag=True, help="Create user-scope KB at ~/.memex/kb/")
 @click.option("--force", "-f", is_flag=True, help="Reinitialize existing KB")
+@click.option(
+    "--sample",
+    is_flag=True,
+    help="Create a small sample entry under inbox/ (recommended for first run).",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
-def init(path: str | None, user: bool, force: bool, as_json: bool):
+def init(path: str | None, user: bool, force: bool, sample: bool, as_json: bool):
     """Initialize a knowledge base.
 
     By default, creates a project-scope KB at kb/ in the current directory.
@@ -1466,9 +1722,9 @@ def init(path: str | None, user: bool, force: bool, as_json: bool):
       mx init --user             # User scope: creates ~/.memex/kb/
       mx init --path docs/kb     # Custom project location
       mx init --force            # Reinitialize existing
+      mx init --sample           # Also create inbox/first-task.md
     """
-    from .context import LOCAL_KB_CONFIG_FILENAME, USER_KB_DIR
-    from .frontmatter import build_frontmatter, create_new_metadata
+    from .initializer import initialize_kb
 
     # Validate mutually exclusive options
     if user and path:
@@ -1477,203 +1733,59 @@ def init(path: str | None, user: bool, force: bool, as_json: bool):
         else:
             click.echo("Error: --user and --path are mutually exclusive", err=True)
         sys.exit(1)
-
-    # Determine target directory based on scope
-    if user:
-        kb_path = USER_KB_DIR
-    else:
-        kb_path = Path(path) if path else Path.cwd() / LOCAL_KB_DIR
-
-    # Check if already exists
-    if kb_path.exists():
-        if not force:
-            scope_label = "User" if user else "Project"
-            if as_json:
-                output(
-                    {
-                        "error": f"{scope_label} KB already exists at {kb_path}",
-                        "hint": "Use --force to reinitialize",
-                    },
-                    as_json=True,
-                )
-            else:
-                click.echo(f"Error: {scope_label} KB already exists at {kb_path}", err=True)
-                click.echo("Use --force to reinitialize.", err=True)
-            sys.exit(1)
-
-    # Create directory structure
-    kb_path.mkdir(parents=True, exist_ok=True)
-
-    # Default write directory for new entries so mx add doesn't warn on a fresh KB.
-    default_primary = "inbox"
-    (kb_path / default_primary).mkdir(parents=True, exist_ok=True)
-
-    # Create README with scope-appropriate content
-    readme_path = kb_path / "README.md"
-    if user:
-        readme_metadata = create_new_metadata(
-            title="User Knowledge Base",
-            tags=["kb", "meta", "user"],
-        )
-        readme_frontmatter = build_frontmatter(readme_metadata)
-        readme_body = """# User Knowledge Base
-
-This directory contains your personal knowledge base entries managed by `mx`.
-This KB is available everywhere and is not shared with collaborators.
-
-## Usage
-
-```bash
-mx add --title="Entry" --tags="tag1,tag2" --content="..." --scope=user
-mx search "query" --scope=user
-mx list --scope=user
-```
-
-## Structure
-
-Entries are Markdown files with YAML frontmatter:
-
-```markdown
----
-title: Entry Title
-tags: [tag1, tag2]
-created: 2024-01-15T10:30:00
----
-
-# Entry Title
-
-Your content here.
-```
-
-## Scope
-
-User KB entries are personal and available in all projects.
-They are stored at ~/.memex/kb/ and are not committed to git.
-"""
-        readme_content = f"{readme_frontmatter}{readme_body}"
-    else:
-        readme_metadata = create_new_metadata(
-            title="Project Knowledge Base",
-            tags=["kb", "meta", "project"],
-        )
-        readme_frontmatter = build_frontmatter(readme_metadata)
-        readme_body = """# Project Knowledge Base
-
-This directory contains project-specific knowledge base entries managed by `mx`.
-Commit this directory to share knowledge with collaborators.
-
-## Usage
-
-```bash
-mx add --title="Entry" --tags="tag1,tag2" --content="..." --scope=project
-mx search "query" --scope=project
-mx list --scope=project
-```
-
-## Structure
-
-Entries are Markdown files with YAML frontmatter:
-
-```markdown
----
-title: Entry Title
-tags: [tag1, tag2]
-created: 2024-01-15T10:30:00
----
-
-# Entry Title
-
-Your content here.
-```
-
-## Integration
-
-Project KB entries take precedence over global KB entries in search results.
-This keeps project-specific knowledge close to the code.
-"""
-        readme_content = f"{readme_frontmatter}{readme_body}"
-    readme_path.write_text(readme_content, encoding="utf-8")
-
-    # Create config file with scope-appropriate defaults
-    if user:
-        # User scope: config lives inside the KB directory
-        config_path = kb_path / LOCAL_KB_CONFIG_FILENAME
-        config_content = f"""# User KB Configuration
-# This file marks this directory as your personal memex knowledge base
-
-# Default write directory for new entries (relative to KB root)
-primary: {default_primary}
-
-# Optional: default tags for entries created here
-# default_tags:
-#   - personal
-
-# Optional: exclude patterns (glob)
-# exclude:
-#   - "*.draft.md"
-"""
-    else:
-        # Project scope: config lives at project root with kb_path reference
-        config_path = Path.cwd() / ".kbconfig"
-        # Calculate relative path from project root to kb directory
-        try:
-            relative_kb_path = kb_path.relative_to(Path.cwd())
-        except ValueError:
-            # If kb_path is not under cwd, use absolute path
-            relative_kb_path = kb_path
-        config_content = f"""# Project KB Configuration
-# This file configures the project knowledge base
-
-# Path to the KB directory (required for project-scope KBs)
-kb_path: ./{relative_kb_path}
-
-# Optional: default tags for entries created here
-# default_tags:
-#   - {Path.cwd().name}
-
-# Default write directory for new entries (relative to KB root)
-primary: {default_primary}
-
-# Optional: boost these paths in search (glob patterns)
-# boost_paths:
-#   - {default_primary}/*
-#   - reference/*
-
-# Optional: exclude patterns from indexing (glob)
-# exclude:
-#   - "*.draft.md"
-"""
-    config_path.write_text(config_content, encoding="utf-8")
-
-    # Output
-    scope_label = "user" if user else "project"
-    if user:
-        files_created = ["kb/README.md", f"kb/{LOCAL_KB_CONFIG_FILENAME}"]
-    else:
-        files_created = [f"{kb_path.name}/README.md", ".kbconfig"]
+    try:
+        result = initialize_kb(cwd=Path.cwd(), path=path, user=user, force=force, sample=sample)
+    except FileExistsError as exc:
+        if as_json:
+            output(
+                {"error": str(exc), "hint": "Use --force to reinitialize"},
+                as_json=True,
+            )
+        else:
+            click.echo(f"Error: {exc}", err=True)
+            click.echo("Use --force to reinitialize.", err=True)
+        sys.exit(1)
+    except ValueError:
+        # Should be caught by earlier validation, but keep consistent behavior.
+        if as_json:
+            output({"error": "--user and --path are mutually exclusive"}, as_json=True)
+        else:
+            click.echo("Error: --user and --path are mutually exclusive", err=True)
+        sys.exit(1)
 
     if as_json:
         output(
             {
-                "created": str(kb_path),
-                "config": str(config_path),
-                "scope": scope_label,
-                "files": files_created,
-                "hint": "Use 'mx add' to add entries to this KB",
+                "created": str(result.kb_path),
+                "config": str(result.config_path),
+                "scope": result.scope,
+                "files": result.files,
+                "hint": (
+                    "Next: mx add (create an entry). "
+                    "If you ran with --sample, try: mx get inbox/first-task.md"
+                ),
             },
             as_json=True,
         )
     else:
-        click.echo(f"✓ Initialized {scope_label} KB at {kb_path}")
-        click.echo(f"  Config: {config_path}")
+        click.echo(f"✓ Initialized {result.scope} KB at {result.kb_path}")
+        click.echo(f"  Config: {result.config_path}")
         click.echo()
         click.echo("Next steps:")
-        if user:
+        if result.scope == "user":
             click.echo('  mx add --title="Entry" --tags="..." --content="..." --scope=user')
-            click.echo('  mx search "query" --scope=user')
+            if sample:
+                click.echo("  mx get @user/inbox/first-task.md")
+                click.echo('  mx search "First Task" --scope=user')
+            else:
+                click.echo('  mx search "query" --scope=user')
         else:
             click.echo('  mx add --title="Entry" --tags="..." --content="..." --scope=project')
-            click.echo('  mx search "query" --scope=project')
+            if sample:
+                click.echo("  mx get @project/inbox/first-task.md")
+                click.echo('  mx search "First Task" --scope=project')
+            else:
+                click.echo('  mx search "query" --scope=project')
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -2487,6 +2599,7 @@ def add(
     Category behavior:
       - If --category is omitted and .kbconfig sets primary, primary is used.
       - If --category is omitted and no primary is set, mx writes to KB root (.) and warns.
+        (Silence: set warn_on_implicit_category: false in .kbconfig.)
 
     \b
     Scope Selection:
@@ -2586,7 +2699,11 @@ def add(
             else:
                 click.echo(f"Warning: {warning}", err=True)
 
-    if not category and not (context and context.primary):
+    if (
+        not category
+        and not (context and context.primary)
+        and (context is None or context.warn_on_implicit_category)
+    ):
         categories_hint = ""
         if kb_root is not None:
             try:
@@ -3592,6 +3709,7 @@ def context(ctx):
 
     The .kbconfig file configures KB behavior for a project:
     - primary: Default directory for new entries
+    - warn_on_implicit_category: Warn when mx add omits --category and no primary is set
     - paths: Boost these paths in search results
     - default_tags: Suggested tags for new entries
 
@@ -3635,6 +3753,7 @@ def context_show(as_json: bool):
                 "found": True,
                 "source_file": str(ctx.source_file) if ctx.source_file else None,
                 "primary": ctx.primary,
+                "warn_on_implicit_category": ctx.warn_on_implicit_category,
                 "paths": ctx.paths,
                 "default_tags": ctx.default_tags,
                 "project": ctx.project,
@@ -3648,6 +3767,9 @@ def context_show(as_json: bool):
             click.echo(
                 "Hint: Set `primary` in .kbconfig (e.g., `primary: guides`) or pass `--category=...` to `mx add`."
             )
+        click.echo(
+            f"Warn on implicit category: {'true' if ctx.warn_on_implicit_category else 'false'}"
+        )
         click.echo(f"Paths:        {', '.join(ctx.paths) if ctx.paths else '(none)'}")
         click.echo(f"Default tags: {', '.join(ctx.default_tags) if ctx.default_tags else '(none)'}")
         if ctx.project:
@@ -4224,9 +4346,17 @@ def templates(action: str, name: str | None, as_json: bool):
 
 
 @cli.command()
+@click.option("--errors", "show_errors", is_flag=True, help="Show parse errors with paths + hints")
+@click.option(
+    "--max-errors",
+    default=20,
+    show_default=True,
+    type=click.IntRange(min=1, max=500),
+    help="Max parse errors to include (for --errors/--json)",
+)
 @click.option("--json", "as_json", is_flag=True, help="Output as JSON")
 @click.pass_context
-def info(ctx: click.Context, as_json: bool):
+def info(ctx: click.Context, show_errors: bool, max_errors: int, as_json: bool):
     """Show knowledge base configuration and stats.
 
     Shows all active KBs (project + user) with entry counts.
@@ -4235,7 +4365,10 @@ def info(ctx: click.Context, as_json: bool):
     Examples:
       mx info
       mx info --json
+      mx info --errors
     """
+    import importlib.util
+
     from .config import (
         ConfigurationError,
         get_index_root,
@@ -4257,26 +4390,64 @@ def info(ctx: click.Context, as_json: bool):
     project_kb = get_project_kb_root()
     user_kb = get_user_kb_root()
 
-    def scan_counts(kb_path: Path | None) -> tuple[int, int]:
-        """Return (parsed_entries, parse_errors) using the same parsing rules as mx health."""
+    def _parse_error_suggestion(message: str) -> str | None:
+        msg = message.strip()
+        if msg.startswith("Missing frontmatter"):
+            return "Add YAML frontmatter (--- ... ---) including required fields: title, tags."
+        if "Failed to parse frontmatter" in msg:
+            return "Fix invalid YAML frontmatter (ensure it is the first block and delimited by ---)."
+        if msg.startswith("Invalid frontmatter"):
+            return "Fix frontmatter fields/types (title, tags, dates, relations schema)."
+        return None
+
+    def _one_line(s: str, limit: int = 220) -> str:
+        s2 = " ".join(s.split())
+        return (s2[: limit - 1] + "…") if len(s2) > limit else s2
+
+    def scan_kb(
+        kb_path: Path | None,
+        scope: str,
+        include_errors: bool,
+    ) -> tuple[int, int, list[dict[str, Any]]]:
+        """Return (parsed_entries, parse_error_count, parse_errors_preview)."""
         if not kb_path or not kb_path.exists():
-            return (0, 0)
+            return (0, 0, [])
         parsed = 0
-        errors = 0
+        error_count = 0
+        parse_errors_preview: list[dict[str, Any]] = []
         for md_file in kb_path.rglob("*.md"):
             if md_file.name.startswith("_"):
                 continue
             try:
                 parse_entry(md_file)
-            except ParseError:
-                errors += 1
+            except ParseError as e:
+                error_count += 1
+                if include_errors and len(parse_errors_preview) < max_errors:
+                    rel = str(md_file.relative_to(kb_path))
+                    # ParseError already includes a human message; keep it compact and add a hint.
+                    raw_msg = getattr(e, "message", str(e))
+                    suggestion = _parse_error_suggestion(raw_msg)
+                    parse_errors_preview.append(
+                        {
+                            "scope": scope,
+                            "path": rel,
+                            "error": _one_line(raw_msg),
+                            "suggestion": suggestion,
+                        }
+                    )
             else:
                 parsed += 1
-        return (parsed, errors)
+        return (parsed, error_count, parse_errors_preview)
 
-    project_count, project_parse_errors = scan_counts(project_kb)
-    user_count, user_parse_errors = scan_counts(user_kb)
+    include_errors = show_errors or as_json
+    project_count, project_parse_errors, project_parse_errors_preview = scan_kb(
+        project_kb, "project", include_errors
+    )
+    user_count, user_parse_errors, user_parse_errors_preview = scan_kb(
+        user_kb, "user", include_errors
+    )
     total_count = project_count + user_count
+    all_parse_errors_preview = project_parse_errors_preview + user_parse_errors_preview
 
     primary_scope: str | None = None
     try:
@@ -4291,6 +4462,18 @@ def info(ctx: click.Context, as_json: bool):
     context = get_kb_context()
     primary_category = context.primary if context else None
     context_file = str(context.source_file) if context and context.source_file else None
+
+    deps = {
+        "whoosh": importlib.util.find_spec("whoosh") is not None,
+        "chromadb": importlib.util.find_spec("chromadb") is not None,
+        "sentence_transformers": importlib.util.find_spec("sentence_transformers") is not None,
+    }
+    keyword_available = deps["whoosh"]
+    semantic_available = deps["chromadb"] and deps["sentence_transformers"]
+    missing_search_deps = [
+        name for name, ok in (("chromadb", deps["chromadb"]), ("sentence_transformers", deps["sentence_transformers"])) if not ok
+    ]
+    install_hint = "uv tool install 'memex-kb[search]' (recommended) or pip install 'memex-kb[search]'"
 
     # Build payload
     kbs_info = []
@@ -4322,6 +4505,15 @@ def info(ctx: click.Context, as_json: bool):
         "categories": categories,
         "primary_category": primary_category,
         "context_file": context_file,
+        "search": {
+            "keyword_available": keyword_available,
+            "semantic_available": semantic_available,
+            "missing_search_deps": missing_search_deps,
+            "install_hint": None if semantic_available else install_hint,
+        },
+        "parse_errors": all_parse_errors_preview if include_errors else [],
+        "parse_errors_truncated": include_errors
+        and (project_parse_errors + user_parse_errors) > len(all_parse_errors_preview),
     }
 
     if as_json:
@@ -4333,6 +4525,14 @@ def info(ctx: click.Context, as_json: bool):
     click.echo(f"Primary KB: {primary_kb}")
     click.echo(f"Primary Scope: {primary_scope or '(unknown)'}")
     click.echo(f"Index Root: {index_root}")
+    click.echo(
+        "Search: keyword "
+        + ("OK" if keyword_available else "MISSING")
+        + ", semantic "
+        + ("OK" if semantic_available else f"MISSING ({', '.join(missing_search_deps)})")
+    )
+    if not semantic_available:
+        click.echo(f"Tip: Install semantic deps: {install_hint}")
     click.echo()
     click.echo("Active KBs:")
     if project_kb:
@@ -4356,6 +4556,23 @@ def info(ctx: click.Context, as_json: bool):
         click.echo(
             "Tip: Set `primary` in .kbconfig to choose a default directory for `mx add`. See: `mx context show`."
         )
+
+    total_parse_errors = project_parse_errors + user_parse_errors
+    if total_parse_errors:
+        click.echo()
+        click.echo(f"Parse errors: {total_parse_errors} (run: mx info --errors)")
+
+    if show_errors and all_parse_errors_preview:
+        click.echo()
+        click.echo("Parse error details")
+        click.echo("-" * 40)
+        for err in all_parse_errors_preview:
+            click.echo(f"- {err['scope']}: {err['path']}")
+            click.echo(f"  {err['error']}")
+            if err.get("suggestion"):
+                click.echo(f"  Hint: {err['suggestion']}")
+        if payload.get("parse_errors_truncated"):
+            click.echo(f"... and more (increase with: mx info --max-errors={max_errors + 20})")
 
 
 @cli.command("config")
@@ -6022,6 +6239,12 @@ def publish(
     else:
         click.echo(f"Published {result['entries_published']} entries to {result['output_dir']}")
 
+        if result["entries_published"] == 0:
+            click.echo(
+                "Note: 0 entries published. Check for `status: draft`/`archived`, or hidden paths.\n"
+                "Hidden files/dirs (segments starting with '.' or '_') are skipped."
+            )
+
         broken_links = result.get("broken_links", [])
         if broken_links:
             click.echo(f"\n⚠ Broken links ({len(broken_links)}):")
@@ -6032,7 +6255,9 @@ def publish(
 
         click.echo(f"\nSearch index: {result['search_index_path']}")
         click.echo("\nTo preview locally:")
-        click.echo(f"  cd {result['output_dir']} && python -m http.server")
+        out_dir = shlex.quote(result["output_dir"])
+        python = shlex.quote(sys.executable or "python3")
+        click.echo(f"  cd {out_dir} && {python} -m http.server")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

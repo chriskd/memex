@@ -126,6 +126,9 @@ class KBContext:
     primary: str | None = None
     """Default directory for new entries (e.g., 'projects/memex')."""
 
+    warn_on_implicit_category: bool = True
+    """Warn when `mx add` omits --category and no primary is set (defaults to KB root)."""
+
     paths: list[str] = field(default_factory=list)
     """Paths to boost in search results. Supports glob patterns (* and **)."""
 
@@ -152,6 +155,7 @@ class KBContext:
         """Create KBContext from parsed YAML dict."""
         return cls(
             primary=data.get("primary"),
+            warn_on_implicit_category=bool(data.get("warn_on_implicit_category", True)),
             paths=data.get("paths", []),
             default_tags=data.get("default_tags", []),
             project=data.get("project"),
@@ -295,6 +299,7 @@ def _load_kbconfig_as_context(config_path: Path) -> KBContext | None:
 
         context_data = {
             "primary": data.get("primary"),
+            "warn_on_implicit_category": data.get("warn_on_implicit_category", True),
             "paths": data.get("boost_paths", []),
             "default_tags": data.get("default_tags", []),
             "project": data.get("project"),

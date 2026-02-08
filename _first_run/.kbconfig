@@ -1,0 +1,25 @@
+# Project KB Configuration
+# This file configures the project knowledge base
+
+# Path to the KB directory (required for project-scope KBs)
+kb_path: ./kb
+
+# Optional: default tags for entries created here
+# default_tags:
+#   - _first_run
+
+# Optional: default write directory for new entries (relative to KB root)
+# primary: inbox
+
+# Optional: warn when `mx add` omits --category and no primary is set
+# (defaults to KB root (.)). Set to false to silence that warning.
+# warn_on_implicit_category: true
+
+# Optional: boost these paths in search (glob patterns)
+# boost_paths:
+#   - inbox/*
+#   - reference/*
+
+# Optional: exclude patterns from indexing (glob)
+# exclude:
+#   - "*.draft.md"

@@ -7,8 +7,8 @@ description: How to install memex and its semantic search dependencies
 
 # Installation Guide
 
-Memex installs with semantic search enabled by default (ChromaDB + sentence-transformers).
-Expect a larger install footprint and a first-run model download.
+Memex installs with keyword search enabled by default (Whoosh).
+Semantic search (ChromaDB + sentence-transformers) is optional via the `search` extra.
 
 ## Install (Recommended)
 
@@ -24,11 +24,19 @@ mx --version
 ```
 
 This includes:
-- Hybrid search (keyword + semantic)
-- ChromaDB for vector storage
-- sentence-transformers for embeddings
-- CPU-only PyTorch (~500MB additional)
-- First search downloads embedding model (~100MB)
+- Keyword search (Whoosh)
+- KB health checks and graph tooling
+- Static site publishing (`mx publish`)
+
+## Semantic Search (Optional)
+
+If you want semantic search, install the `search` extra (larger footprint; may download models on first use):
+
+```bash
+uv tool install 'memex-kb[search]'
+# or
+pip install 'memex-kb[search]'
+```
 
 ## From Source
 

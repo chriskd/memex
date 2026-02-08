@@ -14,7 +14,7 @@ Get productive with memex in 5 minutes.
 Run these in order; each step confirms the previous one worked.
 
 ```bash
-mx init                                 # Creates KB + .kbconfig
+mx onboard --init --yes                 # Creates KB + .kbconfig (+ sample entry)
 mx add --title="First Entry" --tags=docs --category=guides --content="Hello KB"  # Confirms write path
 mx list --limit=5                       # Confirms entry exists (path printed)
 mx get guides/first-entry.md            # Confirms read path
@@ -38,10 +38,10 @@ Choose a KB scope:
 
 ```bash
 # Project KB (shared with your repo)
-mx init
+mx init --sample
 
 # User KB (personal, available everywhere)
-mx init --user
+mx init --user --sample
 ```
 
 Optional overrides:

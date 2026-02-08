@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#fafaf9">
+    <title>CLI Reference - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <!-- Mobile menu button (hamburger) -->
+            <button class="mobile-menu-btn" aria-label="Open navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="/" class="logo">
+                <div class="logo-text">meme<span style="color: var(--accent);">x</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+
+            <!-- Mobile search button -->
+            <button class="mobile-search-btn" aria-label="Open search">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">design</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/design/chunking-system-design.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Chunking System Design</span>
+                    </a>
+                    <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">LLM Query Processing Feature Plan</span>
+                    </a>
+                    <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Frontmatter Edge Types</span>
+                    </a>
+                    <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Relations Graph Overview</span>
+                    </a>
+                    <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Wikilink Edge Behavior</span>
+                    </a>
+                    <a href="/design/state-diagrams.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MX State Diagrams</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup (Deprecated)</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Relations Graph Overview</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup (Deprecated)</span>
+            </a>
+            <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+            </a>
+            <a href="/design/state-diagrams.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MX State Diagrams</span>
+            </a>
+            <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Frontmatter Edge Types</span>
+            </a>
+            <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Wikilink Edge Behavior</span>
+            </a>
+            <a href="/design/chunking-system-design.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Chunking System Design</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">LLM Query Processing Feature Plan</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex-kb"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/reference/cli.html" class="entry-path">reference/cli</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">
+                    Created: <span>Jan 6, 2026</span>
+                </div>
+                
+                
+                <div class="entry-meta-item">
+                    Updated: <span>Jan 25, 2026 at 11:32 PM</span>
+                </div>
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/cli.html" class="tag">cli</a>
+                
+                <a href="/tags/reference.html" class="tag">reference</a>
+                
+                <a href="/tags/commands.html" class="tag">commands</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <h1>CLI Reference</h1>
+<p>The <code>mx</code> CLI provides token-efficient access to your knowledge base.</p>
+<h2>Search Commands</h2>
+<h3>mx search</h3>
+<p>Search the knowledge base with hybrid keyword + semantic search.</p>
+<pre><code class="language-bash">mx search &quot;query&quot;                    # Hybrid search
+mx search &quot;docker&quot; --tags=infra      # Filter by tag
+mx search &quot;api&quot; --mode=semantic      # Semantic only
+mx search &quot;api&quot; --mode=keyword       # Keyword only
+mx search &quot;query&quot; --limit=20         # More results
+mx search &quot;query&quot; --min-score=0.5    # Only confident results
+mx search &quot;query&quot; --content          # Include full content
+mx search &quot;query&quot; --strict           # No semantic fallback
+mx search &quot;query&quot; --scope=project    # Project KB only
+mx search &quot;query&quot; --include-neighbors
+mx search &quot;query&quot; --include-neighbors --neighbor-depth=2
+mx search &quot;query&quot; --terse            # Paths only
+mx search &quot;query&quot; --full-titles      # Show untruncated titles
+mx search &quot;query&quot; --json             # JSON output
+</code></pre>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--tag, --tags</code>: Filter by tags (comma-separated)</li>
+<li><code>--mode</code>: Search mode (hybrid, keyword, semantic)</li>
+<li><code>--limit, -n</code>: Maximum results (default: 10)</li>
+<li><code>--min-score</code>: Minimum score threshold (0.0-1.0)</li>
+<li><code>--content</code>: Include full document content in results (replaces snippet)</li>
+<li><code>--strict</code>: Disable semantic fallback</li>
+<li><code>--terse</code>: Output paths only</li>
+<li><code>--full-titles</code>: Show full titles without truncation</li>
+<li><code>--scope</code>: Limit to KB scope (project or user)</li>
+<li><code>--include-neighbors</code>: Include semantic links + typed relations + wikilinks</li>
+<li><code>--neighbor-depth</code>: Neighbor traversal depth (default: 1)</li>
+<li><code>--json</code>: JSON output</li>
+</ul>
+<p><strong>Content Flag Behavior:</strong></p>
+<p>When <code>--content</code> is used:</p>
+<ul>
+<li><strong>JSON output</strong>: Returns <code>content</code> field with full document text instead of <code>snippet</code></li>
+<li><strong>Table output</strong>: Shows the standard results table followed by a content section displaying full text for each result</li>
+</ul>
+<p>Without <code>--content</code>, only a brief snippet is shown (default behavior).</p>
+<p><strong>Notes:</strong></p>
+<ul>
+<li>Query cannot be empty. An error is returned for empty or whitespace-only queries.</li>
+</ul>
+<h4>Understanding Search Scores</h4>
+<p>All search scores are normalized to <strong>0.0-1.0</strong> (higher = better match).</p>
+<table>
+<thead>
+<tr>
+<th>Score Range</th>
+<th>Confidence</th>
+<th>Interpretation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&gt;= 0.7</td>
+<td>High</td>
+<td>Strong keyword or semantic match. Trust this result.</td>
+</tr>
+<tr>
+<td>0.4 - 0.7</td>
+<td>Moderate</td>
+<td>Partial match. Worth reviewing but may be tangential.</td>
+</tr>
+<tr>
+<td>&lt; 0.4</td>
+<td>Weak</td>
+<td>Tangential relevance only. May be noise.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>How scores are calculated:</strong></p>
+<ul>
+<li><strong>Hybrid mode</strong> (default): Combines keyword and semantic search using Reciprocal Rank Fusion (RRF). Results appearing in both rankings score higher.</li>
+<li><strong>Keyword mode</strong>: BM25 text matching. Exact term matches matter most.</li>
+<li><strong>Semantic mode</strong>: Cosine similarity of embeddings. Conceptual meaning matters more than exact words.</li>
+</ul>
+<p><strong>Score adjustments:</strong></p>
+<p>After initial ranking, scores receive context-aware boosts:</p>
+<ul>
+<li><strong>Tag match</strong>: +0.05 per matching tag (e.g., searching &quot;python&quot; boosts entries tagged &quot;python&quot;)</li>
+<li><strong>Project context</strong>: +0.15 if entry's source_project matches your current project</li>
+<li><strong>Boost paths</strong>: +0.12 if entry matches patterns in <code>boost_paths</code> in your <code>.kbconfig</code></li>
+</ul>
+<p>Scores are re-normalized to 0-1 after boosts, so the top result is always 1.0.</p>
+<p><strong>Recommended thresholds:</strong></p>
+<pre><code class="language-bash"># High-confidence results only (for automated workflows)
+mx search &quot;deployment&quot; --min-score=0.7
+
+# Moderate confidence (good default for exploration)
+mx search &quot;deployment&quot; --min-score=0.4
+
+# All results (when you want broad coverage)
+mx search &quot;deployment&quot;
+</code></pre>
+<h3>mx history</h3>
+<p>View and re-run past searches.</p>
+<pre><code class="language-bash">mx history                  # Show last 10 searches
+mx history -n 20            # Show last 20
+mx history --rerun 1        # Re-run most recent
+mx history --clear          # Clear history
+</code></pre>
+<h2>Read Commands</h2>
+<h3>mx get</h3>
+<p>Read a knowledge base entry.</p>
+<pre><code class="language-bash">mx get tooling/my-entry.md            # Full entry by path
+mx get tooling/my-entry.md --metadata # Metadata only
+mx get tooling/my-entry.md --json     # JSON output
+mx get --title=&quot;Docker Guide&quot;         # Get by title
+mx get --title &quot;Python Tooling&quot;       # Get by title (alt form)
+</code></pre>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--title</code>: Get entry by title instead of path (case-insensitive)</li>
+<li><code>--metadata, -m</code>: Show only metadata</li>
+<li><code>--json</code>: JSON output</li>
+</ul>
+<p><strong>Title Lookup Behavior:</strong></p>
+<ul>
+<li>If one match found: returns that entry</li>
+<li>If multiple matches: shows error with candidate paths</li>
+<li>If no match: shows error with similar title suggestions</li>
+</ul>
+<h3>mx list</h3>
+<p>List entries with optional filters.</p>
+<pre><code class="language-bash">mx list                        # All entries
+mx list --tags=infrastructure  # Filter by tag
+mx list --category=tooling     # Filter by category
+mx list --limit=50             # More results
+mx list --full-titles          # Show untruncated titles
+mx list --scope=project        # Project KB only
+</code></pre>
+<h3>mx categories</h3>
+<p>List available top-level categories (directories) in the KB.</p>
+<pre><code class="language-bash">mx categories
+mx categories --scope=project
+mx categories --json
+</code></pre>
+<h3>mx tree</h3>
+<p>Display directory structure.</p>
+<pre><code class="language-bash">mx tree                    # Full tree
+mx tree tooling            # Specific path
+mx tree --depth=2          # Limit depth
+mx tree --scope=project    # Project KB only
+</code></pre>
+<h2>Write Commands</h2>
+<h3>mx add</h3>
+<p>Create a new entry.</p>
+<pre><code class="language-bash">mx add --title=&quot;My Entry&quot; --tags=&quot;foo,bar&quot; --category=tooling --content=&quot;...&quot;
+mx add --title=&quot;...&quot; --tags=&quot;...&quot; --category=... --file=content.md
+cat content.md | mx add --title=&quot;...&quot; --tags=&quot;...&quot; --category=... --stdin
+</code></pre>
+<p><strong>Required:</strong></p>
+<ul>
+<li><code>--title</code>: Entry title</li>
+<li><code>--tag, --tags</code>: Tags (comma-separated)</li>
+</ul>
+<p><strong>Category behavior:</strong></p>
+<ul>
+<li><code>--category</code>: Optional target directory.</li>
+<li>If omitted and <code>.kbconfig</code> sets <code>primary</code>, <code>primary</code> is used.</li>
+<li>If omitted and no <code>primary</code> is set, <code>mx add</code> writes to KB root (<code>.</code>) and warns by default.
+Tip: Use <code>mx categories</code> to discover available categories.</li>
+<li>Silence the warning with:
+<ul>
+<li><code>.kbconfig</code>: <code>warn_on_implicit_category: false</code></li>
+</ul>
+</li>
+</ul>
+<p><strong>Common options:</strong></p>
+<ul>
+<li><code>--scope</code>: Target KB scope (project or user)</li>
+<li><code>--semantic-links</code>: Set semantic links as JSON array</li>
+</ul>
+<h3>mx replace</h3>
+<p>Replace content or metadata in an existing entry.</p>
+<pre><code class="language-bash">mx replace path/entry.md --tags=&quot;new,tags&quot;
+mx replace path/entry.md --content=&quot;New content&quot;
+mx replace path/entry.md --file=new-content.md
+</code></pre>
+<p>Note: For appending content, use <code>mx append</code>. For surgical edits, use <code>mx patch</code>.</p>
+<h3>mx patch</h3>
+<p>Surgical find-replace edits.</p>
+<pre><code class="language-bash">mx patch path/entry.md --find=&quot;old text&quot; --replace=&quot;new text&quot;
+mx patch path/entry.md --find=&quot;TODO&quot; --replace=&quot;DONE&quot; --replace-all
+mx patch path/entry.md --find=&quot;...&quot; --replace=&quot;...&quot; --dry-run
+</code></pre>
+<p><strong>Intent Detection:</strong> If you use flags that suggest a different command (e.g., <code>--content</code> without <code>--find</code>), the CLI will suggest the correct command:</p>
+<pre><code class="language-bash">$ mx patch entry.md --content='new stuff'
+Error: --find is required for find-replace operations.
+
+Did you mean:
+  - To append content:  mx append 'Title' --content='...'
+  - To replace text:    mx patch entry.md --find 'x' --replace 'y'
+  - To overwrite entry: mx replace entry.md --content='...'
+</code></pre>
+<h3>mx append</h3>
+<p>Append content to existing entry by title, or create new if not found.</p>
+<pre><code class="language-bash">mx append &quot;Daily Log&quot; --content=&quot;Session summary&quot;
+mx append &quot;API Docs&quot; --file=api.md --tags=&quot;api,docs&quot;
+mx append &quot;Debug Log&quot; --content=&quot;...&quot; --no-create  # Error if not found
+cat notes.md | mx append &quot;Meeting Notes&quot; --stdin --tags=&quot;meetings&quot;
+</code></pre>
+<h3>mx delete</h3>
+<p>Delete an entry.</p>
+<pre><code class="language-bash">mx delete path/entry.md
+mx delete path/entry.md --force  # Delete even with backlinks
+</code></pre>
+<h3>mx quick-add</h3>
+<p>Quickly add content with auto-generated metadata.</p>
+<pre><code class="language-bash">mx quick-add --stdin              # Paste content, auto-generate all
+mx quick-add -f notes.md          # From file with auto metadata
+mx quick-add --content &quot;...&quot; --confirm  # Auto-confirm creation
+echo &quot;...&quot; | mx quick-add --stdin --json
+</code></pre>
+<h3>mx ingest</h3>
+<p>Ingest a markdown file into the KB, adding frontmatter if missing.</p>
+<pre><code class="language-bash">mx ingest notes.md                          # Auto-detect title/tags
+mx ingest draft.md --title=&quot;My Entry&quot;       # Override title
+mx ingest doc.md --tags=&quot;api,docs&quot;          # Set tags
+mx ingest doc.md --directory=&quot;guides&quot;       # Place in guides/
+mx ingest doc.md --scope=project            # Project KB only
+mx ingest doc.md --dry-run                  # Preview changes
+</code></pre>
+<h2>Analysis Commands</h2>
+<h3>mx health</h3>
+<p>Audit KB for problems.</p>
+<pre><code class="language-bash">mx health
+mx health --json
+</code></pre>
+<p>Checks for:</p>
+<ul>
+<li>Orphaned entries (no backlinks)</li>
+<li>Broken links</li>
+<li>Stale content (&gt;90 days)</li>
+<li>Missing frontmatter</li>
+</ul>
+<p>Orphans are entries with no incoming links (no <code>[[wikilinks]]</code> or typed relations pointing at them).
+This is normal in new KBs.</p>
+<p>Quick fixes:</p>
+<ul>
+<li>Add an index/hub entry that links to everything important.</li>
+<li>Add at least one link from an existing entry to each orphan.</li>
+<li>Use <code>mx suggest-links path/to/entry.md</code> to find candidates to connect.</li>
+</ul>
+<h3>mx relations-lint</h3>
+<p>Warn on unknown or inconsistent typed relation types (non-blocking by default).</p>
+<pre><code class="language-bash">mx relations-lint
+mx relations-lint --json
+mx relations-lint --strict   # Exit non-zero if issues found
+</code></pre>
+<p>Use <code>mx relations-lint</code> to align relation types with the canonical taxonomy.</p>
+<h3>mx hubs</h3>
+<p>Show most connected entries.</p>
+<pre><code class="language-bash">mx hubs
+mx hubs --limit=5
+</code></pre>
+<h3>mx suggest-links</h3>
+<p>Find semantically related entries.</p>
+<pre><code class="language-bash">mx suggest-links path/entry.md
+mx suggest-links path/entry.md --limit=10
+</code></pre>
+<h3>mx tags</h3>
+<p>List all tags with counts.</p>
+<pre><code class="language-bash">mx tags
+mx tags --min-count=3
+</code></pre>
+<h2>Browse Commands</h2>
+<h3>mx info</h3>
+<p>Show KB configuration and stats.</p>
+<pre><code class="language-bash">mx info
+mx info --json
+</code></pre>
+<p>Alias: <code>mx config</code></p>
+<h3>mx whats-new</h3>
+<p>Show recently modified entries.</p>
+<pre><code class="language-bash">mx whats-new                      # Last 30 days
+mx whats-new --days=7             # Last week
+mx whats-new --scope=project      # Project KB only
+mx whats-new --limit=20           # More results
+</code></pre>
+<h2>Project Setup Commands</h2>
+<h3>mx init</h3>
+<p>Initialize a knowledge base (project or user scope).</p>
+<pre><code class="language-bash">mx init                    # Project KB in ./kb/
+mx init --user             # User KB in ~/.memex/kb/
+mx init --path docs/kb     # Custom location
+mx init --force            # Reinitialize existing
+mx init --json             # JSON output
+</code></pre>
+<p><strong>Options:</strong></p>
+<ul>
+<li><code>--path, -p</code>: Custom location for local KB (default: kb/)</li>
+<li><code>--user, -u</code>: Create user KB at ~/.memex/kb/</li>
+<li><code>--force, -f</code>: Reinitialize existing KB</li>
+<li><code>--json</code>: JSON output</li>
+</ul>
+<p><strong>What gets created:</strong></p>
+<ul>
+<li>Project: <code>kb/README.md</code> and <code>.kbconfig</code> at the project root</li>
+<li>User: <code>~/.memex/kb/README.md</code> and <code>~/.memex/kb/.kbconfig</code></li>
+</ul>
+<p><strong>When to use:</strong></p>
+<ul>
+<li>Starting a new project that needs project-specific documentation</li>
+<li>Creating a knowledge base that should be versioned with the code</li>
+<li>Setting up for GitHub Pages publishing</li>
+</ul>
+<h3>mx context</h3>
+<p>Show or validate project KB configuration.</p>
+<pre><code class="language-bash">mx context                  # Show current config
+mx context show             # Same as above
+mx context validate         # Validate config paths
+mx context validate --json  # JSON output
+</code></pre>
+<p><strong>Note:</strong> <code>.kbconfig</code> is created by <code>mx init</code>.</p>
+<p>Common next step: set a default write directory so you can omit <code>--category</code> in <code>mx add</code>:</p>
+<pre><code class="language-yaml"># .kbconfig (project root)
+primary: guides
+</code></pre>
+<h2>Automation Commands</h2>
+<h3>mx batch</h3>
+<p>Execute multiple KB operations in a single invocation.</p>
+<pre><code class="language-bash">mx batch &lt;&lt; 'EOF'
+add --title='Note 1' --tags='tag1' --category=tooling --content='Content'
+search 'api'
+EOF
+</code></pre>
+<p>Reads commands from stdin (or <code>--file</code>) and returns JSON results.</p>
+<h2>Templates</h2>
+<p>List or show available entry templates.</p>
+<pre><code class="language-bash">mx templates
+mx templates show troubleshooting
+mx templates --json
+</code></pre>
+<h2>Publishing</h2>
+<h3>mx publish</h3>
+<p>Generate static HTML site.</p>
+<pre><code class="language-bash">mx publish                           # Build to _site/
+mx publish -o docs                   # Build to docs/
+mx publish --base-url /my-kb         # For subdirectory hosting
+mx publish --include-drafts          # Include draft entries
+</code></pre>
+<h2>Maintenance</h2>
+<h3>mx summarize</h3>
+<p>Generate descriptions for entries missing them.</p>
+<pre><code class="language-bash">mx summarize --dry-run         # Preview what would be generated
+mx summarize                   # Generate and write descriptions
+mx summarize --limit 5         # Process only 5 entries
+mx summarize --json            # Output as JSON
+</code></pre>
+<h3>mx reindex</h3>
+<p>Rebuild search indices.</p>
+<pre><code class="language-bash">mx reindex
+mx reindex --json
+</code></pre>
+<h3>mx eval</h3>
+<p>Evaluate search accuracy against a query dataset.</p>
+<pre><code class="language-bash">mx eval                              # Run eval/queries.json against current KB
+mx eval --mode=keyword               # Keyword-only evaluation
+mx eval --scope=project              # Project KB only
+mx eval --json                       # JSON to stdout (includes meta)
+mx eval --save                       # Also write eval/results/&lt;timestamp&gt;.json
+mx eval --out /tmp/mx-eval.json      # Also write JSON artifact to a specific file
+</code></pre>
+<h3>mx prime</h3>
+<p>Output agent workflow context (for hooks).</p>
+<pre><code class="language-bash">mx prime                    # Output onboarding + quick reference
+mx prime --json             # JSON output
+</code></pre>
+<h3>mx session-context</h3>
+<p>Output dynamic project-relevant context (for hooks).</p>
+<pre><code class="language-bash">mx session-context                   # Print session context
+mx session-context --max-entries 4   # Limit relevant entries
+mx session-context --install         # Update .claude/settings.json hook
+mx session-context --install --install-path .claude/settings.local.json
+mx session-context --json            # JSON output
+</code></pre>
+<h3>mx schema</h3>
+<p>Output CLI schema with agent-friendly metadata for introspection.</p>
+<pre><code class="language-bash">mx schema                    # Full schema (JSON)
+mx schema --command=patch    # Schema for specific command only
+mx schema -c search          # Short form
+mx schema --compact          # Minimal output (commands and options only)
+</code></pre>
+<p><strong>Schema includes:</strong></p>
+<ul>
+<li>All commands with their arguments and options</li>
+<li>Related commands (cross-references)</li>
+<li>Common mistakes and how to avoid them</li>
+<li>Example invocations</li>
+<li>Recommended workflows</li>
+</ul>
+<p><strong>Use cases:</strong></p>
+<ul>
+<li>Agent introspection to understand available commands</li>
+<li>Proactive error avoidance via common_mistakes field</li>
+<li>Discovering related commands for a task</li>
+<li>Understanding option types and defaults</li>
+</ul>
+<p><strong>Example output structure:</strong></p>
+<pre><code class="language-json">{
+  &quot;version&quot;: &quot;0.2.0&quot;,
+  &quot;commands&quot;: {
+    &quot;patch&quot;: {
+      &quot;description&quot;: &quot;Apply surgical find-replace edits&quot;,
+      &quot;options&quot;: [...],
+      &quot;related&quot;: [&quot;update&quot;, &quot;append&quot;],
+      &quot;common_mistakes&quot;: {
+        &quot;--find without --replace&quot;: &quot;Both are required&quot;
+      },
+      &quot;examples&quot;: [&quot;mx patch path.md --find \&quot;old\&quot; --replace \&quot;new\&quot;&quot;]
+    }
+  },
+  &quot;workflows&quot;: {...}
+}
+</code></pre>
+<h2>Global Options</h2>
+<p>Global flags:</p>
+<ul>
+<li><code>--version</code>: Show the version and exit</li>
+<li><code>--json-errors</code>: Output errors as JSON (for programmatic use)</li>
+<li><code>-q, --quiet</code>: Suppress warnings, show only errors and essential output</li>
+<li><code>--help</code>: Show help</li>
+</ul>
+<p>Per-command (when available):</p>
+<ul>
+<li><code>--json</code>: JSON output</li>
+</ul>
+<h2>See Also</h2>
+<ul>
+<li><a href="../guides/installation.html" class="wikilink">Installation Guide</a></li>
+<li><a href="../guides/ai-integration.html" class="wikilink">AI Agent Integration</a></li>
+<li><a href="entry-format.html" class="wikilink">Entry Format</a></li>
+<li><a href="../design/state-diagrams.html" class="wikilink">State diagrams for MX flows</a></li>
+</ul>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="/design/state-diagrams.html">
+                        <div class="link-title">MX State Diagrams</div>
+                        <div class="link-path">design/state-diagrams</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/guides/ai-integration.html">
+                        <div class="link-title">AI Agent Integration</div>
+                        <div class="link-path">guides/ai-integration</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/guides/installation.html">
+                        <div class="link-title">Installation Guide</div>
+                        <div class="link-path">guides/installation</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/reference/entry-format.html">
+                        <div class="link-title">Entry Format Reference</div>
+                        <div class="link-path">reference/entry-format</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list">
+                <li class="link-item">
+                    <a href="/guides/ai-integration.html">
+                        <div class="link-title">AI Agent Integration</div>
+                        <div class="link-path">guides/ai-integration</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/guides/installation.html">
+                        <div class="link-title">Installation Guide</div>
+                        <div class="link-path">guides/installation</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/guides/mcp-setup.html">
+                        <div class="link-title">MCP Server Setup (Deprecated)</div>
+                        <div class="link-path">guides/mcp-setup</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/guides/quick-start.html">
+                        <div class="link-title">Quick Start Guide</div>
+                        <div class="link-path">guides/quick-start</div>
+                    </a>
+                </li>
+                <li class="link-item">
+                    <a href="/reference/entry-format.html">
+                        <div class="link-title">Entry Format Reference</div>
+                        <div class="link-path">reference/entry-format</div>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Typed Relations</div><p class="empty-state">No typed relations</p>
+        </div>
+        </aside>
+    </div>
+
+    <!-- Mobile search overlay -->
+    <div class="search-overlay">
+        <div class="search-overlay-header">
+            <button class="search-overlay-close" aria-label="Close search">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                </svg>
+            </button>
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
+        </div>
+        <div class="search-overlay-results"></div>
+    </div>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-inner">
+            <a href="/" class="bottom-nav-link active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>Reader</span>
+            </a>
+            <button class="bottom-nav-link bottom-nav-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Search</span>
+            </button>
+            <a href="/graph.html" class="bottom-nav-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="6" cy="6" r="2"></circle>
+                    <circle cx="18" cy="6" r="2"></circle>
+                    <circle cx="6" cy="18" r="2"></circle>
+                    <circle cx="18" cy="18" r="2"></circle>
+                    <path d="M12 10V6M12 14v4M10 12H6M14 12h4"></path>
+                </svg>
+                <span>Graph</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>

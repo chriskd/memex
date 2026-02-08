@@ -399,6 +399,10 @@ Content B
 
             assert result.exit_code == 1
             assert "No knowledge base found" in result.output
+            # Should include first-run guidance (onboard/init/doctor + config locations)
+            assert "mx onboard --init --yes" in result.output
+            assert "mx init --sample" in result.output
+            assert "mx doctor" in result.output
 
     @patch("memex.config.get_kb_root")
     @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
@@ -767,6 +771,41 @@ class TestAddCommand:
         assert result.exit_code == 0
         combined_output = result.output + getattr(result, "stderr", "")
         assert "defaulting to KB root" in combined_output
+
+    @patch("memex.context.get_kb_context")
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_add_can_silence_missing_category_warning_via_kbconfig(
+        self,
+        mock_run_async,
+        mock_get_context,
+        runner,
+    ):
+        """Add can silence the missing category warning via .kbconfig flag."""
+        from memex.context import KBContext
+
+        mock_get_context.return_value = KBContext(primary=None, warn_on_implicit_category=False)
+        mock_run_async.return_value = {
+            "path": "root-entry.md",
+            "suggested_links": [],
+            "suggested_tags": [],
+        }
+
+        result = runner.invoke(
+            cli,
+            [
+                "add",
+                "--title",
+                "Root Entry",
+                "--tags",
+                "tag1",
+                "--content",
+                "Content",
+            ],
+        )
+
+        assert result.exit_code == 0
+        combined_output = result.output + getattr(result, "stderr", "")
+        assert "defaulting to KB root" not in combined_output
 
     @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_add_with_scope_json_output(self, mock_run_async, runner):
@@ -1842,7 +1881,9 @@ class TestInitCommand:
         assert (tmp_path / "kb" / "README.md").exists()
         # Verify .kbconfig was written to tmp_path, not project root
         assert (tmp_path / ".kbconfig").exists()
-        assert "primary: inbox" in (tmp_path / ".kbconfig").read_text()
+        kbconfig = (tmp_path / ".kbconfig").read_text()
+        assert "# primary: inbox" in kbconfig
+        assert "\nprimary: inbox\n" not in kbconfig
 
         from memex.parser import parse_entry
 
@@ -1850,6 +1891,23 @@ class TestInitCommand:
         assert metadata.title == "Project Knowledge Base"
         assert "project" in metadata.tags
         assert content.lstrip().startswith("# Project Knowledge Base")
+
+    def test_init_sample_creates_first_task(self, runner, tmp_path, monkeypatch):
+        """Init --sample creates a searchable sample entry under inbox/."""
+        monkeypatch.chdir(tmp_path)
+        kb_path = tmp_path / "kb"
+
+        result = runner.invoke(cli, ["init", "--path", str(kb_path), "--sample"])
+
+        assert result.exit_code == 0
+        sample_entry = kb_path / "inbox" / "first-task.md"
+        assert sample_entry.exists()
+
+        from memex.parser import parse_entry
+
+        metadata, content, _chunks = parse_entry(sample_entry)
+        assert metadata.title == "First Task"
+        assert "Write a note" in content
 
     def test_init_already_exists(self, runner, tmp_path, monkeypatch):
         """Init fails if KB already exists (without --force)."""
@@ -1936,6 +1994,8 @@ class TestReindexCommand:
 class TestInfoCommand:
     """Tests for 'mx info' command."""
 
+    @patch("memex.config.get_user_kb_root")
+    @patch("memex.config.get_project_kb_root")
     @patch("memex.core.get_valid_categories")
     @patch("memex.config.get_index_root")
     @patch("memex.config.get_kb_root")
@@ -1944,17 +2004,21 @@ class TestInfoCommand:
         mock_kb_root,
         mock_index_root,
         mock_categories,
+        mock_project_kb,
+        mock_user_kb,
         runner,
         tmp_path,
     ):
         """Info displays KB configuration."""
         kb_root = tmp_path / "kb"
         kb_root.mkdir()
-        (kb_root / "test.md").write_text("# Test")
+        (kb_root / "test.md").write_text("# Test")  # parse error is fine for this smoke test
 
         mock_kb_root.return_value = kb_root
         mock_index_root.return_value = tmp_path / "indices"
         mock_categories.return_value = ["general"]
+        mock_project_kb.return_value = kb_root
+        mock_user_kb.return_value = None
 
         result = runner.invoke(cli, ["info"])
 
@@ -1962,6 +2026,8 @@ class TestInfoCommand:
         assert "Primary KB" in result.output
         assert "Active KBs" in result.output
 
+    @patch("memex.config.get_user_kb_root")
+    @patch("memex.config.get_project_kb_root")
     @patch("memex.core.get_valid_categories")
     @patch("memex.config.get_index_root")
     @patch("memex.config.get_kb_root")
@@ -1970,6 +2036,8 @@ class TestInfoCommand:
         mock_kb_root,
         mock_index_root,
         mock_categories,
+        mock_project_kb,
+        mock_user_kb,
         runner,
         tmp_path,
     ):
@@ -1980,6 +2048,8 @@ class TestInfoCommand:
         mock_kb_root.return_value = kb_root
         mock_index_root.return_value = tmp_path / "indices"
         mock_categories.return_value = []
+        mock_project_kb.return_value = kb_root
+        mock_user_kb.return_value = None
 
         result = runner.invoke(cli, ["info", "--json"])
 
@@ -1989,6 +2059,127 @@ class TestInfoCommand:
         assert "kbs" in data
         assert "total_entries" in data
         assert "primary_scope" in data
+        assert "search" in data
+
+    @patch("memex.config.get_user_kb_root")
+    @patch("memex.config.get_project_kb_root")
+    @patch("memex.core.get_valid_categories")
+    @patch("memex.config.get_index_root")
+    @patch("memex.config.get_kb_root")
+    def test_info_json_search_deps_missing_state(
+        self,
+        mock_kb_root,
+        mock_index_root,
+        mock_categories,
+        mock_project_kb,
+        mock_user_kb,
+        runner,
+        tmp_path,
+    ):
+        """Info --json reports missing semantic deps with an install hint."""
+        from unittest.mock import patch as patch_obj
+
+        kb_root = tmp_path / "kb"
+        kb_root.mkdir()
+
+        mock_kb_root.return_value = kb_root
+        mock_index_root.return_value = tmp_path / "indices"
+        mock_categories.return_value = []
+        mock_project_kb.return_value = kb_root
+        mock_user_kb.return_value = None
+
+        def fake_find_spec(name: str):
+            if name == "whoosh":
+                return object()
+            if name in ("chromadb", "sentence_transformers"):
+                return None
+            return None
+
+        with patch_obj("importlib.util.find_spec", side_effect=fake_find_spec):
+            result = runner.invoke(cli, ["info", "--json"])
+
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        search = data["search"]
+        assert search["keyword_available"] is True
+        assert search["semantic_available"] is False
+        assert set(search["missing_search_deps"]) == {"chromadb", "sentence_transformers"}
+        assert search["install_hint"]
+
+    @patch("memex.config.get_user_kb_root")
+    @patch("memex.config.get_project_kb_root")
+    @patch("memex.core.get_valid_categories")
+    @patch("memex.config.get_index_root")
+    @patch("memex.config.get_kb_root")
+    def test_info_json_includes_parse_error_details(
+        self,
+        mock_kb_root,
+        mock_index_root,
+        mock_categories,
+        mock_project_kb,
+        mock_user_kb,
+        runner,
+        tmp_path,
+    ):
+        """Info --json includes structured parse_errors entries with paths + hints."""
+        kb_root = tmp_path / "kb"
+        kb_root.mkdir()
+        # One good entry, one bad entry.
+        (kb_root / "good.md").write_text(
+            """---
+title: Good
+tags: [test]
+created: 2024-01-15
+---
+
+ok
+"""
+        )
+        (kb_root / "bad.md").write_text("# Missing frontmatter\n")
+
+        mock_kb_root.return_value = kb_root
+        mock_index_root.return_value = tmp_path / "indices"
+        mock_categories.return_value = []
+        mock_project_kb.return_value = kb_root
+        mock_user_kb.return_value = None
+
+        result = runner.invoke(cli, ["info", "--json"])
+        assert result.exit_code == 0, result.output
+        data = json.loads(result.output)
+        assert isinstance(data.get("parse_errors"), list)
+        assert any(e.get("path") == "bad.md" for e in data["parse_errors"])
+
+    @patch("memex.config.get_user_kb_root")
+    @patch("memex.config.get_project_kb_root")
+    @patch("memex.core.get_valid_categories")
+    @patch("memex.config.get_index_root")
+    @patch("memex.config.get_kb_root")
+    def test_info_errors_flag_prints_details(
+        self,
+        mock_kb_root,
+        mock_index_root,
+        mock_categories,
+        mock_project_kb,
+        mock_user_kb,
+        runner,
+        tmp_path,
+    ):
+        """Info --errors prints parse error details with a hint."""
+        kb_root = tmp_path / "kb"
+        kb_root.mkdir()
+        (kb_root / "bad.md").write_text("# Missing frontmatter\n")
+
+        mock_kb_root.return_value = kb_root
+        mock_index_root.return_value = tmp_path / "indices"
+        mock_categories.return_value = []
+        mock_project_kb.return_value = kb_root
+        mock_user_kb.return_value = None
+
+        result = runner.invoke(cli, ["info", "--errors"])
+        assert result.exit_code == 0, result.output
+        assert "Parse error details" in result.output
+        assert "bad.md" in result.output
+        assert "Hint:" in result.output
 
 
 def _count_frontmatter_blocks(text: str) -> int:
@@ -2561,8 +2752,10 @@ class TestTypoSuggestions:
         result = runner.invoke(cli, ["serach"])  # typo for 'search'
 
         assert result.exit_code != 0
-        # Should suggest 'search'
-        assert "search" in result.output.lower() or "No such command" in result.output
+        assert "No such command" in result.output
+        assert "Did you mean" in result.output
+        assert "search" in result.output.lower()
+        assert "mx --help" in result.output
 
 
 # ─────────────────────────────────────────────────────────────────────────────

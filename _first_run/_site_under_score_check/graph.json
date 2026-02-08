@@ -1,0 +1,55 @@
+{
+  "nodes": [
+    {
+      "id": "setup",
+      "title": "Setup",
+      "tags": [
+        "docs",
+        "setup"
+      ],
+      "url": "setup.html"
+    },
+    {
+      "id": "README",
+      "title": "Project Knowledge Base",
+      "tags": [
+        "kb",
+        "meta",
+        "project"
+      ],
+      "url": "README.html"
+    },
+    {
+      "id": "inbox/first-task",
+      "title": "First Task",
+      "tags": [
+        "onboarding"
+      ],
+      "url": "inbox/first-task.html"
+    },
+    {
+      "id": "inbox/investigate-why-mx-publish-says-0-entries-when-kb-is-unde",
+      "title": "Investigate why mx publish says 0 entries when KB is unde...",
+      "tags": [
+        "uncategorized"
+      ],
+      "url": "inbox/investigate-why-mx-publish-says-0-entries-when-kb-is-unde.html"
+    }
+  ],
+  "edges": [
+    {
+      "source": "inbox/first-task",
+      "target": "setup",
+      "origin": "wikilink",
+      "type": null,
+      "score": null
+    },
+    {
+      "source": "inbox/first-task",
+      "target": "setup",
+      "origin": "relations",
+      "type": "references",
+      "score": null
+    }
+  ]
+}

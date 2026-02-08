@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#fafaf9">
+    <title>LLM Query Processing Feature Plan - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <!-- Mobile menu button (hamburger) -->
+            <button class="mobile-menu-btn" aria-label="Open navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="/" class="logo">
+                <div class="logo-text">meme<span style="color: var(--accent);">x</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+
+            <!-- Mobile search button -->
+            <button class="mobile-search-btn" aria-label="Open search">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">design</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/design/chunking-system-design.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Chunking System Design</span>
+                    </a>
+                    <a href="/design/llm-query-processing-feature-plan.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">LLM Query Processing Feature Plan</span>
+                    </a>
+                    <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Frontmatter Edge Types</span>
+                    </a>
+                    <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Relations Graph Overview</span>
+                    </a>
+                    <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Wikilink Edge Behavior</span>
+                    </a>
+                    <a href="/design/state-diagrams.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MX State Diagrams</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup (Deprecated)</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Relations Graph Overview</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup (Deprecated)</span>
+            </a>
+            <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+            </a>
+            <a href="/design/state-diagrams.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MX State Diagrams</span>
+            </a>
+            <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Frontmatter Edge Types</span>
+            </a>
+            <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Wikilink Edge Behavior</span>
+            </a>
+            <a href="/design/chunking-system-design.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Chunking System Design</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/design/llm-query-processing-feature-plan.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">LLM Query Processing Feature Plan</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex-kb"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/design/llm-query-processing-feature-plan.html" class="entry-path">design/llm-query-processing-feature-plan</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">
+                    Created: <span>Jan 15, 2026 at 2:44 AM</span>
+                </div>
+                
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/memex.html" class="tag">memex</a>
+                
+                <a href="/tags/llm.html" class="tag">llm</a>
+                
+                <a href="/tags/feature-plan.html" class="tag">feature-plan</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <h1>Plan: LLM Query Processing for KB Entries</h1>
+<h2>Summary</h2>
+<p>Add opt-in LLM processing to KB entries with caching. Supports summarize, synthesize, and answer operations.</p>
+<h2>CLI Interface</h2>
+<pre><code class="language-bash">mx get path/entry.md --llm           # Summarize entry
+mx get path/entry.md --llm --no-cache # Force fresh generation
+mx search &quot;query&quot; --llm              # Synthesize results to answer query
+mx ask &quot;How do I deploy?&quot;            # Shorthand for search + synthesize
+mx ask &quot;...&quot; --show-sources          # Include source paths
+mx llm-cache stats                   # Cache statistics
+mx llm-cache clear                   # Clear cache
+</code></pre>
+<h2>Files to Create</h2>
+<h3><code>src/memex/llm_query.py</code></h3>
+<p>Core LLM operations:</p>
+<ul>
+<li><code>content_hash(content: str) -&gt; str</code> - SHA256 for cache keys</li>
+<li><code>summarize_entry(entry: KBEntry) -&gt; LLMResponse</code></li>
+<li><code>synthesize_entries(entries: list[KBEntry]) -&gt; LLMResponse</code></li>
+<li><code>answer_query(query: str, entries: list[KBEntry]) -&gt; LLMResponse</code></li>
+<li><code>_truncate_content()</code> - Handle token limits with tiktoken</li>
+</ul>
+<h3><code>src/memex/llm_cache.py</code></h3>
+<p>Cache management (stored in <code>.indices/llm_cache.json</code>):</p>
+<ul>
+<li><code>get_cached_response(operation, content_hashes, query) -&gt; CachedLLMResponse | None</code></li>
+<li><code>cache_response(operation, paths, hashes, query, model, response, tokens)</code></li>
+<li><code>clear_cache() -&gt; int</code></li>
+<li><code>cache_stats() -&gt; dict</code></li>
+</ul>
+<p>Cache key: <code>sha256(operation + sorted(content_hashes) + query)[:16]</code></p>
+<h2>Files to Modify</h2>
+<h3><code>src/memex/config.py</code></h3>
+<p>Add <code>LLMQueryConfig</code> dataclass:</p>
+<pre><code class="language-python">@dataclass
+class LLMQueryConfig:
+    enabled: bool = False
+    model: str = &quot;anthropic/claude-3-5-haiku&quot;
+    max_input_tokens: int = 8000
+    cache_enabled: bool = True
+</code></pre>
+<p>Add <code>get_llm_query_config()</code> (follow existing config loader patterns)</p>
+<h3><code>src/memex/models.py</code></h3>
+<p>Add:</p>
+<pre><code class="language-python">class LLMResponse(BaseModel):
+    operation: Literal[&quot;summarize&quot;, &quot;synthesize&quot;, &quot;answer&quot;]
+    input_paths: list[str]
+    response: str
+    model: str
+    cached: bool = False
+    token_count: int = 0
+</code></pre>
+<h3><code>src/memex/cli.py</code></h3>
+<ol>
+<li>
+<p>Add to <code>get</code> command (line ~1189):</p>
+<ul>
+<li><code>--llm</code> flag</li>
+<li><code>--no-cache</code> flag</li>
+</ul>
+</li>
+<li>
+<p>Add to <code>search</code> command (line ~973):</p>
+<ul>
+<li><code>--llm</code> flag</li>
+<li><code>--no-cache</code> flag</li>
+</ul>
+</li>
+<li>
+<p>Add new <code>ask</code> command:</p>
+<ul>
+<li>Search → load entries → call <code>answer_query()</code></li>
+<li>Options: <code>--limit</code>, <code>--show-sources</code>, <code>--no-cache</code></li>
+</ul>
+</li>
+<li>
+<p>Add <code>llm-cache</code> command group with <code>stats</code> and <code>clear</code> subcommands</p>
+</li>
+</ol>
+<h2>Config (.kbconfig)</h2>
+<pre><code class="language-yaml">llm_query:
+  enabled: true
+  model: anthropic/claude-3-5-haiku
+  max_input_tokens: 8000
+  cache_enabled: true
+</code></pre>
+<h2>Cache Format (.indices/llm_cache.json)</h2>
+<pre><code class="language-json">{
+  &quot;version&quot;: 1,
+  &quot;entries&quot;: {
+    &quot;cache_key_hash&quot;: {
+      &quot;operation&quot;: &quot;summarize&quot;,
+      &quot;input_hashes&quot;: [&quot;sha256...&quot;],
+      &quot;input_paths&quot;: [&quot;path.md&quot;],
+      &quot;query&quot;: null,
+      &quot;model&quot;: &quot;anthropic/claude-3-5-haiku&quot;,
+      &quot;response&quot;: &quot;...&quot;,
+      &quot;created_at&quot;: &quot;2024-01-14T12:00:00Z&quot;,
+      &quot;token_count&quot;: 150
+    }
+  }
+}
+</code></pre>
+<h2>Implementation Order</h2>
+<ol>
+<li>Add <code>LLMQueryConfig</code> to <code>config.py</code></li>
+<li>Create <code>llm_cache.py</code></li>
+<li>Create <code>llm_query.py</code></li>
+<li>Add <code>LLMResponse</code> to <code>models.py</code></li>
+<li>Add <code>--llm</code> to <code>mx get</code></li>
+<li>Add <code>--llm</code> to <code>mx search</code></li>
+<li>Add <code>mx ask</code> command</li>
+<li>Add <code>mx llm-cache</code> commands</li>
+</ol>
+<h2>Verification</h2>
+<pre><code class="language-bash"># Enable in config
+echo 'llm_query:\n  enabled: true' &gt;&gt; .kbconfig
+
+# Test summarize
+mx get kb/guides/quick-start.md --llm
+
+# Test cached response
+mx get kb/guides/quick-start.md --llm  # Should say &quot;(cached)&quot;
+
+# Test answer query
+mx ask &quot;How do I track issues?&quot;
+
+# Test cache management
+mx llm-cache stats
+mx llm-cache clear
+
+# Run tests
+uv run pytest tests/test_llm_query.py -v
+</code></pre>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list"><li class="empty-state">No outgoing links</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list"><li class="empty-state">No backlinks</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Typed Relations</div><p class="empty-state">No typed relations</p>
+        </div>
+        </aside>
+    </div>
+
+    <!-- Mobile search overlay -->
+    <div class="search-overlay">
+        <div class="search-overlay-header">
+            <button class="search-overlay-close" aria-label="Close search">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                </svg>
+            </button>
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
+        </div>
+        <div class="search-overlay-results"></div>
+    </div>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-inner">
+            <a href="/" class="bottom-nav-link active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>Reader</span>
+            </a>
+            <button class="bottom-nav-link bottom-nav-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Search</span>
+            </button>
+            <a href="/graph.html" class="bottom-nav-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="6" cy="6" r="2"></circle>
+                    <circle cx="18" cy="6" r="2"></circle>
+                    <circle cx="6" cy="18" r="2"></circle>
+                    <circle cx="18" cy="18" r="2"></circle>
+                    <path d="M12 10V6M12 14v4M10 12H6M14 12h4"></path>
+                </svg>
+                <span>Graph</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>

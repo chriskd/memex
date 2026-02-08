@@ -189,8 +189,14 @@ cat content.md | mx add --title="..." --tags="..." --category=... --stdin
 **Required:**
 - `--title`: Entry title
 - `--tag, --tags`: Tags (comma-separated)
-- `--category`: Target directory. If omitted and no `.kbconfig` `primary` exists, defaults to KB root (`.`) with a warning.
+
+**Category behavior:**
+- `--category`: Optional target directory.
+- If omitted and `.kbconfig` sets `primary`, `primary` is used.
+- If omitted and no `primary` is set, `mx add` writes to KB root (`.`) and warns by default.
   Tip: Use `mx categories` to discover available categories.
+- Silence the warning with:
+  - `.kbconfig`: `warn_on_implicit_category: false`
 
 **Common options:**
 - `--scope`: Target KB scope (project or user)

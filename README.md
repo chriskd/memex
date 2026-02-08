@@ -4,6 +4,12 @@
 
 CLI-first knowledge base with hybrid search, typed relations, and static site publishing. Stores Markdown with YAML frontmatter across project and user scopes. Built for humans and AI coding agents.
 
+## Start Here
+
+- `docs/README.md` (fast onboarding for new users/agents)
+- `kb/guides/quick-start.md` (KB-based quick start)
+- `kb/reference/cli.md` (full CLI reference)
+
 ## Features
 
 - **Hybrid search** — BM25 keyword + semantic embeddings, merged with Reciprocal Rank Fusion
@@ -32,6 +38,14 @@ pip install 'memex-kb[search]'
 mx --version
 ```
 
+### From Source (Repo Checkout)
+
+```bash
+uv sync --dev
+uv run mx --version
+uv run mx prime
+```
+
 Keyword search ships by default. Semantic search is optional (to avoid heavyweight ML installs by default).
 If semantic search is missing, run `mx doctor` for an install hint.
 If `mx search` fails with `ModuleNotFoundError: No module named 'whoosh'`, install keyword search deps with
@@ -40,8 +54,13 @@ Requires Python 3.11+.
 
 ## Quick Start
 
+If you're running from a repo checkout (without installing `mx` globally), prefix commands with `uv run`
+(e.g., `uv run mx init`, `uv run mx add ...`).
+
 ```bash
-mx init                                    # Create kb/ and .kbconfig
+mx onboard --init --yes                    # Guided setup + init if missing (includes sample entry)
+# or:
+mx init --sample                           # Create kb/ + .kbconfig + inbox/first-task.md
 mx add --title="Setup" --tags="docs" \
        --category=guides --content="..."   # Add an entry
 mx list --limit=5                          # Confirm entry path
@@ -172,6 +191,7 @@ mx batch              # Multiple commands, one invocation
 ```yaml
 kb_path: ./kb
 primary: guides              # Default category for mx add
+warn_on_implicit_category: true  # Warn when mx add omits --category and no primary is set
 boost_paths:
   - guides/*                 # Search ranking boost
 default_tags:

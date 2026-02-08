@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#fafaf9">
+    <title>ChatGPT 5.2 Pro Dense Memory Signals Reference - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <!-- Mobile menu button (hamburger) -->
+            <button class="mobile-menu-btn" aria-label="Open navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="/" class="logo">
+                <div class="logo-text">meme<span style="color: var(--accent);">x</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+
+            <!-- Mobile search button -->
+            <button class="mobile-search-btn" aria-label="Open search">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">design</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/design/chunking-system-design.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Chunking System Design</span>
+                    </a>
+                    <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">LLM Query Processing Feature Plan</span>
+                    </a>
+                    <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Frontmatter Edge Types</span>
+                    </a>
+                    <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Relations Graph Overview</span>
+                    </a>
+                    <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Wikilink Edge Behavior</span>
+                    </a>
+                    <a href="/design/state-diagrams.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MX State Diagrams</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup (Deprecated)</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Relations Graph Overview</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup (Deprecated)</span>
+            </a>
+            <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+            </a>
+            <a href="/design/state-diagrams.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MX State Diagrams</span>
+            </a>
+            <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Frontmatter Edge Types</span>
+            </a>
+            <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Wikilink Edge Behavior</span>
+            </a>
+            <a href="/design/chunking-system-design.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Chunking System Design</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">LLM Query Processing Feature Plan</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex-kb"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="entry-path">reference/chat-gpt-5.2-pro-dense-memory-signals-reference</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">
+                    Created: <span>Jan 25, 2026</span>
+                </div>
+                
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/reference.html" class="tag">reference</a>
+                
+                <a href="/tags/ai.html" class="tag">ai</a>
+                
+                <a href="/tags/memory.html" class="tag">memory</a>
+                
+                <a href="/tags/signals.html" class="tag">signals</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <p>My prompt:</p>
+<p>Research Prompt: Dense Memory Signals for Agent Context Injection</p>
+<p>Context</p>
+<p>I'm building an agent memory system for LLM-based coding assistants (like Claude Code, Cursor, Codex). The core problem: when an agent's context window is cleared or a new session starts, valuable context is lost—decisions made, gotchas discovered, work in progress, etc.</p>
+<p>Dense memory signals are compact, high-information-density snippets that can be injected at session start to restore context without consuming many tokens. The goal is to find signals with the best ratio of usefulness to token cost.</p>
+<p>What I Already Know</p>
+<p>I've researched existing tools and identified some signals:</p>
+<p>Tier 1 (High Value, Low Tokens):</p>
+<ul>
+<li>Decisions made + rationale (~15 tokens, critical—LLM can't infer this)</li>
+<li>Gotchas/warnings discovered (~10 tokens, prevents repeated mistakes)</li>
+<li>User corrections (~10 tokens, direct mistake prevention)</li>
+<li>Git staged files (~5 tokens, interrupted work signal)</li>
+<li>Git stash contents (~5 tokens, parked work context)</li>
+<li>Branch name (~3 tokens, feature context)</li>
+<li>Build status (~3 tokens, &quot;FAILING&quot; changes everything)</li>
+<li>Files read but NOT modified (~10 tokens, research context)</li>
+</ul>
+<p>Tier 2 (Medium Value):</p>
+<ul>
+<li>Files touched with context (~15 tokens)</li>
+<li>Summary of what was done (~25 tokens)</li>
+<li>Questions the LLM asked (~15 tokens)</li>
+<li>Tool usage patterns (~10 tokens)</li>
+<li>Errors encountered (~15 tokens)</li>
+<li>TODOs added/removed (~10 tokens)</li>
+</ul>
+<p>Existing tools' approaches:</p>
+<ul>
+<li>claude-mem: Causal observations (what led to what)</li>
+<li>Mem0: Extract facts, not transcripts (~90% token reduction)</li>
+<li>Letta/MemGPT: Message buffer + core memory blocks + archival</li>
+</ul>
+<p>What I Need Help With</p>
+<ol>
+<li>Identify non-obvious signals I'm missing:</li>
+</ol>
+<ul>
+<li>What context does a developer carry in their head that an LLM loses between sessions?</li>
+<li>What signals are available from git, IDE state, project structure, CI/CD, etc. that aren't commonly captured?</li>
+<li>What &quot;meta&quot; signals exist (patterns across sessions, user habits, team conventions)?</li>
+</ul>
+<ol start="2">
+<li>Evaluate signal properties:
+For each signal you identify, estimate:</li>
+</ol>
+<ul>
+<li>Token cost: How many tokens to represent it?</li>
+<li>Information value: High/Medium/Low—how much does this help the agent?</li>
+<li>Extraction difficulty: Easy (automated) / Medium (heuristics) / Hard (requires LLM inference)</li>
+<li>Uniqueness: Can the LLM infer this from code, or is it hidden context only humans know?</li>
+</ul>
+<ol start="3">
+<li>Consider the &quot;anti-signals&quot;:</li>
+</ol>
+<ul>
+<li>What signals seem useful but actually waste tokens or mislead the agent?</li>
+<li>What context should NOT be injected (too noisy, too stale, inferrable from code)?</li>
+</ul>
+<ol start="4">
+<li>Explore scaling strategies:
+When an agent touches 50+ files across many sessions, raw signal lists explode. How should signals be:</li>
+</ol>
+<ul>
+<li>Summarized hierarchically (file → directory → project level)</li>
+<li>Decayed over time (recent = full detail, old = compressed)</li>
+<li>Clustered semantically (group related signals)</li>
+<li>Filtered by relevance to current task</li>
+</ul>
+<ol start="5">
+<li>Cross-domain inspiration:</li>
+</ol>
+<ul>
+<li>What do human developers do to restore context? (Notes, git commit messages, PR descriptions, etc.)</li>
+<li>What do other domains do for context continuity? (Medical handoffs, shift changes, project management)</li>
+<li>What research exists on human memory cues that could apply?</li>
+</ul>
+<p>Constraints</p>
+<ul>
+<li>Token budget: The injection should be ~100-300 tokens for a &quot;dense&quot; format, expandable to ~500-1000 for &quot;rich&quot; format</li>
+<li>Extraction source: Primarily git history, file system, session logs (parsed conversation transcripts), and project config</li>
+<li>No user action required: Signals should be automatically extractable without user tagging or annotation</li>
+</ul>
+<p>Desired Output</p>
+<p>Please provide:</p>
+<ol>
+<li>A prioritized list of signals I haven't considered, with the properties above</li>
+<li>Critiques of my current signal list—what's overrated, underrated, or missing nuance?</li>
+<li>A proposed signal taxonomy—how would you categorize signals (by source? by value? by extraction method?)</li>
+<li>Scaling recommendations for when signal volume gets high</li>
+<li>Any relevant research, papers, or prior art I should investigate</li>
+</ol>
+<p>Example Output Format</p>
+<h2>Signal: [Name]</h2>
+<ul>
+<li><strong>Description</strong>: What this captures</li>
+<li><strong>Token cost</strong>: ~N tokens</li>
+<li><strong>Value</strong>: High/Medium/Low—why</li>
+<li><strong>Extraction</strong>: Easy/Medium/Hard—how</li>
+<li><strong>Uniqueness</strong>: Can LLM infer this? Why/why not?</li>
+<li><strong>Example</strong>: &quot;Branch: feat/caching | Stash: 'WIP: redis connection pooling'&quot;</li>
+</ul>
+<hr />
+<p>That prompt is self-contained and should elicit useful research contributions from other LLMs. You could also ask specific follow-up questions like:</p>
+<ul>
+<li>&quot;Focus specifically on git-derived signals I might be missing&quot;</li>
+<li>&quot;What signals exist in IDE state (cursor position, open tabs, breakpoints)?&quot;</li>
+<li>&quot;How do enterprise knowledge management systems handle context handoff?&quot;</li>
+</ul>
+<p>======++++++REPLY+++++=====
+You’re already thinking in the right direction: most “lost context” isn’t <em>code</em>, it’s the invisible stuff a dev (or agent) just learned: <strong>what we’re trying to accomplish, what we tried that failed, what we decided, what’s currently broken, and what the next step is</strong>.</p>
+<p>Below are (1) high-leverage signals you’re missing, (2) critiques of your list, (3) a taxonomy that’s practical for extraction + ranking, (4) scaling tactics when the signal list explodes, and (5) research/prior art worth mining.</p>
+<hr />
+<h2>1) Prioritized “missing” dense signals</h2>
+<p>I’m prioritizing by <em>usefulness ÷ tokens</em>, and by “can’t be inferred from code”.</p>
+<h3>Signal: Next Step / Open Loop</h3>
+<ul>
+<li><strong>Description</strong>: The single most valuable handoff cue: what the agent was about to do next (or what remains undone).</li>
+<li><strong>Token cost</strong>: ~10–25</li>
+<li><strong>Value</strong>: <strong>High</strong> — eliminates “re-figure out what I was doing” time.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — infer from final transcript turns + last tool calls + last git changes.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not reliably inferable from repo state.</li>
+<li><strong>Example</strong>: “Next: fix failing <code>TestCacheEviction::ttl_expired</code> by adjusting clock mock in <code>cache_test.go</code>.”</li>
+</ul>
+<hr />
+<h3>Signal: Current Blocker + Why</h3>
+<ul>
+<li><strong>Description</strong>: What’s preventing progress right now (missing secret, flaky test, unclear spec, reproducer unavailable).</li>
+<li><strong>Token cost</strong>: ~10–25</li>
+<li><strong>Value</strong>: <strong>High</strong> — prevents the classic “repeat same dead end”.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — parse last error outputs + “I can’t because …” statements.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — often external or transient.</li>
+<li><strong>Example</strong>: “Blocked: can’t run integration tests—<code>REDIS_URL</code> missing locally.”</li>
+</ul>
+<hr />
+<h3>Signal: Merge/Rebase/Conflict State</h3>
+<ul>
+<li><strong>Description</strong>: Whether git is mid-merge/rebase/cherry-pick and which files are conflicted.</li>
+<li><strong>Token cost</strong>: ~8–20</li>
+<li><strong>Value</strong>: <strong>High</strong> — changes everything about the next actions.</li>
+<li><strong>Extraction</strong>: <strong>Easy</strong> — detect <code>.git/MERGE_HEAD</code>, <code>.git/rebase-apply</code>, <code>git status</code>.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not in code; pure workflow state.</li>
+<li><strong>Example</strong>: “REBASE in progress; conflicts: <code>src/api.ts</code>, <code>package-lock.json</code>.”</li>
+</ul>
+<hr />
+<h3>Signal: Dirty Working Tree Diffstat (Staged + Unstaged + Untracked)</h3>
+<ul>
+<li><strong>Description</strong>: A compact snapshot of “how much is in flight” + where, without listing every file.</li>
+<li><strong>Token cost</strong>: ~10–20</li>
+<li><strong>Value</strong>: <strong>High</strong> — signals incomplete work and risk.</li>
+<li><strong>Extraction</strong>: <strong>Easy</strong> — <code>git status --porcelain</code>, <code>git diff --stat</code>, <code>git diff --cached --stat</code>.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium</strong> — partially inferable by looking at repo, but not from code alone.</li>
+<li><strong>Example</strong>: “Dirty: staged 2 files (+45/-10), unstaged 5 (+120/-40), untracked: 1.”</li>
+</ul>
+<hr />
+<h3>Signal: Ahead/Behind + Unpushed Commits Titles</h3>
+<ul>
+<li><strong>Description</strong>: Whether local work is unpublished + <em>what it is</em> (commit subject lines).</li>
+<li><strong>Token cost</strong>: ~10–25 (top 1–3 commit subjects)</li>
+<li><strong>Value</strong>: <strong>High</strong> — tells the agent “the story so far”.</li>
+<li><strong>Extraction</strong>: <strong>Easy</strong> — <code>git status -sb</code>, <code>git log @{u}.. --oneline -n 3</code>.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium</strong> — code contains changes, but intent is compressed in subjects.</li>
+<li><strong>Example</strong>: “Ahead 2: <code>Add redis pool</code>, <code>Fix TTL race in eviction</code>.”</li>
+</ul>
+<hr />
+<h3>Signal: Last Command(s) Run + Exit Code</h3>
+<ul>
+<li><strong>Description</strong>: The most recent build/test/lint/dev-server command and whether it succeeded.</li>
+<li><strong>Token cost</strong>: ~10–30</li>
+<li><strong>Value</strong>: <strong>High</strong> — beats a vague “build failing”.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — capture terminal/tool logs; normalize + redact paths.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not deducible from code.</li>
+<li><strong>Example</strong>: “Last: <code>pytest -k cache</code> → FAIL (3), <code>ruff check</code> → OK.”</li>
+</ul>
+<hr />
+<h3>Signal: Failure Signature (Canonical Error Fingerprint)</h3>
+<ul>
+<li><strong>Description</strong>: One-line normalized summary of the <em>dominant</em> failure (error type + location + key message).</li>
+<li><strong>Token cost</strong>: ~8–18</li>
+<li><strong>Value</strong>: <strong>High</strong> — rehydrates debugging context instantly.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — parse logs; dedupe stack traces; pick top recurring signature.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — ephemeral runtime info.</li>
+<li><strong>Example</strong>: “FAIL: <code>KeyError: 'user_id'</code> at <code>src/auth.py:112</code> (in <code>LoginHandler</code>).”</li>
+</ul>
+<hr />
+<h3>Signal: Active Working Set (Open Tabs + Primary Cursor Location)</h3>
+<ul>
+<li><strong>Description</strong>: The “mental desktop”: which files were open and where the cursor last was.</li>
+<li><strong>Token cost</strong>: ~15–40 (top 3–8 files + 1–3 cursor spots)</li>
+<li><strong>Value</strong>: <strong>High</strong> — humans use this as their fastest context cue.</li>
+<li><strong>Extraction</strong>: <strong>Easy/Medium</strong> — easy if IDE exposes state; medium if inferred from recent reads/edits.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not in repo; purely session state.</li>
+<li><strong>Example</strong>: “Focus: <code>src/cache/pool.ts:188</code>; tabs: <code>pool.ts</code>, <code>redis.ts</code>, <code>cache.test.ts</code>.”</li>
+</ul>
+<p><em>Why I’m so confident this matters:</em> task-context tooling in IDEs (e.g., Eclipse Mylyn / Mylar) explicitly models “task context” from developer interaction and uses it to focus what you see. That’s basically a human “dense memory signal” system. (<a href="https://eclipse.dev/mylyn/publications/2006-11-mylar-fse.pdf?utm_source=chatgpt.com" title="Using Task Context to Improve Programmer Productivity">Eclipse</a>)</p>
+<hr />
+<h3>Signal: Navigation Trace (Symbols/Paths Investigated)</h3>
+<ul>
+<li><strong>Description</strong>: A compressed “investigation trail”: key symbols, call chain, or files traversed during debugging.</li>
+<li><strong>Token cost</strong>: ~15–40</li>
+<li><strong>Value</strong>: <strong>High</strong> — prevents re-reading the same rabbit hole; restores the mental model.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — from IDE navigation events / “go to definition” logs / conversation + file reads.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium/High</strong> — code exists, but “what we already checked” isn’t.</li>
+<li><strong>Example</strong>: “Trace: <code>RequestHandler→AuthSvc→TokenRepo</code>; checked <code>JWTClaims</code> parsing; not culprit.”</li>
+</ul>
+<hr />
+<h3>Signal: Environment / Toolchain Fingerprint</h3>
+<ul>
+<li><strong>Description</strong>: The minimal environment facts that commonly break builds: language versions, package manager, OS/arch, container vs host.</li>
+<li><strong>Token cost</strong>: ~10–30</li>
+<li><strong>Value</strong>: <strong>High</strong> (conditional) — huge when mismatch caused the bug.</li>
+<li><strong>Extraction</strong>: <strong>Easy/Medium</strong> — read <code>.tool-versions</code>, <code>.nvmrc</code>, <code>pyproject</code>, plus runtime introspection.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — cannot infer from code reliably.</li>
+<li><strong>Example</strong>: “Env: Node 20, pnpm 9; Python 3.12 venv active; running in Docker.”</li>
+</ul>
+<hr />
+<h3>Signal: Local Services / Containers / Ports Running</h3>
+<ul>
+<li><strong>Description</strong>: What’s currently running locally (db, redis, queues) + which compose profile.</li>
+<li><strong>Token cost</strong>: ~10–25</li>
+<li><strong>Value</strong>: <strong>High</strong> — avoids “why can’t I connect” loops.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — <code>docker ps</code>, compose state, dev scripts logs.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — pure runtime state.</li>
+<li><strong>Example</strong>: “Services: <code>docker compose up redis,postgres</code> (ports 6379/5432).”</li>
+</ul>
+<hr />
+<h3>Signal: “Hidden Config Changed” Flag</h3>
+<ul>
+<li><strong>Description</strong>: Detect if developer touched config files that are often excluded from commits (<code>.env</code>, <code>config/local.*</code>) and summarize <em>that</em> without leaking secrets.</li>
+<li><strong>Token cost</strong>: ~8–20</li>
+<li><strong>Value</strong>: <strong>High</strong> — explains behavior differences.</li>
+<li><strong>Extraction</strong>: <strong>Easy</strong> for “changed/not changed”; <strong>Hard</strong> to safely summarize content (needs redaction rules).</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong></li>
+<li><strong>Example</strong>: “Local config changed: <code>.env</code> edited (secrets redacted); <code>FEATURE_X=true</code> toggled.”</li>
+</ul>
+<hr />
+<h3>Signal: Migration / Schema State</h3>
+<ul>
+<li><strong>Description</strong>: Pending migrations, last applied migration, or “DB schema drift”.</li>
+<li><strong>Token cost</strong>: ~10–30</li>
+<li><strong>Value</strong>: <strong>High</strong> for backend work — prevents subtle runtime failures.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — framework-specific (Django/Alembic/Prisma/Flyway/etc.).</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not deducible from code alone.</li>
+<li><strong>Example</strong>: “Pending: <code>20260114_add_user_idx.sql</code>; not applied locally.”</li>
+</ul>
+<hr />
+<h3>Signal: Dependency Delta Summary</h3>
+<ul>
+<li><strong>Description</strong>: “What dependencies changed” in one line (esp. lockfile changes), or “this PR is mostly dependency churn”.</li>
+<li><strong>Token cost</strong>: ~10–30</li>
+<li><strong>Value</strong>: <strong>High</strong> — clarifies risk + why diffs are huge.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — parse lockfile diff; choose top N packages by impact.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium/High</strong> — code shows lockfile changes but not the intention/impact.</li>
+<li><strong>Example</strong>: “Deps: bump <code>redis</code> 5.0→5.2, <code>pydantic</code> 2.6→2.7.”</li>
+</ul>
+<hr />
+<h3>Signal: Repo Workflow Contract (How to Build/Test/Lint Here)</h3>
+<ul>
+<li><strong>Description</strong>: The “rules of the repo” distilled from configs: how to run tests, formatters, linters, pre-commit, CI entrypoints.</li>
+<li><strong>Token cost</strong>: ~20–60</li>
+<li><strong>Value</strong>: <strong>High</strong> — prevents agent doing the wrong thing or inventing commands.</li>
+<li><strong>Extraction</strong>: <strong>Easy/Medium</strong> — read <code>Makefile</code>, <code>package.json</code>, <code>pyproject</code>, <code>.pre-commit-config.yaml</code>, CI YAML.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium</strong> — inferable by reading files, but costly to rediscover each session.</li>
+<li><strong>Example</strong>: “Workflow: <code>make test</code>, <code>make lint</code>; fmt via <code>ruff format</code>; CI uses <code>pytest -m 'not slow'</code>.”</li>
+</ul>
+<hr />
+<h3>Signal: “Tried &amp; Failed” Attempts (Dead Ends Register)</h3>
+<ul>
+<li><strong>Description</strong>: A small list of approaches attempted and why they were rejected (e.g., “tried caching at layer X; broke invariants”).</li>
+<li><strong>Token cost</strong>: ~20–60</li>
+<li><strong>Value</strong>: <strong>High</strong> — huge loop-prevention payoff.</li>
+<li><strong>Extraction</strong>: <strong>Hard</strong> — requires transcript understanding + causality extraction.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — not in code; prevents repeated exploration.</li>
+<li><strong>Example</strong>: “Tried: memoize <code>getUser()</code> (broke auth refresh). Rejected: global singleton cache (tests flaky).”</li>
+</ul>
+<p>This is very aligned with “causal observations” approaches, and with research emphasizing structured, consolidated memory rather than transcripts. (<a href="https://github.com/thedotmack/claude-mem?utm_source=chatgpt.com" title="GitHub - thedotmack/claude-mem: A Claude Code plugin that automatically ...">GitHub</a>)</p>
+<hr />
+<h3>Signal: Assumptions Ledger (Validated vs Unvalidated)</h3>
+<ul>
+<li><strong>Description</strong>: Short list of key assumptions and whether they were confirmed.</li>
+<li><strong>Token cost</strong>: ~15–40</li>
+<li><strong>Value</strong>: <strong>Medium/High</strong> — helps agent reason without hallucinating constraints.</li>
+<li><strong>Extraction</strong>: <strong>Hard</strong> — needs inference + confidence tagging.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong></li>
+<li><strong>Example</strong>: “Assumptions: Redis available in prod ✅; TTL must be per-tenant ✅; clock monotonic ❓.”</li>
+</ul>
+<hr />
+<h3>Signal: Compatibility / Constraints Snapshot</h3>
+<ul>
+<li><strong>Description</strong>: Non-negotiables: supported versions, API compatibility, performance budget, security constraints.</li>
+<li><strong>Token cost</strong>: ~15–50</li>
+<li><strong>Value</strong>: <strong>High</strong></li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — configs + CI matrix + transcript.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — often not explicit in code.</li>
+<li><strong>Example</strong>: “Constraints: must support Python 3.10–3.12; no new deps; keep API stable.”</li>
+</ul>
+<hr />
+<h3>Signal: Ownership / Review Surface (CODEOWNERS + “touches risky modules”)</h3>
+<ul>
+<li><strong>Description</strong>: A one-line hint about who owns touched areas, or “this change affects auth/billing”.</li>
+<li><strong>Token cost</strong>: ~10–25</li>
+<li><strong>Value</strong>: <strong>Medium/High</strong> — improves decisions about scope and safety.</li>
+<li><strong>Extraction</strong>: <strong>Easy/Medium</strong> — parse CODEOWNERS + changed paths.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium</strong> — not inferable from code logic.</li>
+<li><strong>Example</strong>: “Touches <code>auth/*</code> (owned by @security-team).”</li>
+</ul>
+<hr />
+<h3>Signal: Work Item / PR Anchor (If Derivable)</h3>
+<ul>
+<li><strong>Description</strong>: Issue/PR number and title, if encoded in branch/commit messages (or local PR metadata).</li>
+<li><strong>Token cost</strong>: ~8–25</li>
+<li><strong>Value</strong>: <strong>Medium/High</strong> — restores “why this exists”.</li>
+<li><strong>Extraction</strong>: <strong>Medium</strong> — regex branch names, parse commit subjects.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong> — intent signal.</li>
+<li><strong>Example</strong>: “Work item: <code>#4821 Cache token introspection results</code>.”</li>
+</ul>
+<hr />
+<h3>Signal: “Task Context Model” (Ranked code elements, not file lists)</h3>
+<ul>
+<li><strong>Description</strong>: Instead of “50 touched files”, store a <em>ranked</em> set of relevant elements (files + symbols) with a “degree-of-interest” score.</li>
+<li><strong>Token cost</strong>: ~30–80</li>
+<li><strong>Value</strong>: <strong>High</strong> at scale — fights token blowups.</li>
+<li><strong>Extraction</strong>: <strong>Medium/Hard</strong> — requires interaction logging + scoring.</li>
+<li><strong>Uniqueness</strong>: <strong>High</strong></li>
+<li><strong>Example</strong>: “Context(top): <code>CachePool.acquire</code>, <code>RedisClient.connect</code>, <code>TTLClock.now</code>…”</li>
+</ul>
+<p>This is directly inspired by task-focused interface research/tooling (Mylyn/Mylar) and newer “code context model” work (e.g., the ICSE’23 “TASK CONTEXT” tool). (<a href="https://eclipse.dev/mylyn/publications/2006-11-mylar-fse.pdf?utm_source=chatgpt.com" title="Using Task Context to Improve Programmer Productivity">Eclipse</a>)</p>
+<hr />
+<h3>Signal: “Gist Episode” for a Session (Ultra-compressed)</h3>
+<ul>
+<li><strong>Description</strong>: 1–3 sentence gist of what happened, plus pointers/IDs to full details if needed.</li>
+<li><strong>Token cost</strong>: ~40–90</li>
+<li><strong>Value</strong>: <strong>Medium/High</strong> — good as a fallback when you have many sessions.</li>
+<li><strong>Extraction</strong>: <strong>Hard</strong> — needs summarization that preserves decisions + blockers.</li>
+<li><strong>Uniqueness</strong>: <strong>Medium</strong> — overlaps with other signals, but good for retrieval.</li>
+<li><strong>Example</strong>: “Session gist: Implemented redis pool; tests failing due to mocked time; next fix in <code>cache_test.go</code>.”</li>
+</ul>
+<p>This resembles “gist memory” ideas (compress episodes and retrieve details when needed). (<a href="https://arxiv.org/abs/2402.09727?utm_source=chatgpt.com" title="A Human-Inspired Reading Agent with Gist Memory of Very Long Contexts">arXiv</a>)</p>
+<hr />
+<h2>2) Critiques of your current signal list (overrated / underrated / nuance)</h2>
+<h3>What’s underrated or missing nuance</h3>
+<ul>
+<li>
+<p><strong>Build status (~3 tokens)</strong>: totally right that “FAILING changes everything”, but <strong>“FAILING” without <em>which command/target + top failing signature</em></strong> is often too lossy. I’d promote:</p>
+<ul>
+<li>“Last command + exit code”</li>
+<li>“Canonical failure signature”</li>
+<li>“Top failing tests”</li>
+</ul>
+</li>
+<li>
+<p><strong>Git staged files / stash</strong>: excellent, but incomplete without:</p>
+<ul>
+<li><strong>unstaged + untracked counts</strong> (people often forget they exist)</li>
+<li><strong>diffstat</strong> (size matters a lot for risk + mental rehydration)</li>
+</ul>
+</li>
+<li>
+<p><strong>Decisions + rationale</strong>: best Tier 1 item. Small addition that increases value a lot:</p>
+<ul>
+<li>include <strong>“alternatives rejected”</strong> (even 3–6 tokens) and whether decision is <strong>reversible</strong>.</li>
+</ul>
+</li>
+<li>
+<p><strong>Errors encountered (~15 tokens)</strong>: make it <em>one canonical signature</em>, not a rotating list of stack traces.</p>
+</li>
+</ul>
+<h3>What’s potentially overrated (or easy to accidentally bloat)</h3>
+<ul>
+<li>
+<p><strong>Files read but NOT modified (~10 tokens)</strong>: useful, but <strong>very easy to explode</strong> and often too low-signal if the agent skimmed a bunch of stuff. I’d compress it as:</p>
+<ul>
+<li>“investigation trace” (top 3–5 files/symbols)</li>
+<li>or directory-level cluster (“looked in <code>src/auth/*</code>”)</li>
+</ul>
+</li>
+<li>
+<p><strong>Questions the LLM asked (~15 tokens)</strong>: keep only <strong>unanswered</strong> questions or “open unknowns”, not every question.</p>
+</li>
+<li>
+<p><strong>Tool usage patterns (~10 tokens)</strong>: usually low value unless it encodes something actionable (“we can’t use docker here”, “no network”, “tests too slow so we used unit-only”).</p>
+</li>
+</ul>
+<h3>One subtle “gotcha” with dense signals</h3>
+<p>Some signals become harmful if they’re <strong>stale but sound authoritative</strong>. Any inferred signal (“we think cause is X”) should carry:</p>
+<ul>
+<li>a timestamp or commit anchor, and</li>
+<li>a confidence flag (“hypothesis” vs “confirmed”).</li>
+</ul>
+<hr />
+<h2>3) Proposed signal taxonomy</h2>
+<p>A taxonomy that stays useful under scaling usually needs <em>two axes</em>: <strong>(A) what the signal means</strong> and <strong>(B) how stable it is</strong>.</p>
+<h3>Axis A: Semantic category</h3>
+<ol>
+<li>
+<p><strong>Intent &amp; Progress</strong></p>
+<ul>
+<li>goal, next step, done/remaining, blockers</li>
+</ul>
+</li>
+<li>
+<p><strong>Decisions &amp; Constraints</strong></p>
+<ul>
+<li>decisions + rationale, rejected alternatives, invariants, compatibility requirements</li>
+</ul>
+</li>
+<li>
+<p><strong>Execution State</strong></p>
+<ul>
+<li>last commands, failing signature/tests, running services, CI status</li>
+</ul>
+</li>
+<li>
+<p><strong>Repo / Workflow State</strong></p>
+<ul>
+<li>branch/upstream, ahead/behind, diffstat, merge/rebase state, stash</li>
+</ul>
+</li>
+<li>
+<p><strong>Task Context Model</strong></p>
+<ul>
+<li>ranked files/symbols, navigation trace, open tabs/cursor, search terms</li>
+</ul>
+</li>
+<li>
+<p><strong>Risk Register</strong></p>
+<ul>
+<li>known pitfalls, security/perf risks, “touches auth/billing”</li>
+</ul>
+</li>
+<li>
+<p><strong>Human/Team Conventions</strong></p>
+<ul>
+<li>lint/format rules, codeowners, review norms, user preferences/corrections</li>
+</ul>
+</li>
+</ol>
+<h3>Axis B: Stability / half-life</h3>
+<ul>
+<li><strong>Ephemeral (minutes–hours)</strong>: cursor position, open tabs, running containers, last command</li>
+<li><strong>Session-stable (hours–days)</strong>: current blocker, failing tests, “next step”, diffstat</li>
+<li><strong>Task-stable (days–weeks)</strong>: decisions, constraints, gotchas, rejected approaches</li>
+<li><strong>Project-stable (weeks–months)</strong>: conventions, build workflow, codeowners</li>
+</ul>
+<p>Why this matters: you can allocate token budget by half-life. Old ephemeral stuff should decay to zero aggressively.</p>
+<h3>Bonus axis that helps ranking: “inferability”</h3>
+<ul>
+<li><strong>Non-inferable</strong> (inject aggressively): decisions, blockers, failed attempts, runtime errors</li>
+<li><strong>Inferable</strong> (inject only if cheap or high relevance): file lists, summaries of changes, tool usage</li>
+</ul>
+<hr />
+<h2>4) Scaling recommendations when signal volume explodes</h2>
+<p>When you hit “50+ files across many sessions”, you need to stop thinking “list” and start thinking <strong>index + retrieval + salience</strong> (your own notes already point here; claude-mem also emphasizes progressive disclosure and layered retrieval). (<a href="https://github.com/thedotmack/claude-mem" title="GitHub - thedotmack/claude-mem: A Claude Code plugin that automatically captures everything Claude does during your coding sessions, compresses it with AI (using Claude's agent-sdk), and injects relevant context back into future sessions.">GitHub</a>)</p>
+<h3>A. Budget by category, not by raw count</h3>
+<p>Example dense budget (≈200–250 tokens total):</p>
+<ul>
+<li>60 tokens: Decisions/Constraints (non-inferable, durable)</li>
+<li>60 tokens: State (git + build/test + blockers)</li>
+<li>60 tokens: Next step + top failure signature + open unknowns</li>
+<li>30 tokens: Task context model (top 3 files/symbols)</li>
+</ul>
+<p>This prevents “files touched” from eating the whole injection.</p>
+<h3>B. Hierarchical summarization: file → directory → subsystem</h3>
+<p>For touched/read files:</p>
+<ul>
+<li>
+<p><strong>Level 0</strong>: “Touched: 47 files”</p>
+</li>
+<li>
+<p><strong>Level 1</strong>: “<code>src/cache/*</code> 18, <code>src/auth/*</code> 9, <code>infra/*</code> 6…”</p>
+</li>
+<li>
+<p><strong>Level 2 (only for top clusters)</strong>: list top 3–5 files <em>with a 3–6 token role label</em>:</p>
+<ul>
+<li>“<code>src/cache/pool.ts</code> (pool logic), <code>redis.ts</code> (client), <code>cache.test.ts</code> (TTL tests)”</li>
+</ul>
+</li>
+</ul>
+<p>Role labels are cheap and massively improve usefulness.</p>
+<h3>C. Decay by time <em>and</em> by stability</h3>
+<p>Use half-lives:</p>
+<ul>
+<li>cursor/open tabs: half-life ~2 hours</li>
+<li>build failures: half-life until next green run</li>
+<li>decisions: half-life weeks, but supersede if contradicted</li>
+</ul>
+<p>MemoryBank explicitly explores time-based updating inspired by forgetting curves (and more broadly, time/decay is a common memory-system lever). (<a href="https://arxiv.org/abs/2305.10250?utm_source=chatgpt.com" title="MemoryBank: Enhancing Large Language Models with Long-Term Memory">arXiv</a>)</p>
+<h3>D. Cluster semantically + store “gist episodes”</h3>
+<p>Store per-session “gist” plus structured atomic notes, then link them into a network you keep updated as new memories arrive.</p>
+<p>Practical implementation for your case:</p>
+<ul>
+<li>Create <strong>atomic notes</strong> for decisions, gotchas, blockers, failed attempts.</li>
+<li>Create <strong>episodes</strong> for each work session (1–3 sentence gist + pointers).</li>
+<li>Link episodes ↔ atomic notes ↔ files/directories.</li>
+</ul>
+<h3>E. Relevance filtering: don’t inject until you know the user’s next request</h3>
+<p>If your system can inject after the first user prompt (or can re-rank right after it), do:</p>
+<ol>
+<li>Inject only <strong>project-stable + last-known critical state</strong> at session start (≈80–150 tokens).</li>
+<li>After user prompt, fetch task-relevant notes (top-K by similarity + recency + type weight).</li>
+</ol>
+<p>This is essentially “progressive disclosure”: start with an index and pull details when needed (claude-mem’s MCP workflow is explicitly built around this idea). (<a href="https://github.com/thedotmack/claude-mem" title="GitHub - thedotmack/claude-mem: A Claude Code plugin that automatically captures everything Claude does during your coding sessions, compresses it with AI (using Claude's agent-sdk), and injects relevant context back into future sessions.">GitHub</a>)</p>
+<h3>F. Scoring function for what makes it into the 100–300 token capsule</h3>
+<p>A simple salience score you can implement without an LLM:</p>
+<ul>
+<li><strong>BaseWeight(type)</strong> × <strong>RecencyDecay</strong> × <strong>UniquenessBoost</strong> × <strong>RiskBoost</strong> × <strong>TaskMatch</strong></li>
+</ul>
+<p>Where:</p>
+<ul>
+<li><strong>UniquenessBoost</strong> high for decisions/blockers/errors/failed attempts</li>
+<li><strong>RiskBoost</strong> high for auth/billing/migrations/infra</li>
+<li><strong>TaskMatch</strong> from branch name + current prompt + current file focus</li>
+</ul>
+<p>Then pick top-K per category to preserve diversity.</p>
+<h3>G. Explicit supersession + confidence tagging</h3>
+<p>Every memory item should support:</p>
+<ul>
+<li><code>supersedes=&lt;id&gt;</code> and/or <code>status=deprecated</code></li>
+<li><code>confidence={hypothesis|likely|confirmed}</code></li>
+<li><code>anchor={commit sha | timestamp | build id}</code></li>
+</ul>
+<p>This prevents stale cues from becoming misinformation.</p>
+<hr />
+<h2>5) Cross-domain inspiration (human handoffs) you can steal shamelessly</h2>
+<h3>Use SBAR / I-PASS as the <em>format</em> of your injection capsule</h3>
+<p>Medical handoff tools exist because handoffs are exactly the “context loss” problem you’re describing.</p>
+<ul>
+<li><strong>SBAR</strong> = <em>Situation, Background, Assessment, Recommendation</em> — an intentionally compressed structure for fast, high-signal transfer. (<a href="https://link.springer.com/content/pdf/10.1186/s40886-018-0073-1.pdf?utm_source=chatgpt.com" title="Situation, Background, Assessment, Recommendation (SBAR) Communication ...">Springer</a>)</li>
+<li><strong>I-PASS</strong> is another evidence-based handoff bundle associated with reduced medical errors in studies (often cited ~23% reduction in medical errors / ~30% in preventable adverse events, depending on study/design). (<a href="https://link.springer.com/article/10.1186/s12909-024-05880-7?utm_source=chatgpt.com" title="Secondary analysis of hand-offs in internal medicine using the I-PASS ...">Springer</a>)</li>
+</ul>
+<p>Mapping to coding sessions:</p>
+<ul>
+<li><strong>Situation</strong>: current objective + severity (is the build broken? is prod impacted?)</li>
+<li><strong>Background</strong>: decisions, constraints, relevant context</li>
+<li><strong>Assessment</strong>: what’s true now (state + failures + what we tried)</li>
+<li><strong>Recommendation</strong>: next step(s) + contingencies</li>
+</ul>
+<h3>Safety-critical “shift handover” checklists</h3>
+<p>Industries like chemical plants treat shift handover as a high-risk moment and use structured logs/checklists emphasizing “ongoing tasks”, “abnormal conditions”, and “explicitly acknowledge nothing to report.” (<a href="https://process.honeywell.com/content/dam/process/en/documents/document-lists/doc_asm-consortium/white-papers/July%2031%202011%20-%20Effective%20Shift%20Handover.pdf?utm_source=chatgpt.com" title="Microsoft Word - Effective Shift HAndover_HCI2011 ... - Honeywell">Process Solutions</a>)</p>
+<p>Your analog checklist items:</p>
+<ul>
+<li>ongoing WIP (diffstat/staged/stash)</li>
+<li>abnormal conditions (failing tests, merge conflicts, migrations pending)</li>
+<li>safety issues (security concerns, secrets, data handling constraints)</li>
+<li>operational limits (compatibility constraints)</li>
+</ul>
+<h3>Human memory cue research: context cues + resumption cues</h3>
+<ul>
+<li><strong>Context-dependent memory / encoding specificity</strong>: recall improves when retrieval cues match encoding context (classic example: Godden &amp; Baddeley divers study; and broader encoding specificity principle). (<a href="https://app.nova.edu/toolbox/instructionalproducts/edd8124/fall11/1975GoddenBaddeley.pdf?utm_source=chatgpt.com" title="CONTEXT-DEPENDENT MEMORY IN TWO NATURAL ENVIRONMENTS: ON LAND AND ...">app.nova.edu</a>)
+<em>Implication</em>: injecting <strong>the same cues the agent used while working</strong> (file names, symbols, error signatures, command lines) is disproportionately effective for recall.</li>
+<li><strong>Interrupted-task effects</strong> are more nuanced than pop-psych suggests; a 2025 meta-analysis reports no reliable memory advantage for unfinished tasks but does find a general tendency to resume (Ovsiankina effect). (<a href="https://www.nature.com/articles/s41599-025-05000-w.pdf?utm_source=chatgpt.com" title="Interruption, recall and resumption: a meta-analysis of the Zeigarnik ...">Nature</a>)
+<em>Implication</em>: your “Next step / open loop” cue is still powerful—but treat it as a <strong>resumption trigger</strong>, not as guaranteed enhanced recall.</li>
+</ul>
+<hr />
+<h2>6) Research / prior art to investigate (highly relevant to your design)</h2>
+<h3>Agent / LLM memory systems</h3>
+<ul>
+<li><strong>MemGPT</strong> (hierarchical memory / paging-inspired) and the associated Letta architecture docs (core vs archival, etc.). (<a href="https://arxiv.org/pdf/2310.08560?utm_source=chatgpt.com" title="MemGPT: Towards LLMs as Operating Systems - arXiv.org">arXiv</a>)</li>
+<li><strong>Mem0 (2025)</strong>: focuses on extracting + consolidating salient memory (and a graph variant), reporting big token savings and latency reductions. (<a href="https://arxiv.org/abs/2504.19413?utm_source=chatgpt.com" title="Mem0: Building Production-Ready AI Agents with Scalable Long-Term Memory">arXiv</a>)</li>
+<li><strong>MemoryBank (AAAI)</strong>: long-term memory mechanism + time-based updating inspired by forgetting curves. (<a href="https://arxiv.org/abs/2305.10250?utm_source=chatgpt.com" title="MemoryBank: Enhancing Large Language Models with Long-Term Memory">arXiv</a>)</li>
+<li><strong>ReadAgent (2024)</strong>: “gist memory” episodes + the ability to look up details in the original text. (<a href="https://arxiv.org/abs/2402.09727?utm_source=chatgpt.com" title="A Human-Inspired Reading Agent with Gist Memory of Very Long Contexts">arXiv</a>)</li>
+<li><strong>LoCoMo benchmark</strong> for evaluating very long-term conversational memory across sessions. (<a href="https://aclanthology.org/2024.acl-long.747/?utm_source=chatgpt.com" title="Evaluating Very Long-Term Conversational Memory of LLM Agents">ACL Anthology</a>)</li>
+</ul>
+<h3>Coding-context continuity tooling (pre-LLM, but directly applicable)</h3>
+<ul>
+<li><strong>Eclipse Mylyn / Mylar</strong>: task context as a first-class object; DOI (“degree of interest”) ranking; restore task context when switching. (<a href="https://eclipse.dev/mylyn/publications/2006-11-mylar-fse.pdf?utm_source=chatgpt.com" title="Using Task Context to Improve Programmer Productivity">Eclipse</a>)</li>
+<li><strong>TASK CONTEXT (ICSE 2023 tool paper)</strong>: predicting code context models for dev tasks based on navigation patterns. (<a href="https://zhiyuan-wan.github.io/assets/publications/icse_tool_23_task_context.pdf?utm_source=chatgpt.com" title="TASK CONTEXT: A Tool for Predicting Code Context Models for Software ...">Zhiyuan Wan’s Home Page</a>)</li>
+<li><strong>IDE session managers</strong> like ContextKeeper (open documents, layout, breakpoints, bookmarks) as concrete examples of what humans need to restore “where was I?”. (<a href="https://marketplace.visualstudio.com/items?itemName=ContextKeeper.ContextKeeperVsix&amp;utm_source=chatgpt.com" title="Favorites Tabs and Files Manager - Visual Studio Marketplace">Visual Studio Marketplace</a>)</li>
+</ul>
+<h3>Practical memory plugin approaches in the LLM coding world</h3>
+<ul>
+<li><strong>claude-mem</strong>: progressive disclosure + layered retrieval (search → timeline → fetch details), plus privacy controls (exclude sensitive segments). (<a href="https://github.com/thedotmack/claude-mem" title="GitHub - thedotmack/claude-mem: A Claude Code plugin that automatically captures everything Claude does during your coding sessions, compresses it with AI (using Claude's agent-sdk), and injects relevant context back into future sessions.">GitHub</a>)</li>
+<li><strong>Claude “memory tool” docs</strong> (client-side persistent files) as another pattern for persistence. (<a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool?utm_source=chatgpt.com" title="Memory tool - Claude Docs">Claude</a>)</li>
+</ul>
+<hr />
+<h2>A “dense capsule” template (100–300 tokens) you can steal</h2>
+<p>Structured formats tend to compress well and reduce hallucination:</p>
+<pre><code>S: Goal=&lt;…&gt; | Severity=&lt;GREEN/RED&gt; | Branch=&lt;…&gt; | Ahead/Behind=&lt;…&gt;
+B: Decisions=&lt;…&gt;; Constraints=&lt;…&gt;; Gotchas=&lt;…&gt;
+A: State=Dirty(staged X/unstaged Y/untracked Z); LastCmd=&lt;…&gt;; FailSig=&lt;…&gt;
+R: Next=&lt;…&gt;; BlockedOn=&lt;…&gt;; Focus=&lt;file:line&gt;; Trace=&lt;sym→sym→sym&gt;
+</code></pre>
+<p>(You can swap SBAR for I-PASS-style “Action list / Contingencies” if you prefer.)</p>
+<hr />
+<p>If you want one very targeted follow-up direction (without adding user effort): I’d focus your next iteration on <strong>Task Context Model signals</strong> (ranked symbols/files) because that’s the cleanest way to beat “50-file explosion” while staying token-efficient—and there’s strong prior art in Mylyn/Mylar + newer code-context-model work to guide the scoring/representation. (<a href="https://eclipse.dev/mylyn/publications/2006-11-mylar-fse.pdf?utm_source=chatgpt.com" title="Using Task Context to Improve Programmer Productivity">Eclipse</a>)</p>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list"><li class="empty-state">No outgoing links</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list"><li class="empty-state">No backlinks</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Typed Relations</div><p class="empty-state">No typed relations</p>
+        </div>
+        </aside>
+    </div>
+
+    <!-- Mobile search overlay -->
+    <div class="search-overlay">
+        <div class="search-overlay-header">
+            <button class="search-overlay-close" aria-label="Close search">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                </svg>
+            </button>
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
+        </div>
+        <div class="search-overlay-results"></div>
+    </div>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-inner">
+            <a href="/" class="bottom-nav-link active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>Reader</span>
+            </a>
+            <button class="bottom-nav-link bottom-nav-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Search</span>
+            </button>
+            <a href="/graph.html" class="bottom-nav-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="6" cy="6" r="2"></circle>
+                    <circle cx="18" cy="6" r="2"></circle>
+                    <circle cx="6" cy="18" r="2"></circle>
+                    <circle cx="18" cy="18" r="2"></circle>
+                    <path d="M12 10V6M12 14v4M10 12H6M14 12h4"></path>
+                </svg>
+                <span>Graph</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>

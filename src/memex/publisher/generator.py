@@ -149,11 +149,15 @@ class SiteGenerator:
         from ..parser import ParseError, parse_entry
 
         for md_file in self.kb_root.rglob("*.md"):
+            rel_path = md_file.relative_to(self.kb_root)
+
             # Skip hidden files and directories
-            if any(part.startswith("_") or part.startswith(".") for part in md_file.parts):
+            # NOTE: Check the path relative to kb_root. Users may keep their KB under
+            # underscore/dot-prefixed directories (e.g., "_scratch/kb"), and those
+            # should still publish.
+            if any(part.startswith("_") or part.startswith(".") for part in rel_path.parts):
                 continue
 
-            rel_path = md_file.relative_to(self.kb_root)
             path_key = str(rel_path.with_suffix(""))
 
             try:

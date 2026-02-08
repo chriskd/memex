@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#fafaf9">
+    <title>Focusgroup Agent UX Evaluation (2026-01) - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <!-- Mobile menu button (hamburger) -->
+            <button class="mobile-menu-btn" aria-label="Open navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="/" class="logo">
+                <div class="logo-text">meme<span style="color: var(--accent);">x</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link active">Reader</a>
+                <a href="/graph.html" class="nav-link">Graph</a>
+            </div>
+
+            <!-- Mobile search button -->
+            <button class="mobile-search-btn" aria-label="Open search">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Categories</div>
+                <div class="tree" id="tree">
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">design</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/design/chunking-system-design.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Chunking System Design</span>
+                    </a>
+                    <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">LLM Query Processing Feature Plan</span>
+                    </a>
+                    <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Frontmatter Edge Types</span>
+                    </a>
+                    <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Relations Graph Overview</span>
+                    </a>
+                    <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Wikilink Edge Behavior</span>
+                    </a>
+                    <a href="/design/state-diagrams.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MX State Diagrams</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">guides</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/guides/ai-integration.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">AI Agent Integration</span>
+                    </a>
+                    <a href="/guides/installation.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Installation Guide</span>
+                    </a>
+                    <a href="/guides/mcp-setup.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">MCP Server Setup (Deprecated)</span>
+                    </a>
+                    <a href="/guides/quick-start.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Quick Start Guide</span>
+                    </a>
+                </div>
+            </div>
+            <div class="tree-folder">
+                <div class="tree-folder-header">
+                    <span class="tree-icon folder">📁</span>
+                    <span class="tree-label">reference</span>
+                </div>
+                <div class="tree-children">
+                    <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+                    </a>
+                    <a href="/reference/cli.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">CLI Reference</span>
+                    </a>
+                    <a href="/reference/entry-format.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Entry Format Reference</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item active">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+                    </a>
+                    <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                        <span class="tree-icon file">◇</span>
+                        <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+                    </a>
+                </div>
+            </div></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list">
+            <a href="/guides/ai-integration.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">AI Agent Integration</span>
+            </a>
+            <a href="/reference/cli.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">CLI Reference</span>
+            </a>
+            <a href="/reference/entry-format.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Entry Format Reference</span>
+            </a>
+            <a href="/design/relations-graph/relations-graph-overview.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Relations Graph Overview</span>
+            </a>
+            <a href="/guides/mcp-setup.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MCP Server Setup (Deprecated)</span>
+            </a>
+            <a href="/reference/chat-gpt-5.2-pro-dense-memory-signals-reference.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">ChatGPT 5.2 Pro Dense Memory Signals Reference</span>
+            </a>
+            <a href="/design/state-diagrams.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">MX State Diagrams</span>
+            </a>
+            <a href="/design/relations-graph/frontmatter-edge-types.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Frontmatter Edge Types</span>
+            </a>
+            <a href="/design/relations-graph/wikilink-edge-behavior.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Wikilink Edge Behavior</span>
+            </a>
+            <a href="/design/chunking-system-design.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Chunking System Design</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-mx-cli-discoverability-2026-01.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Evaluation: mx CLI Discoverability (2026-01)</span>
+            </a>
+            <a href="/design/llm-query-processing-feature-plan.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">LLM Query Processing Feature Plan</span>
+            </a>
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="tree-item active">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Focusgroup Agent UX Evaluation (2026-01)</span>
+            </a>
+            <a href="/guides/quick-start.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Quick Start Guide</span>
+            </a>
+            <a href="/guides/installation.html" class="tree-item">
+                <span class="tree-icon file">◇</span>
+                <span class="tree-label">Installation Guide</span>
+            </a></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex-kb"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="reader-container">
+    <article class="entry">
+        <header class="entry-header">
+            <a href="/reference/focusgroup-evaluation-2026-01.html" class="entry-path">reference/focusgroup-evaluation-2026-01</a>
+            <div class="entry-meta">
+                
+                <div class="entry-meta-item">
+                    Created: <span>Jan 11, 2026</span>
+                </div>
+                
+                
+            </div>
+            
+            <div class="entry-tags">
+                
+                <a href="/tags/focusgroup.html" class="tag">focusgroup</a>
+                
+                <a href="/tags/agent-ux.html" class="tag">agent-ux</a>
+                
+                <a href="/tags/evaluation.html" class="tag">evaluation</a>
+                
+                <a href="/tags/cli.html" class="tag">cli</a>
+                
+            </div>
+            
+        </header>
+        <div class="entry-content">
+            <h1>Focusgroup Agent UX Evaluation (2026-01)</h1>
+<p>Comprehensive evaluation of <code>mx</code> CLI agent usability using <a href="https://github.com/chriskd/focusgroup">focusgroup</a> - 5 sessions with 12 total agents (8 Claude, 4 GPT).</p>
+<h2>Overall Rating: 8-8.5/10</h2>
+<h2>Sessions</h2>
+<table>
+<thead>
+<tr>
+<th>Session ID</th>
+<th>Focus</th>
+<th>Agents</th>
+<th>Key Finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>20260111-cb7d8f20</td>
+<td>General usability</td>
+<td>4 Claude</td>
+<td>Validation crashes, JSON error gaps</td>
+</tr>
+<tr>
+<td>20260111-d86b9983</td>
+<td>General usability</td>
+<td>4 Claude</td>
+<td>8.5/10 rating</td>
+</tr>
+<tr>
+<td>20260111-2b993462</td>
+<td>Error messages</td>
+<td>2 Claude</td>
+<td>80% self-service, no command suggestions</td>
+</tr>
+<tr>
+<td>20260111-7c39a291</td>
+<td>Intuition test</td>
+<td>4 Claude</td>
+<td>100% command convergence</td>
+</tr>
+<tr>
+<td>20260111-6e6f778b</td>
+<td>Intuition test</td>
+<td>4 GPT</td>
+<td>More variance, same flag mistakes</td>
+</tr>
+</tbody>
+</table>
+<h2>Key Strengths</h2>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Why It Works</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Token-conscious output</td>
+<td><code>--compact</code>, <code>--terse</code>, <code>--json</code> serve different context budgets</td>
+</tr>
+<tr>
+<td>Schema introspection</td>
+<td><code>mx schema</code> - &quot;agent gold&quot; for self-discovery</td>
+</tr>
+<tr>
+<td>Batch operations</td>
+<td><code>mx batch</code> reduces round-trips</td>
+</tr>
+<tr>
+<td>Dry-run support</td>
+<td><code>mx add --dry-run</code> allows validation</td>
+</tr>
+<tr>
+<td>Error handling</td>
+<td><code>--json-errors</code> with codes like <code>ENTRY_NOT_FOUND</code> (1002)</td>
+</tr>
+</tbody>
+</table>
+<h2>Issues Found</h2>
+<h3>P0: Crashes</h3>
+<ul>
+<li><code>mx search &quot;test&quot; --limit 0</code> - Python traceback</li>
+<li><code>mx list --category=nonexistent</code> - Python traceback</li>
+<li><code>--json-errors</code> doesn't catch Click validation failures</li>
+</ul>
+<h3>P1: Flag Discoverability</h3>
+<ul>
+<li>All 8 agents guessed <code>--find</code>/<code>--replace</code> for patch (actual: <code>--old</code>/<code>--new</code>)</li>
+<li>Cross-model consensus = strong signal flags are unintuitive</li>
+</ul>
+<h3>P2: Command Suggestions</h3>
+<ul>
+<li>Flag typos get suggestions: <code>--jason</code> → &quot;Possible options: --json&quot;</li>
+<li>Command typos don't: <code>mx serach</code> → no &quot;Did you mean 'search'?&quot;</li>
+</ul>
+<h2>Agent-Recommended Patterns</h2>
+<pre><code class="language-bash"># Session start
+mx prime
+
+# Precise search (avoid semantic surprises)
+mx search &quot;query&quot; --strict --terse --limit=1
+
+# Check existence
+mx get path.md --metadata  # Exit code 0/1
+
+# Batch for efficiency
+echo -e &quot;search 'docker'\nget path/file.md&quot; | mx batch
+
+# Safe writes
+mx add --title=&quot;...&quot; --dry-run --json
+</code></pre>
+<h2>Cross-Model Comparison</h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Claude</th>
+<th>GPT</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Response variance</td>
+<td>0% (identical)</td>
+<td>High (3+ variants)</td>
+</tr>
+<tr>
+<td>Correct commands</td>
+<td>8/8</td>
+<td>8/8</td>
+</tr>
+<tr>
+<td>Correct flags</td>
+<td>~6/8</td>
+<td>~5/8</td>
+</tr>
+</tbody>
+</table>
+<p>Both models guessed wrong on patch flags - validates this is a real UX gap.</p>
+<h2>Related Beads Issues</h2>
+<ul>
+<li><code>voidlabs-kb-ktfu</code> - Epic: mx CLI Agent UX Improvements</li>
+<li><code>voidlabs-kb-i24u</code> - Patch flag rename (--old/--new → --find/--replace)</li>
+<li><code>voidlabs-kb-77q4</code> - Flag discoverability</li>
+<li><code>voidlabs-kb-skeb</code> - Error message improvements</li>
+<li><code>voidlabs-kb-pgml</code> - General agent usability</li>
+<li><code>voidlabs-kb-jll6</code> - Append workflow confusion</li>
+</ul>
+<h2>Session Logs</h2>
+<p>Retrieve full session data:</p>
+<pre><code class="language-bash">focusgroup logs show 20260111-cb7d8f20
+focusgroup logs show 20260111-2b993462
+focusgroup logs show 20260111-7c39a291
+focusgroup logs show 20260111-6e6f778b
+</code></pre>
+
+        </div>
+    </article>
+</div>
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Outgoing Links</div>
+            <ul class="link-list"><li class="empty-state">No outgoing links</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Backlinks</div>
+            <ul class="link-list"><li class="empty-state">No backlinks</li>
+            </ul>
+        </div>
+        <div class="panel-section">
+            <div class="panel-header">Typed Relations</div><p class="empty-state">No typed relations</p>
+        </div>
+        </aside>
+    </div>
+
+    <!-- Mobile search overlay -->
+    <div class="search-overlay">
+        <div class="search-overlay-header">
+            <button class="search-overlay-close" aria-label="Close search">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                </svg>
+            </button>
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
+        </div>
+        <div class="search-overlay-results"></div>
+    </div>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-inner">
+            <a href="/" class="bottom-nav-link active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>Reader</span>
+            </a>
+            <button class="bottom-nav-link bottom-nav-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Search</span>
+            </button>
+            <a href="/graph.html" class="bottom-nav-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="6" cy="6" r="2"></circle>
+                    <circle cx="18" cy="6" r="2"></circle>
+                    <circle cx="6" cy="18" r="2"></circle>
+                    <circle cx="18" cy="18" r="2"></circle>
+                    <path d="M12 10V6M12 14v4M10 12H6M14 12h4"></path>
+                </svg>
+                <span>Graph</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>

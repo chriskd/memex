@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#fafaf9">
+    <title>Graph - Memex</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@300;400;500&display=swap"
+          rel="stylesheet">
+    <link rel="stylesheet" href="/assets/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script>window.BASE_URL = "";</script>
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header">
+            <!-- Mobile menu button (hamburger) -->
+            <button class="mobile-menu-btn" aria-label="Open navigation menu">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+
+            <a href="/" class="logo">
+                <div class="logo-text">meme<span style="color: var(--accent);">x</span></div>
+            </a>
+
+            <div class="search-container">
+                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <input
+                    type="text"
+                    id="search-input"
+                    placeholder="Search knowledge base..."
+                    autocomplete="off"
+                >
+                <div id="search-results"></div>
+            </div>
+
+            <div class="header-nav">
+                <a href="/" class="nav-link">Reader</a>
+                <a href="/graph.html" class="nav-link active">Graph</a>
+            </div>
+
+            <!-- Mobile search button -->
+            <button class="mobile-search-btn" aria-label="Open search">
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+            </button>
+        </header>
+
+        <!-- Sidebar overlay (mobile) -->
+        <div class="sidebar-overlay"></div>
+
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            
+            <div class="nav-tabs">
+                <button class="nav-tab active" data-tab="tree">Browse</button>
+                <button class="nav-tab" data-tab="recent">Recent</button>
+            </div>
+
+            <div class="sidebar-section" id="tree-section">
+                <div class="sidebar-header">Entries</div>
+                <div class="tree" id="tree"></div>
+            </div>
+
+            <div class="sidebar-section" id="recent-section" style="display: none;">
+                <div class="sidebar-header">Recent Updates</div>
+                <div class="tree" id="recent-list"></div>
+            </div>
+            <div class="sidebar-footer">
+                <a href="https://github.com/chriskd/memex-kb"
+                   target="_blank"
+                   rel="noopener">Powered by memex</a>
+            </div>
+        </aside>
+
+        <!-- Main content -->
+        <main class="main">
+            
+<div class="graph-container">
+    <div id="graph"></div>
+    <div id="graph-tooltip" class="graph-tooltip"></div>
+    <div id="graph-controls" class="graph-controls">
+        <div class="graph-controls-header">Relations</div>
+        <div class="graph-control-group">
+            <label class="graph-control-item">
+                <input type="checkbox" data-origin="wikilink" checked>
+                <span>Wikilinks</span>
+            </label>
+            <label class="graph-control-item">
+                <input type="checkbox" data-origin="semantic" checked>
+                <span>Semantic</span>
+            </label>
+            <label class="graph-control-item">
+                <input type="checkbox" data-origin="relations" checked>
+                <span>Typed</span>
+            </label>
+        </div>
+        <div class="graph-control-group">
+            <div class="graph-control-subheader">Types</div>
+            <div id="graph-relation-types" class="graph-control-list"></div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script>
+(function() {
+    const baseUrl = window.BASE_URL || '';
+
+    fetch(baseUrl + '/graph.json')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('graph');
+            const tooltip = document.getElementById('graph-tooltip');
+            const controls = document.getElementById('graph-controls');
+            const relationTypesContainer = document.getElementById('graph-relation-types');
+            const width = container.clientWidth || 960;
+            const height = container.clientHeight || 600;
+
+            const svg = d3.select('#graph')
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%')
+                .attr('viewBox', [0, 0, width, height]);
+
+            // Zoom behavior
+            const g = svg.append('g');
+            svg.call(d3.zoom()
+                .extent([[0, 0], [width, height]])
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => g.attr('transform', event.transform)));
+
+            // Force simulation
+            const simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(80))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(20));
+
+            const edgeColors = {
+                'wikilink': '#262b3a',
+                'semantic': '#8fbcbb',
+                'relations': '#5e81ac'
+            };
+
+            const nodeRadius = 8;
+            const arrowOffset = nodeRadius + 6;
+
+            const defs = svg.append('defs');
+            defs.append('marker')
+                .attr('id', 'arrow-relations')
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 10)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', edgeColors['relations']);
+
+            // Links
+            const link = g.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(data.edges)
+                .join('line')
+                .attr('stroke', d => edgeColors[d.origin] || '#262b3a')
+                .attr('stroke-opacity', 0.5)
+                .attr('stroke-width', d => d.score ? 1 + (d.score * 2) : 1)
+                .attr('stroke-dasharray', d => {
+                    if (d.origin === 'wikilink') return '2,2';
+                    if (d.origin === 'semantic') return '1,4';
+                    return null;
+                })
+                .attr('marker-end', d => d.origin === 'relations' ? 'url(#arrow-relations)' : null)
+                .attr('data-origin', d => d.origin)
+                .attr('data-type', d => d.type || '');
+
+            // Nodes
+            const node = g.append('g')
+                .attr('class', 'nodes')
+                .selectAll('g')
+                .data(data.nodes)
+                .join('g')
+                .call(d3.drag()
+                    .on('start', (event, d) => {
+                        if (!event.active) simulation.alphaTarget(0.3).restart();
+                        d.fx = d.x;
+                        d.fy = d.y;
+                    })
+                    .on('drag', (event, d) => {
+                        d.fx = event.x;
+                        d.fy = event.y;
+                    })
+                    .on('end', (event, d) => {
+                        if (!event.active) simulation.alphaTarget(0);
+                        d.fx = null;
+                        d.fy = null;
+                    }));
+
+            // Category colors - Nord Aurora palette
+            const categoryColors = {
+                'devops': '#d08770',        // nord12 - orange
+                'infrastructure': '#88c0d0', // nord8 - cyan
+                'projects': '#a3be8c',       // nord14 - green
+                'tooling': '#bf616a',        // nord11 - red
+                'development': '#b48ead',    // nord15 - purple
+                'best-practices': '#ebcb8b', // nord13 - yellow
+                'default': '#81a1c1'         // nord9 - blue
+            };
+
+            function getNodeColor(d) {
+                const path = d.id || '';
+                const category = path.split('/')[0];
+                return categoryColors[category] || categoryColors['default'];
+            }
+
+            node.append('circle')
+                .attr('r', 8)
+                .attr('fill', d => getNodeColor(d))
+                .attr('stroke', d => getNodeColor(d))
+                .attr('stroke-opacity', 0.3)
+                .attr('stroke-width', 8)
+                .style('filter', 'drop-shadow(0 0 4px currentColor)');
+
+            node.append('text')
+                .text(d => d.title)
+                .attr('x', 14)
+                .attr('y', 4)
+                .attr('font-family', "'JetBrains Mono', monospace")
+                .attr('font-size', '10px')
+                .attr('fill', '#9ca3af')
+                .attr('opacity', 0.8);
+
+            const relationTypes = Array.from(new Set(
+                data.edges
+                    .filter(edge => edge.origin === 'relations' && edge.type)
+                    .map(edge => edge.type)
+            )).sort();
+
+            const hasTypeFilters = relationTypes.length > 0;
+            const activeTypes = new Set(relationTypes);
+            const originEnabled = {
+                wikilink: true,
+                semantic: true,
+                relations: true,
+            };
+
+            function isEdgeVisible(edge) {
+                if (!originEnabled[edge.origin]) {
+                    return false;
+                }
+                if (edge.origin === 'relations' && hasTypeFilters) {
+                    if (!edge.type) {
+                        return false;
+                    }
+                    return activeTypes.has(edge.type);
+                }
+                return true;
+            }
+
+            function updateLinkVisibility() {
+                link.style('display', d => isEdgeVisible(d) ? null : 'none');
+            }
+
+            function edgeTargetPosition(edge, offset) {
+                const dx = edge.target.x - edge.source.x;
+                const dy = edge.target.y - edge.source.y;
+                const length = Math.sqrt(dx * dx + dy * dy) || 1;
+                return {
+                    x: edge.target.x - (dx / length) * offset,
+                    y: edge.target.y - (dy / length) * offset,
+                };
+            }
+
+            if (relationTypesContainer) {
+                relationTypesContainer.textContent = '';
+                if (!relationTypes.length) {
+                    const empty = document.createElement('div');
+                    empty.className = 'graph-control-empty';
+                    empty.textContent = 'No typed relations';
+                    relationTypesContainer.appendChild(empty);
+                } else {
+                    relationTypes.forEach(type => {
+                        const label = document.createElement('label');
+                        label.className = 'graph-control-item';
+                        const input = document.createElement('input');
+                        input.type = 'checkbox';
+                        input.checked = true;
+                        input.dataset.type = type;
+                        const span = document.createElement('span');
+                        span.textContent = type;
+                        label.appendChild(input);
+                        label.appendChild(span);
+                        relationTypesContainer.appendChild(label);
+                    });
+                }
+            }
+
+            if (controls) {
+                const originInputs = controls.querySelectorAll('input[data-origin]');
+                originInputs.forEach(input => {
+                    input.addEventListener('change', event => {
+                        const target = event.target;
+                        if (!target || !target.dataset) {
+                            return;
+                        }
+                        originEnabled[target.dataset.origin] = target.checked;
+                        updateLinkVisibility();
+                    });
+                });
+            }
+
+            if (relationTypesContainer) {
+                relationTypesContainer.addEventListener('change', event => {
+                    const target = event.target;
+                    if (!target || !target.dataset || !target.dataset.type) {
+                        return;
+                    }
+                    if (target.checked) {
+                        activeTypes.add(target.dataset.type);
+                    } else {
+                        activeTypes.delete(target.dataset.type);
+                    }
+                    updateLinkVisibility();
+                });
+            }
+
+            updateLinkVisibility();
+
+            // Hover effects
+            node.on('mouseover', (event, d) => {
+                    tooltip.style.display = 'block';
+                    tooltip.innerHTML = '<strong>' + d.title + '</strong>' +
+                        (d.tags.length ? '<br>Tags: ' + d.tags.join(', ') : '');
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY + 10) + 'px';
+                })
+                .on('mouseout', () => {
+                    tooltip.style.display = 'none';
+                })
+                .on('click', (event, d) => {
+                    window.location.href = baseUrl + '/' + d.url;
+                });
+
+            link.on('mouseover', (event, d) => {
+                    tooltip.style.display = 'block';
+                    const label = d.origin === 'relations'
+                        ? (d.type || 'relation')
+                        : (d.origin === 'semantic' ? 'semantic' : 'wikilink');
+                    const sourceLabel = d.source.title || d.source.id;
+                    const targetLabel = d.target.title || d.target.id;
+                    const score = d.score ? ' (' + d.score.toFixed(2) + ')' : '';
+                    tooltip.innerHTML = '<strong>' + label + '</strong>' +
+                        '<br>' + sourceLabel + ' → ' + targetLabel + score;
+                    tooltip.style.left = (event.pageX + 10) + 'px';
+                    tooltip.style.top = (event.pageY + 10) + 'px';
+                })
+                .on('mouseout', () => {
+                    tooltip.style.display = 'none';
+                });
+
+            // Simulation tick
+            simulation.on('tick', () => {
+                link.attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => {
+                        const offset = d.origin === 'relations' ? arrowOffset : nodeRadius;
+                        return edgeTargetPosition(d, offset).x;
+                    })
+                    .attr('y2', d => {
+                        const offset = d.origin === 'relations' ? arrowOffset : nodeRadius;
+                        return edgeTargetPosition(d, offset).y;
+                    });
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+        });
+})();
+</script>
+
+        </main>
+
+        <!-- Right panel -->
+        <aside class="panel">
+            
+        <div class="panel-section">
+            <div class="panel-header">Graph View</div>
+            <p class="empty-state">Click a node to navigate to that entry</p>
+        </div>
+    
+        </aside>
+    </div>
+
+    <!-- Mobile search overlay -->
+    <div class="search-overlay">
+        <div class="search-overlay-header">
+            <button class="search-overlay-close" aria-label="Close search">
+                <svg width="24" height="24" viewBox="0 0 24 24"
+                     fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M18 6L6 18"></path>
+                    <path d="M6 6l12 12"></path>
+                </svg>
+            </button>
+            <input
+                type="text"
+                class="search-overlay-input"
+                placeholder="Search..."
+                autocomplete="off"
+            >
+        </div>
+        <div class="search-overlay-results"></div>
+    </div>
+
+    <!-- Bottom navigation (mobile) -->
+    <nav class="bottom-nav">
+        <div class="bottom-nav-inner">
+            <a href="/" class="bottom-nav-link">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                    <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                </svg>
+                <span>Reader</span>
+            </a>
+            <button class="bottom-nav-link bottom-nav-search">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="11" cy="11" r="8"></circle>
+                    <path d="m21 21-4.35-4.35"></path>
+                </svg>
+                <span>Search</span>
+            </button>
+            <a href="/graph.html" class="bottom-nav-link active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="2"></circle>
+                    <circle cx="6" cy="6" r="2"></circle>
+                    <circle cx="18" cy="6" r="2"></circle>
+                    <circle cx="6" cy="18" r="2"></circle>
+                    <circle cx="18" cy="18" r="2"></circle>
+                    <path d="M12 10V6M12 14v4M10 12H6M14 12h4"></path>
+                </svg>
+                <span>Graph</span>
+            </a>
+        </div>
+    </nav>
+
+    <script src="/assets/search.js"></script>
+    <script src="/assets/sidebar.js"></script>
+    <script>hljs.highlightAll(); mermaid.initialize({startOnLoad: true, theme: 'dark'});</script>
+</body>
+</html>
