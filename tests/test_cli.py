@@ -412,41 +412,41 @@ Content B
 class TestGetCommand:
     """Tests for 'mx get' command."""
 
-    def test_get_no_kb_configured_no_generic_fallback(self, runner):
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_get_no_kb_configured_no_generic_fallback(self, mock_run_async, runner):
         """Get surfaces ConfigurationError guidance and avoids generic 'Get failed.' fallback."""
         from memex.config import ConfigurationError
 
-        with patch("memex.config.get_kb_root") as mock_get_kb_root:
-            mock_get_kb_root.side_effect = ConfigurationError(
-                "No knowledge base found. Options:\n"
-                "  1. Run 'mx init' to create a project KB at ./kb/\n"
-                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/\n"
-                "  3. Set MEMEX_USER_KB_ROOT to an existing KB directory"
-            )
+        mock_run_async.side_effect = ConfigurationError(
+            "No knowledge base found. Options:\n"
+            "  1. Run 'mx init' to create a project KB at ./kb/\n"
+            "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/\n"
+            "  3. Set MEMEX_USER_KB_ROOT to an existing KB directory"
+        )
 
-            result = runner.invoke(cli, ["get", "test.md"])
+        result = runner.invoke(cli, ["get", "test.md"])
 
-            assert result.exit_code == 1
-            assert "No knowledge base found" in result.output
-            assert "Get failed." not in result.output
+        assert result.exit_code == 1
+        assert "No knowledge base found" in result.output
+        assert "Get failed." not in result.output
 
-    def test_get_title_no_kb_configured_no_traceback(self, runner):
+    @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
+    def test_get_title_no_kb_configured_no_traceback(self, mock_run_async, runner):
         """Get --title without a KB should not print a traceback."""
         from memex.config import ConfigurationError
 
-        with patch("memex.config.get_kb_root") as mock_get_kb_root:
-            mock_get_kb_root.side_effect = ConfigurationError(
-                "No knowledge base found. Options:\n"
-                "  1. Run 'mx init' to create a project KB at ./kb/\n"
-                "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/\n"
-                "  3. Set MEMEX_USER_KB_ROOT to an existing KB directory"
-            )
+        mock_run_async.side_effect = ConfigurationError(
+            "No knowledge base found. Options:\n"
+            "  1. Run 'mx init' to create a project KB at ./kb/\n"
+            "  2. Run 'mx init --user' to create a personal KB at ~/.memex/kb/\n"
+            "  3. Set MEMEX_USER_KB_ROOT to an existing KB directory"
+        )
 
-            result = runner.invoke(cli, ["get", "--title", "Some Title"])
+        result = runner.invoke(cli, ["get", "--title", "Some Title"])
 
-            assert result.exit_code == 1
-            assert "Traceback" not in result.output
-            assert "No knowledge base found" in result.output
+        assert result.exit_code == 1
+        assert "Traceback" not in result.output
+        assert "No knowledge base found" in result.output
 
     @patch("memex.cli.run_async", new_callable=CoroutineClosingMock)
     def test_get_by_path(self, mock_run_async, runner):
